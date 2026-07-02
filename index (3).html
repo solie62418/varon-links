@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바론링크 | 분원 관리대장 색인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>
+  :root{
+    --paper: #F2EFE6;
+    --paper-dim: #EAE6D9;
+    --ink: #20262B;
+    --ink-soft: #5B6470;
+    --ink-faint: #93998F;
+    --line: #D9D3C1;
+    --navy: #23262B;
+    --stamp: #A9790E;
+    --brass: #A9790E;
+    --card: #FCFBF7;
+    --radius: 3px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(circle at 100% 0%, #FFFFFF60, transparent 40%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width:860px;
+    margin:0 auto;
+    padding:56px 24px 120px;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    margin-bottom:40px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:28px;
+  }
+  .eyebrow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:.12em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:16px; height:1px;
+    background:var(--stamp);
+    display:inline-block;
+  }
+  .brandmark{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .logo-box{
+    width:34px; height:34px;
+    background:var(--navy);
+    border-radius:5px;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .logo-box svg{ width:17px; height:23px; }
+  .title-row{
+    display:flex;
+    align-items:baseline;
+    gap:2px;
+  }
+  h1{
+    font-family:'Pretendard', sans-serif;
+    font-weight:800;
+    font-size:42px;
+    letter-spacing:-0.03em;
+    margin:0;
+    color:var(--ink);
+  }
+  .sub{
+    font-size:15px;
+    color:var(--ink-soft);
+    margin:0 0 26px;
+    line-height:1.6;
+  }
+  .search{
+    position:relative;
+    max-width:420px;
+  }
+  .search input{
+    width:100%;
+    padding:12px 14px 12px 38px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--card);
+    font-family:'Pretendard', sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  .search input:focus{ border-color:var(--stamp); }
+  .search svg{
+    position:absolute; left:12px; top:50%;
+    transform:translateY(-50%);
+    width:15px; height:15px;
+    stroke:var(--ink-faint);
+  }
+
+  /* ---------- Branch cards ---------- */
+  #branches{ display:flex; flex-direction:column; gap:22px; }
+
+  .branch-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    box-shadow:0 1px 0 rgba(32,38,43,0.02);
+  }
+
+  .branch-head{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:16px 20px;
+    background:
+      linear-gradient(180deg, #FFFFFF, #FBF9F4);
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    user-select:none;
+  }
+  .branch-head::before{
+    content:"";
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:4px;
+    background:var(--brass);
+    opacity:.55;
+  }
+  .branch-title{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .branch-title h2{
+    font-family:'Pretendard', sans-serif;
+    font-weight:700;
+    font-size:19px;
+    letter-spacing:-0.02em;
+    margin:0;
+    color:var(--ink);
+  }
+  .branch-count{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-faint);
+  }
+  .chevron{
+    width:14px; height:14px;
+    stroke:var(--ink-soft);
+    transition:transform .2s ease;
+    flex-shrink:0;
+  }
+  .branch-card.open .chevron{ transform:rotate(180deg); }
+
+  .doc-list{
+    display:grid;
+    grid-template-rows:0fr;
+    transition:grid-template-rows .22s ease;
+  }
+  .branch-card.open .doc-list{ grid-template-rows:1fr; }
+  .doc-list-inner{ overflow:hidden; }
+
+  a.doc-row{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:14px 20px;
+    text-decoration:none;
+    color:var(--ink);
+    border-top:1px solid var(--line);
+  }
+  a.doc-row:first-child{ border-top:none; }
+  a.doc-row:hover{ background:var(--paper-dim); }
+  a.doc-row:hover .doc-title{ color:var(--stamp); }
+
+  .doc-icon{
+    width:30px; height:30px;
+    flex-shrink:0;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--paper-dim);
+    border:1px solid var(--line);
+  }
+  .doc-icon svg{ width:15px; height:15px; stroke:var(--ink-soft); }
+
+  .doc-text{ flex:1; min-width:0; }
+  .doc-title{
+    font-size:14.5px;
+    font-weight:600;
+    color:var(--ink);
+    transition:color .12s ease;
+  }
+  .doc-cat{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-faint);
+    margin-top:2px;
+  }
+
+  .go{
+    width:24px; height:24px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .go svg{ width:11px; height:11px; stroke:var(--ink-soft); }
+
+  /* stamp micro-interaction */
+  .stamp-mark{
+    position:absolute;
+    right:20px; top:50%;
+    width:38px; height:38px;
+    margin-top:-19px;
+    border:2px solid var(--stamp);
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--stamp);
+    font-family:'Pretendard', sans-serif;
+    font-weight:800;
+    font-size:10px;
+    letter-spacing:-0.03em;
+    opacity:0;
+    transform:scale(1.6) rotate(-14deg);
+    pointer-events:none;
+    transition:opacity .28s ease, transform .28s cubic-bezier(.2,.8,.3,1.2);
+  }
+  a.doc-row:active .stamp-mark{
+    opacity:.9;
+    transform:scale(1) rotate(-14deg);
+  }
+
+  /* ---------- States ---------- */
+  #status{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:14px;
+    border:1px dashed var(--line);
+    border-radius:var(--radius);
+  }
+  #status.error{ color:var(--stamp); }
+  #status button{
+    margin-top:14px;
+    padding:8px 16px;
+    border:1px solid var(--ink);
+    background:none;
+    border-radius:var(--radius);
+    font-family:'Pretendard', sans-serif;
+    font-size:13px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  #status button:hover{ background:var(--ink); color:var(--paper); }
+
+  .no-match{
+    text-align:center;
+    padding:32px;
+    color:var(--ink-faint);
+    font-size:13px;
+    display:none;
+  }
+
+  footer{
+    margin-top:56px;
+    padding-top:18px;
+    border-top:1px solid var(--line);
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-faint);
+    display:flex;
+    justify-content:space-between;
+  }
+
+  @media (max-width:520px){
+    .wrap{ padding:36px 16px 90px; }
+    h1{ font-size:32px; }
+    .branch-head{ padding:14px 16px; }
+    a.doc-row{ padding:13px 16px; }
+    .stamp-mark{ display:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">바론네트웍스 · 총무팀</div>
+    <div class="brandmark">
+      <div class="logo-box">
+        <svg viewBox="0 0 20 28" fill="none"><path d="M13 0H20L7 28H0L13 0Z" fill="#D9A62E"/></svg>
+      </div>
+      <div class="title-row"><h1>바론링크</h1></div>
+    </div>
+    <p class="sub">분원별 관리대장 색인입니다. 지점을 눌러 펼치고, 원하는 대장을 클릭하면 해당 구글시트로 이동합니다.</p>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="searchInput" type="text" placeholder="지점명 또는 대장 종류 검색 (예: 남동탄, 셔틀)">
+    </div>
+  </header>
+
+  <div id="status">색인을 불러오는 중입니다…</div>
+  <div id="branches" style="display:none;"></div>
+  <div class="no-match" id="noMatch">검색 결과가 없습니다.</div>
+
+  <footer>
+    <span>VARON-LINKS</span>
+    <span id="countLabel"></span>
+  </footer>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://fauzcprystmkbvvxysdi.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhdXpjcHJ5c3Rta2J2dnh5c2RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTg0NDcsImV4cCI6MjA5ODQ3NDQ0N30.4B6Blhi_QEaf_fk465M2oLIytbE81ShTwPe-ZRU1-BQ';
+
+const iconPaths = {
+  '시설': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  '청소': '<path d="M3 21l6-6M14 3l7 7-8.5 8.5a4.95 4.95 0 1 1-7-7L14 3z"/>',
+  '셔틀': '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="7.5" cy="19" r="1.5"/><circle cx="16.5" cy="19" r="1.5"/><path d="M3 12h18"/>',
+  'default': '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h5"/>'
+};
+function iconFor(category){
+  for(const key in iconPaths){
+    if(category && category.includes(key)) return iconPaths[key];
+  }
+  return iconPaths.default;
+}
+
+const statusEl = document.getElementById('status');
+const branchesEl = document.getElementById('branches');
+const noMatchEl = document.getElementById('noMatch');
+const countLabel = document.getElementById('countLabel');
+const searchInput = document.getElementById('searchInput');
+
+let allRows = [];
+
+async function loadLinks(){
+  statusEl.style.display = 'block';
+  statusEl.className = '';
+  statusEl.textContent = '색인을 불러오는 중입니다…';
+  branchesEl.style.display = 'none';
+
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/links?select=*&order=sort_order.asc`, {
+      headers:{
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if(!res.ok) throw new Error('요청 실패: ' + res.status);
+    const data = await res.json();
+    if(!Array.isArray(data) || data.length === 0){
+      statusEl.textContent = '등록된 링크가 없습니다. Supabase의 links 테이블에 데이터를 추가해주세요.';
+      return;
+    }
+    allRows = data;
+    render(allRows);
+    statusEl.style.display = 'none';
+    branchesEl.style.display = 'flex';
+  }catch(err){
+    statusEl.className = 'error';
+    statusEl.innerHTML = '색인을 불러오지 못했습니다.<br>' + '네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.';
+    const btn = document.createElement('button');
+    btn.textContent = '다시 시도';
+    btn.onclick = loadLinks;
+    statusEl.appendChild(btn);
+    console.error(err);
+  }
+}
+
+function groupByBranch(rows){
+  const order = [];
+  const map = {};
+  rows.forEach(r=>{
+    if(!map[r.branch]){ map[r.branch] = []; order.push(r.branch); }
+    map[r.branch].push(r);
+  });
+  return order.map(b => ({ branch:b, items:map[b] }));
+}
+
+function render(rows){
+  const groups = groupByBranch(rows);
+  branchesEl.innerHTML = '';
+  countLabel.textContent = rows.length + ' ENTRIES · ' + groups.length + ' BRANCHES';
+
+  groups.forEach((g, idx) => {
+    const card = document.createElement('div');
+    card.className = 'branch-card';
+    card.dataset.branch = g.branch;
+
+    const head = document.createElement('div');
+    head.className = 'branch-head';
+    head.innerHTML = `
+      <div class="branch-title">
+        <h2>${g.branch}</h2>
+        <span class="branch-count">${g.items.length}건</span>
+      </div>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    `;
+    head.addEventListener('click', () => card.classList.toggle('open'));
+
+    const list = document.createElement('div');
+    list.className = 'doc-list';
+    const inner = document.createElement('div');
+    inner.className = 'doc-list-inner';
+
+    g.items.forEach(item => {
+      const row = document.createElement('a');
+      row.className = 'doc-row';
+      row.href = item.url;
+      row.target = '_blank';
+      row.rel = 'noopener noreferrer';
+      row.dataset.search = (g.branch + ' ' + item.category + ' ' + item.title).toLowerCase();
+      row.innerHTML = `
+        <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconFor(item.category)}</svg></div>
+        <div class="doc-text">
+          <div class="doc-title">${item.title || item.category}</div>
+          <div class="doc-cat">${item.category}</div>
+        </div>
+        <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div>
+        <div class="stamp-mark">열람<br>완료</div>
+      `;
+      inner.appendChild(row);
+    });
+
+    list.appendChild(inner);
+    card.appendChild(head);
+    card.appendChild(list);
+    branchesEl.appendChild(card);
+  });
+}
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim().toLowerCase();
+  let visibleBranches = 0;
+
+  document.querySelectorAll('.branch-card').forEach(card => {
+    let branchMatches = 0;
+    const rows = card.querySelectorAll('.doc-row');
+    rows.forEach(row => {
+      const match = !q || row.dataset.search.includes(q);
+      row.style.display = match ? 'flex' : 'none';
+      if(match) branchMatches++;
+    });
+    const show = branchMatches > 0;
+    card.style.display = show ? 'block' : 'none';
+    if(show){
+      visibleBranches++;
+      if(q) card.classList.add('open');
+    }
+  });
+
+  noMatchEl.style.display = (visibleBranches === 0) ? 'block' : 'none';
+});
+
+loadLinks();
+</script>
+</body>
+</html>

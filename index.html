@@ -75,7 +75,7 @@
     display:flex; align-items:center; justify-content:center;
     flex-shrink:0;
   }
-  .logo-box svg{ width:14px; height:20px; }
+  .logo-box svg{ width:17px; height:23px; }
   .title-row{
     display:flex;
     align-items:baseline;
@@ -318,7 +318,7 @@
     <div class="eyebrow">바론네트웍스 · 총무팀</div>
     <div class="brandmark">
       <div class="logo-box">
-        <svg viewBox="0 0 14 20" fill="none"><path d="M9.5 0L2 20H4.5L12 0H9.5Z" fill="#D9A62E"/></svg>
+        <svg viewBox="0 0 20 28" fill="none"><path d="M13 0H20L7 28H0L13 0Z" fill="#D9A62E"/></svg>
       </div>
       <div class="title-row"><h1>바론링크</h1></div>
     </div>
@@ -415,7 +415,7 @@ function render(rows){
 
   groups.forEach((g, idx) => {
     const card = document.createElement('div');
-    card.className = 'branch-card' + (idx === 0 ? ' open' : '');
+    card.className = 'branch-card';
     card.dataset.branch = g.branch;
 
     const head = document.createElement('div');

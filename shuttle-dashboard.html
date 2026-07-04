@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>바론 셔틀 운영 대시보드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --navy:#1F3864;
@@ -206,6 +208,21 @@
   .section-title{font-size:14px;font-weight:800;color:var(--navy);margin:26px 0 10px;display:flex;align-items:center;gap:8px;}
   .section-title .star{color:var(--busyellow-dark);}
 
+  .export-btn{
+    background:var(--card);
+    border:1px solid var(--slate);
+    color:var(--slate);
+    font-weight:700;
+    font-size:12.5px;
+    padding:8px 14px;
+    border-radius:999px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .export-btn:hover{background:var(--slate);color:#fff;}
+  .export-btn:focus-visible{outline:2px solid var(--slate);outline-offset:2px;}
+  .export-btn.small{font-size:11.5px;padding:5px 10px;}
+
   footer{text-align:center;font-size:11px;color:var(--muted);padding:20px;}
 
   @media (max-width:640px){
@@ -229,7 +246,8 @@
     </div>
   </div>
   <div class="upload-wrap">
-    <span class="file-status" id="fileStatus">엑셀 템플릿을 업로드하면 시작됩니다</span>
+    <span class="file-status" id="fileStatus">서버에서 최신 자료를 불러오는 중...</span>
+    <button class="upload-btn" id="saveBtn" style="background:#fff;color:var(--navy);">☁️ 서버에 저장</button>
     <button class="upload-btn" id="uploadBtn">엑셀 업로드</button>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
   </div>
@@ -251,7 +269,10 @@
     </div>
     <div id="hocha-content" style="display:none;">
       <div class="filter-row" id="branch-filter"></div>
-      <input class="search-input" id="hocha-search" placeholder="호차번호 또는 기사명 검색">
+      <div class="filter-row" style="justify-content:space-between;">
+        <input class="search-input" id="hocha-search" placeholder="호차번호 또는 기사명 검색">
+        <button class="export-btn" id="hocha-export">⬇ 현재 목록 엑셀로 내보내기</button>
+      </div>
       <div class="card-grid" id="hocha-grid" style="margin-top:16px;"></div>
     </div>
   </section>
@@ -264,6 +285,9 @@
     </div>
     <div id="contract-content" style="display:none;">
       <div class="stat-row" id="contract-stats"></div>
+      <div class="filter-row" style="justify-content:flex-end;">
+        <button class="export-btn" id="contract-export">⬇ 현재 목록 엑셀로 내보내기</button>
+      </div>
       <table>
         <thead><tr>
           <th>호차</th><th>업체</th><th>계약기간</th><th>남은 기간</th><th>급여</th><th>구분</th>
@@ -281,13 +305,22 @@
     </div>
     <div id="doc-content" style="display:none;">
       <div class="stat-row" id="doc-stats"></div>
+      <div class="filter-row" style="justify-content:flex-end;">
+        <button class="export-btn" id="doc-all-export">⬇ 전체 서류 엑셀로 내보내기</button>
+      </div>
 
-      <div class="section-title"><span class="star">⭐</span> 최상 등급 서류 (범죄경력조회 · 안전교육확인증 · 통학버스신고필증)</div>
+      <div class="section-title" style="justify-content:space-between;">
+        <span><span class="star">⭐</span> 최상 등급 서류 (범죄경력조회 · 안전교육확인증 · 통학버스신고필증)</span>
+        <button class="export-btn small" id="doc-top-export">⬇ 최상 등급만 내보내기</button>
+      </div>
       <table><thead><tr>
         <th>서류종류</th><th>대상</th><th>발급/재조회일</th><th>만료일</th><th>남은 기간</th><th>상태</th>
       </tr></thead><tbody id="doc-top-body"></tbody></table>
 
-      <div class="section-title">일반 서류</div>
+      <div class="section-title" style="justify-content:space-between;">
+        <span>일반 서류</span>
+        <button class="export-btn small" id="doc-normal-export">⬇ 일반 서류만 내보내기</button>
+      </div>
       <table><thead><tr>
         <th>서류종류</th><th>대상</th><th>발급일</th><th>만료일</th><th>남은 기간</th><th>상태</th>
       </tr></thead><tbody id="doc-normal-body"></tbody></table>
@@ -296,12 +329,98 @@
 
 </main>
 
-<footer>바론네트웍스(주) 총무팀 · 셔틀운영 데이터설계서 v1.0 기준 · 이 화면의 자료는 브라우저 세션 동안만 유지됩니다(새로고침 시 재업로드 필요)</footer>
+<footer>바론네트웍스(주) 총무팀 · 셔틀운영 데이터설계서 v1.0 기준 · 엑셀 업로드 후 '☁️ 서버에 저장'을 눌러야 다른 사람 화면에도 반영됩니다</footer>
 
 <script>
 const state = { hocha: [], contract: [], doc: [] };
 const BRANCHES = ["장안","서수원","수원","운정1","운정2","남동탄"];
 const TOP_DOCS = ["범죄경력조회","안전교육확인증","통학버스신고필증"];
+
+// 현재 화면에 표시 중인(필터/정렬 반영된) 목록을 export 시점에 참조하기 위한 저장소
+const current = { hocha: [], contract: [], docTop: [], docNormal: [] };
+
+/* ---------------- Firebase(Firestore) 연동 ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyACokruLFwbkCpxriOdQgVZAQfryYBmUxM",
+  authDomain: "baron-shuttle-ops.firebaseapp.com",
+  projectId: "baron-shuttle-ops",
+  storageBucket: "baron-shuttle-ops.firebasestorage.app",
+  messagingSenderId: "278466071248",
+  appId: "1:278466071248:web:e22df780d05e6b46772cd5"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Firestore는 Date 객체를 그대로 못 받는 경우가 있어, 저장 전 문자열로 정리
+// 또한 빈 이름의 필드가 섞여 들어오지 않도록 한 번 더 걸러낸다(안전장치)
+function sanitize(rows){
+  const clean = JSON.parse(JSON.stringify(rows || []));
+  return clean.map(row => {
+    const out = {};
+    Object.keys(row).forEach(k => { if(k) out[k] = row[k]; });
+    return out;
+  });
+}
+
+async function saveToServer(){
+  const btn = document.getElementById('saveBtn');
+  const original = btn.textContent;
+  btn.textContent = "저장 중...";
+  btn.disabled = true;
+  try{
+    const now = new Date().toISOString();
+    await db.collection('shuttle_data').doc('hocha').set({ rows: sanitize(state.hocha), updatedAt: now });
+    await db.collection('shuttle_data').doc('contract').set({ rows: sanitize(state.contract), updatedAt: now });
+    await db.collection('shuttle_data').doc('doc').set({ rows: sanitize(state.doc), updatedAt: now });
+    document.getElementById('fileStatus').textContent = `서버에 저장 완료 (${new Date().toLocaleTimeString('ko-KR')})`;
+  }catch(err){
+    console.error(err);
+    document.getElementById('fileStatus').textContent = "서버 저장 실패: 콘솔을 확인해주세요";
+  }finally{
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
+async function loadFromServer(){
+  try{
+    const [h, c, d] = await Promise.all([
+      db.collection('shuttle_data').doc('hocha').get(),
+      db.collection('shuttle_data').doc('contract').get(),
+      db.collection('shuttle_data').doc('doc').get(),
+    ]);
+    state.hocha = h.exists ? (h.data().rows || []) : [];
+    state.contract = c.exists ? (c.data().rows || []) : [];
+    state.doc = d.exists ? (d.data().rows || []) : [];
+    renderHocha(); renderContract(); renderDoc();
+    const hasAny = state.hocha.length || state.contract.length || state.doc.length;
+    document.getElementById('fileStatus').textContent = hasAny
+      ? `서버 자료 불러옴 (${new Date().toLocaleTimeString('ko-KR')})`
+      : "서버에 저장된 자료가 없습니다. 엑셀을 업로드하고 '서버에 저장'을 눌러주세요.";
+  }catch(err){
+    console.error(err);
+    document.getElementById('fileStatus').textContent = "서버 연결 실패: 엑셀을 직접 업로드해주세요";
+  }
+}
+
+document.getElementById('saveBtn').addEventListener('click', saveToServer);
+window.addEventListener('DOMContentLoaded', loadFromServer);
+
+function todayStamp(){
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function exportExcel(rows, sheetName, filenamePrefix){
+  if(!rows || rows.length === 0){
+    alert('내보낼 자료가 없습니다.');
+    return;
+  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `${filenamePrefix}_${todayStamp()}.xlsx`);
+}
 
 document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', handleFile);
@@ -340,8 +459,19 @@ function handleFile(e){
 function readSheet(wb, name){
   const sheet = wb.Sheets[name];
   if(!sheet) return [];
-  const rows = XLSX.utils.sheet_to_json(sheet, {range:2, defval:""});
-  return rows.filter(r => Object.values(r).some(v => String(v).trim() !== ""));
+  const aoa = XLSX.utils.sheet_to_json(sheet, {header:1, defval:""});
+  const headers = aoa[0] || [];
+  const dataRows = aoa.slice(2); // 0=헤더행, 1=예시행 → 그 다음부터 실제 데이터
+  return dataRows
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        if(!h) return; // 이름 없는(빈) 헤더 칸은 무시 — Firestore는 빈 필드명을 허용하지 않음
+        obj[h] = row[i] !== undefined ? row[i] : "";
+      });
+      return obj;
+    })
+    .filter(r => Object.values(r).some(v => String(v).trim() !== ""));
 }
 
 function toDate(v){
@@ -408,6 +538,8 @@ function renderHocha(){
     rows = rows.filter(r => String(r['호차번호']).toLowerCase().includes(t) || String(r['현재기사(이름)']).toLowerCase().includes(t));
   }
 
+  current.hocha = rows;
+
   if(rows.length === 0){
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:40px;">조건에 맞는 호차가 없습니다.</div>`;
     return;
@@ -445,6 +577,7 @@ function renderContract(){
   if(!has) return;
 
   const rows = [...state.contract].sort((a,b)=> toDate(a['계약종료일']) - toDate(b['계약종료일']));
+  current.contract = rows;
   const soon = rows.filter(r => { const d = dDay(r['계약종료일']); return d!==null && d<=60; }).length;
   const expired = rows.filter(r => { const d = dDay(r['계약종료일']); return d!==null && d<0; }).length;
 
@@ -482,6 +615,8 @@ function renderDoc(){
 
   const topRows = state.doc.filter(r => TOP_DOCS.includes(r['서류종류']));
   const normalRows = state.doc.filter(r => !TOP_DOCS.includes(r['서류종류']));
+  current.docTop = topRows;
+  current.docNormal = normalRows;
 
   const needsAction = state.doc.filter(r => ['만료','재발급필요','만료임박'].includes(r['상태'])).length;
   const topNeedsAction = topRows.filter(r => ['만료','재발급필요','만료임박'].includes(r['상태'])).length;
@@ -512,6 +647,27 @@ function renderDoc(){
     ? normalRows.map(rowHtml).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">해당 자료 없음</td></tr>`;
 }
+
+/* ---------------- 엑셀 내보내기 ---------------- */
+document.getElementById('hocha-export').addEventListener('click', ()=>{
+  exportExcel(current.hocha, '호차현황', '호차현황판');
+});
+document.getElementById('contract-export').addEventListener('click', ()=>{
+  exportExcel(current.contract, '계약현황', '계약관리');
+});
+document.getElementById('doc-top-export').addEventListener('click', ()=>{
+  exportExcel(current.docTop, '최상등급서류', '서류알림함_최상등급');
+});
+document.getElementById('doc-normal-export').addEventListener('click', ()=>{
+  exportExcel(current.docNormal, '일반서류', '서류알림함_일반');
+});
+document.getElementById('doc-all-export').addEventListener('click', ()=>{
+  const combined = [
+    ...current.docTop.map(r => ({...r, 등급:'⭐최상'})),
+    ...current.docNormal.map(r => ({...r, 등급:'일반'})),
+  ];
+  exportExcel(combined, '전체서류', '서류알림함_전체');
+});
 </script>
 </body>
 </html>

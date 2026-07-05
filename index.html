@@ -336,6 +336,62 @@
   @media (prefers-reduced-motion: reduce){
     *{ transition:none !important; }
   }
+
+  /* ---------- 관리자 순서 편집 모드 ---------- */
+  .reorder-toggle-btn{
+    margin-top:14px;
+    padding:8px 16px;
+    border:1px solid var(--line);
+    background:var(--card);
+    border-radius:var(--radius);
+    font-family:'Pretendard', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .reorder-toggle-btn:hover{ border-color:var(--stamp); color:var(--stamp); }
+  .reorder-toggle-btn.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+
+  body.reorder-mode .branch-head{ cursor:grab; }
+  body.reorder-mode a.branch-head-link{ pointer-events:none; }
+  body.reorder-mode .branch-card{ position:relative; }
+  body.reorder-mode .branch-card::before{
+    content:"⠿";
+    position:absolute;
+    left:-26px; top:50%; transform:translateY(-50%);
+    color:var(--ink-faint);
+    font-size:16px;
+  }
+  .branch-card.dragging{ opacity:.4; }
+  .branch-card.drag-over{ outline:2px dashed var(--stamp); outline-offset:2px; }
+
+  .reorder-bar{
+    display:none;
+    position:fixed;
+    left:0; right:0; bottom:0;
+    background:var(--navy);
+    color:#fff;
+    padding:14px 24px;
+    align-items:center;
+    justify-content:center;
+    gap:16px;
+    font-family:'Pretendard', sans-serif;
+    font-size:13px;
+    z-index:50;
+  }
+  .reorder-bar.active{ display:flex; }
+  .reorder-bar button{
+    padding:8px 18px;
+    border-radius:var(--radius);
+    border:none;
+    font-family:'Pretendard', sans-serif;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .reorder-bar .save-btn{ background:var(--brass); color:#1a1a1a; }
+  .reorder-bar .cancel-btn{ background:transparent; color:#fff; border:1px solid rgba(255,255,255,.4); }
 </style>
 </head>
 <body>
@@ -354,6 +410,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="searchInput" type="text" placeholder="대장 이름 또는 분원명 검색 (예: 남동탄, 셔틀)">
     </div>
+    <button id="reorderToggleBtn" class="reorder-toggle-btn">⚙ 순서 편집</button>
   </header>
 
   <div id="status">색인을 불러오는 중입니다…</div>
@@ -364,6 +421,12 @@
     <span>VARON-LINKS</span>
     <span id="countLabel"></span>
   </footer>
+</div>
+
+<div class="reorder-bar" id="reorderBar">
+  <span>드래그해서 순서를 바꾼 뒤 저장하세요 (관리자 모드)</span>
+  <button class="cancel-btn" id="reorderCancelBtn">취소</button>
+  <button class="save-btn" id="reorderSaveBtn">순서 저장</button>
 </div>
 
 <script>
@@ -582,6 +645,126 @@ searchInput.addEventListener('input', () => {
   });
 
   noMatchEl.style.display = (visibleCards === 0) ? 'block' : 'none';
+});
+
+/* ---------------- 관리자 순서 편집 모드 ---------------- */
+const ADMIN_PASSWORD = "2026";
+let reorderMode = false;
+let draggedCard = null;
+
+const reorderToggleBtn = document.getElementById('reorderToggleBtn');
+const reorderBar = document.getElementById('reorderBar');
+
+reorderToggleBtn.addEventListener('click', () => {
+  if(reorderMode) return; // 편집 중엔 하단 바의 저장/취소로만 종료
+  const pw = prompt('관리자 비밀번호를 입력하세요');
+  if(pw === null) return;
+  if(pw !== ADMIN_PASSWORD){
+    alert('비밀번호가 올바르지 않습니다.');
+    return;
+  }
+  enterReorderMode();
+});
+
+function enterReorderMode(){
+  reorderMode = true;
+  document.body.classList.add('reorder-mode');
+  reorderToggleBtn.classList.add('active');
+  reorderBar.classList.add('active');
+  searchInput.value = '';
+  render(allRows); // 검색 필터 해제한 전체 목록으로 다시 렌더링
+  makeCardsDraggable();
+}
+
+function exitReorderMode(){
+  reorderMode = false;
+  document.body.classList.remove('reorder-mode');
+  reorderToggleBtn.classList.remove('active');
+  reorderBar.classList.remove('active');
+}
+
+function makeCardsDraggable(){
+  document.querySelectorAll('.branch-card').forEach(card => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', (e) => {
+      draggedCard = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.branch-card').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if(card === draggedCard) return;
+      card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      if(!draggedCard || card === draggedCard) return;
+      const cards = [...branchesEl.children];
+      const draggedIdx = cards.indexOf(draggedCard);
+      const targetIdx = cards.indexOf(card);
+      if(draggedIdx < targetIdx){
+        card.after(draggedCard);
+      }else{
+        card.before(draggedCard);
+      }
+    });
+  });
+}
+
+document.getElementById('reorderCancelBtn').addEventListener('click', () => {
+  exitReorderMode();
+  render(allRows);
+});
+
+document.getElementById('reorderSaveBtn').addEventListener('click', async () => {
+  const newCategoryOrder = [...branchesEl.children].map(c => c.dataset.category);
+  const updates = [];
+
+  newCategoryOrder.forEach((cat, catIdx) => {
+    const base = (catIdx + 1) * 1000;
+    const itemsInCat = allRows
+      .filter(r => r.category === cat)
+      .sort((a, b) => (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)));
+    itemsInCat.forEach((item, i) => {
+      const newVal = base + i;
+      if(Number(item.sort_order) !== newVal){
+        updates.push({ id:item.id, sort_order:newVal });
+      }
+    });
+  });
+
+  if(updates.length === 0){
+    exitReorderMode();
+    return;
+  }
+
+  reorderBar.querySelector('.save-btn').textContent = '저장 중...';
+  try{
+    await Promise.all(updates.map(u =>
+      fetch(`${SUPABASE_URL}/rest/v1/links?id=eq.${u.id}`, {
+        method: 'PATCH',
+        headers:{
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ sort_order: u.sort_order })
+      })
+    ));
+    exitReorderMode();
+    await loadLinks();
+  }catch(err){
+    console.error(err);
+    alert('순서 저장에 실패했습니다. 콘솔을 확인해주세요.');
+    reorderBar.querySelector('.save-btn').textContent = '순서 저장';
+  }
 });
 
 loadLinks();

@@ -236,6 +236,31 @@
 
   footer{text-align:center;font-size:11px;color:var(--muted);padding:20px;}
 
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(20,24,32,.55);
+    align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.active{display:flex;}
+  .modal-card{
+    background:#fff;border-radius:16px;padding:24px;max-width:420px;width:100%;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .modal-card h3{margin:0 0 8px;color:var(--navy);font-size:17px;}
+  .modal-desc{font-size:13px;color:var(--muted);margin:0 0 16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .toggle-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 4px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;
+  }
+  .toggle-row:last-child{border-bottom:none;}
+  .switch{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .slider{position:absolute;cursor:pointer;inset:0;background:#D5D9E0;border-radius:999px;transition:.2s;}
+  .switch .slider:before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked + .slider{background:var(--navy);}
+  .switch input:checked + .slider:before{transform:translateX(18px);}
+
   @media (max-width:640px){
     .topbar,.tabs,main{padding-left:16px;padding-right:16px;}
     thead{display:none;}
@@ -258,16 +283,37 @@
   </div>
   <div class="upload-wrap">
     <span class="file-status" id="fileStatus">서버에서 최신 자료를 불러오는 중...</span>
+    <button class="upload-btn" id="settingsBtn" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);">⚙ 화면 관리</button>
     <button class="upload-btn" id="saveBtn" style="background:#fff;color:var(--navy);">☁️ 서버에 저장</button>
     <button class="upload-btn" id="uploadBtn">엑셀 업로드</button>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
   </div>
 </div>
 
-<div class="tabs">
-  <button class="tab-btn active" data-view="hocha">호차현황판</button>
-  <button class="tab-btn" data-view="contract">계약관리</button>
-  <button class="tab-btn" data-view="doc">서류알림함</button>
+<div class="tabs" id="tabsBar"></div>
+
+<!-- 화면 관리(관리자) 모달 -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal-card">
+    <div id="settingsAuthView">
+      <h3>관리자 인증</h3>
+      <p class="modal-desc">화면 노출 설정을 변경하려면 관리자 비밀번호를 입력하세요.</p>
+      <input type="password" id="adminPwInput" class="search-input" style="width:100%;margin-bottom:12px;" placeholder="비밀번호">
+      <div class="modal-actions">
+        <button class="chip" id="settingsCancelBtn">취소</button>
+        <button class="upload-btn" id="adminPwSubmit" style="background:var(--navy);color:#fff;">확인</button>
+      </div>
+    </div>
+    <div id="settingsToggleView" style="display:none;">
+      <h3>화면 노출 설정</h3>
+      <p class="modal-desc">체크 해제하면 상단 탭에서 해당 화면이 숨겨집니다 (전체 사용자 공통 적용).</p>
+      <div id="tabToggleList"></div>
+      <div class="modal-actions">
+        <button class="chip" id="settingsCloseBtn">닫기</button>
+        <button class="upload-btn" id="settingsSaveBtn" style="background:var(--navy);color:#fff;">저장</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <main>
@@ -338,14 +384,128 @@
     </div>
   </section>
 
+  <!-- 기사·동승자현황 -->
+  <section class="view" id="view-staff">
+    <div id="staff-empty" class="empty">
+      <div class="icon">🧑‍✈️</div>
+      <p><b>업로드된 자료가 없습니다.</b><br>'기사' 또는 '동승자' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+    </div>
+    <div id="staff-content" style="display:none;">
+      <div class="stat-row" id="staff-stats"></div>
+      <div class="filter-row">
+        <button class="chip active" data-role="전체">전체</button>
+        <button class="chip" data-role="기사">기사</button>
+        <button class="chip" data-role="동승자">동승자</button>
+        <label style="font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px;margin-left:6px;">
+          <input type="checkbox" id="staff-active-only" checked> 재직중만 보기
+        </label>
+      </div>
+      <div class="filter-row" style="justify-content:space-between;">
+        <input class="search-input" id="staff-search" placeholder="이름 검색">
+        <button class="export-btn" id="staff-export">⬇ 현재 목록 엑셀로 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>이름</th><th>역할</th><th>연락처</th><th>소속업체</th><th>배정호차/부</th>
+        <th>채용일</th><th>재직상태</th><th>범죄조회일</th><th>안전교육이수일</th>
+      </tr></thead><tbody id="staff-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- 차량·업체현황 -->
+  <section class="view" id="view-vehicle">
+    <div id="vehicle-empty" class="empty">
+      <div class="icon">🚐</div>
+      <p><b>업로드된 자료가 없습니다.</b><br>'차량' 또는 '업체' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+    </div>
+    <div id="vehicle-content" style="display:none;">
+      <div class="stat-row" id="vehicle-stats"></div>
+
+      <div class="section-title" style="justify-content:space-between;">
+        <span>차량 목록</span>
+        <button class="export-btn small" id="vehicle-export">⬇ 차량 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>차량번호</th><th>차종</th><th>인승</th><th>연식</th><th>소유형태</th><th>배정호차</th><th>폐차여부</th>
+      </tr></thead><tbody id="vehicle-body"></tbody></table>
+
+      <div class="section-title" style="justify-content:space-between;">
+        <span>업체 목록</span>
+        <button class="export-btn small" id="company-export">⬇ 업체 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>업체명</th><th>사업자등록번호</th><th>대표자</th><th>연락처</th>
+      </tr></thead><tbody id="company-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- 이슈(운행예외) 관리 -->
+  <section class="view" id="view-issue">
+    <div id="issue-empty" class="empty">
+      <div class="icon">⚠️</div>
+      <p><b>업로드된 자료가 없습니다.</b><br>'이슈' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+    </div>
+    <div id="issue-content" style="display:none;">
+      <div class="stat-row" id="issue-stats"></div>
+      <div class="filter-row" style="justify-content:flex-end;">
+        <button class="export-btn" id="issue-export">⬇ 현재 목록 엑셀로 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>호차</th><th>이슈종류</th><th>발생일</th><th>임시조치</th><th>조치대상</th><th>종료일</th><th>상태</th>
+      </tr></thead><tbody id="issue-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- 정류장·학생현황 -->
+  <section class="view" id="view-stop">
+    <div id="stop-empty" class="empty">
+      <div class="icon">📍</div>
+      <p><b>업로드된 자료가 없습니다.</b><br>'정류장' 또는 '학생_기본정보' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+    </div>
+    <div id="stop-content" style="display:none;">
+      <div class="stat-row" id="stop-stats"></div>
+
+      <div class="section-title" style="justify-content:space-between;">
+        <span>정류장 목록</span>
+        <button class="export-btn small" id="stop-export">⬇ 정류장 내보내기</button>
+      </div>
+      <div class="filter-row">
+        <button class="chip active" data-usage="전체">전체</button>
+        <button class="chip" data-usage="사용중">사용중만</button>
+      </div>
+      <table><thead><tr>
+        <th>정류장명</th><th>소속분원</th><th>출처</th><th>사용상태</th><th>등원</th><th>하원</th>
+      </tr></thead><tbody id="stop-body"></tbody></table>
+
+      <div class="section-title" style="justify-content:space-between;">
+        <span>학생 목록(기본정보)</span>
+        <button class="export-btn small" id="student-export">⬇ 학생 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>학생명</th><th>소속분원</th><th>왕복/편도</th><th>요일그룹</th><th>기본등원정류장</th><th>기본하원정류장</th>
+      </tr></thead><tbody id="student-body"></tbody></table>
+    </div>
+  </section>
+
 </main>
 
 <footer>바론네트웍스(주) 총무팀 · 셔틀운영 데이터설계서 v1.0 기준 · 엑셀 업로드 후 '☁️ 서버에 저장'을 눌러야 다른 사람 화면에도 반영됩니다</footer>
 
 <script>
-const state = { hocha: [], contract: [], doc: [] };
+const state = {};
+const SHEET_NAMES = [
+  "호차","기사","동승자","차량","업체","업체_상호변경이력","계약","서류",
+  "배정이력_기사","배정이력_동승자","배정이력_차량","배정이력_정류장",
+  "정류장","학생_기본정보","학생_일별기록","이슈","외부시스템계정","사용자계정"
+];
 const BRANCHES = ["장안","서수원","수원","운정1","운정2","남동탄"];
 const TOP_DOCS = ["범죄경력조회","안전교육확인증","통학버스신고필증"];
+
+// 화면(호차현황판/계약관리/서류알림함)은 기존 변수명을 그대로 사용하도록 별칭 연결
+function syncAliases(){
+  state.hocha = state['호차'] || [];
+  state.contract = state['계약'] || [];
+  state.doc = state['서류'] || [];
+}
 
 // 현재 화면에 표시 중인(필터/정렬 반영된) 목록을 export 시점에 참조하기 위한 저장소
 const current = { hocha: [], contract: [], docTop: [], docNormal: [] };
@@ -380,10 +540,10 @@ async function saveToServer(){
   btn.disabled = true;
   try{
     const now = new Date().toISOString();
-    await db.collection('shuttle_data').doc('hocha').set({ rows: sanitize(state.hocha), updatedAt: now });
-    await db.collection('shuttle_data').doc('contract').set({ rows: sanitize(state.contract), updatedAt: now });
-    await db.collection('shuttle_data').doc('doc').set({ rows: sanitize(state.doc), updatedAt: now });
-    document.getElementById('fileStatus').textContent = `서버에 저장 완료 (${new Date().toLocaleTimeString('ko-KR')})`;
+    await Promise.all(SHEET_NAMES.map(name =>
+      db.collection('shuttle_data').doc(name).set({ rows: sanitize(state[name]), updatedAt: now })
+    ));
+    document.getElementById('fileStatus').textContent = `서버에 저장 완료 - ${SHEET_NAMES.length}개 탭 (${new Date().toLocaleTimeString('ko-KR')})`;
   }catch(err){
     console.error(err);
     document.getElementById('fileStatus').textContent = "서버 저장 실패: 콘솔을 확인해주세요";
@@ -395,23 +555,33 @@ async function saveToServer(){
 
 async function loadFromServer(){
   try{
-    const [h, c, d] = await Promise.all([
-      db.collection('shuttle_data').doc('hocha').get(),
-      db.collection('shuttle_data').doc('contract').get(),
-      db.collection('shuttle_data').doc('doc').get(),
-    ]);
-    state.hocha = h.exists ? (h.data().rows || []) : [];
-    state.contract = c.exists ? (c.data().rows || []) : [];
-    state.doc = d.exists ? (d.data().rows || []) : [];
-    renderHocha(); renderContract(); renderDoc();
-    const hasAny = state.hocha.length || state.contract.length || state.doc.length;
+    const visDoc = await db.collection('shuttle_data').doc('tab_visibility').get();
+    tabVisibility = visDoc.exists ? visDoc.data() : defaultVisibility();
+    renderTabs();
+
+    const results = await Promise.all(
+      SHEET_NAMES.map(name => db.collection('shuttle_data').doc(name).get())
+    );
+    SHEET_NAMES.forEach((name, i) => {
+      state[name] = results[i].exists ? (results[i].data().rows || []) : [];
+    });
+    syncAliases();
+    renderAll();
+    const hasAny = SHEET_NAMES.some(name => (state[name] || []).length > 0);
     document.getElementById('fileStatus').textContent = hasAny
-      ? `서버 자료 불러옴 (${new Date().toLocaleTimeString('ko-KR')})`
+      ? `서버 자료 불러옴 - ${SHEET_NAMES.length}개 탭 확인 (${new Date().toLocaleTimeString('ko-KR')})`
       : "서버에 저장된 자료가 없습니다. 엑셀을 업로드하고 '서버에 저장'을 눌러주세요.";
   }catch(err){
     console.error(err);
+    tabVisibility = defaultVisibility();
+    renderTabs();
     document.getElementById('fileStatus').textContent = "서버 연결 실패: 엑셀을 직접 업로드해주세요";
   }
+}
+
+function renderAll(){
+  renderHocha(); renderContract(); renderDoc();
+  renderStaff(); renderVehicleCompany(); renderIssue(); renderStopStudent();
 }
 
 document.getElementById('saveBtn').addEventListener('click', saveToServer);
@@ -436,13 +606,108 @@ function exportExcel(rows, sheetName, filenamePrefix){
 document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', handleFile);
 
-document.querySelectorAll('.tab-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+const TABS = [
+  { key:'hocha',    label:'호차현황판',   view:'view-hocha' },
+  { key:'contract', label:'계약관리',     view:'view-contract' },
+  { key:'doc',      label:'서류알림함',   view:'view-doc' },
+  { key:'staff',    label:'기사·동승자현황', view:'view-staff' },
+  { key:'vehicle',  label:'차량·업체현황',   view:'view-vehicle' },
+  { key:'issue',    label:'이슈관리',     view:'view-issue' },
+  { key:'stop',     label:'정류장·학생현황', view:'view-stop' },
+];
+let tabVisibility = {};
+let activeTabKey = 'hocha';
+const ADMIN_PASSWORD = "2026";
+let adminUnlocked = false;
+
+function defaultVisibility(){
+  const v = {};
+  TABS.forEach(t => v[t.key] = true);
+  return v;
+}
+
+function renderTabs(){
+  const bar = document.getElementById('tabsBar');
+  bar.innerHTML = "";
+  const visibleTabs = TABS.filter(t => tabVisibility[t.key] !== false);
+  if(!visibleTabs.some(t => t.key === activeTabKey)){
+    activeTabKey = visibleTabs.length ? visibleTabs[0].key : null;
+  }
+  visibleTabs.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (t.key === activeTabKey ? ' active' : '');
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      activeTabKey = t.key;
+      renderTabs();
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(t.view).classList.add('active');
+    });
+    bar.appendChild(btn);
   });
+  // 첫 렌더 시 활성 화면 보이기
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const activeTab = TABS.find(t => t.key === activeTabKey);
+  if(activeTab) document.getElementById(activeTab.view).classList.add('active');
+}
+
+/* ---------------- 화면 관리(관리자) 모달 ---------------- */
+const settingsOverlay = document.getElementById('settingsOverlay');
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  settingsOverlay.classList.add('active');
+  if(adminUnlocked){
+    showToggleView();
+  }else{
+    document.getElementById('settingsAuthView').style.display = 'block';
+    document.getElementById('settingsToggleView').style.display = 'none';
+    document.getElementById('adminPwInput').value = '';
+  }
+});
+document.getElementById('settingsCancelBtn').addEventListener('click', () => settingsOverlay.classList.remove('active'));
+document.getElementById('settingsCloseBtn').addEventListener('click', () => settingsOverlay.classList.remove('active'));
+
+document.getElementById('adminPwSubmit').addEventListener('click', () => {
+  const pw = document.getElementById('adminPwInput').value;
+  if(pw === ADMIN_PASSWORD){
+    adminUnlocked = true;
+    showToggleView();
+  }else{
+    alert('비밀번호가 올바르지 않습니다.');
+  }
+});
+
+function showToggleView(){
+  document.getElementById('settingsAuthView').style.display = 'none';
+  document.getElementById('settingsToggleView').style.display = 'block';
+  const list = document.getElementById('tabToggleList');
+  list.innerHTML = "";
+  TABS.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    const checked = tabVisibility[t.key] !== false;
+    row.innerHTML = `
+      <span>${t.label}</span>
+      <label class="switch">
+        <input type="checkbox" data-key="${t.key}" ${checked ? 'checked' : ''}>
+        <span class="slider"></span>
+      </label>`;
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('settingsSaveBtn').addEventListener('click', async () => {
+  const inputs = document.querySelectorAll('#tabToggleList input[type=checkbox]');
+  const newVisibility = {};
+  inputs.forEach(inp => { newVisibility[inp.dataset.key] = inp.checked; });
+  tabVisibility = newVisibility;
+  renderTabs();
+  settingsOverlay.classList.remove('active');
+  try{
+    await db.collection('shuttle_data').doc('tab_visibility').set(tabVisibility);
+  }catch(err){
+    console.error(err);
+    alert('노출 설정 저장에 실패했습니다. (화면에는 즉시 반영되었지만, 다른 사용자에게는 반영되지 않을 수 있습니다)');
+  }
 });
 
 function handleFile(e){
@@ -453,11 +718,10 @@ function handleFile(e){
   reader.onload = (ev)=>{
     try{
       const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
-      state.hocha = readSheet(wb, '호차');
-      state.contract = readSheet(wb, '계약');
-      state.doc = readSheet(wb, '서류');
-      document.getElementById('fileStatus').textContent = `"${file.name}" 반영됨 (${new Date().toLocaleTimeString('ko-KR')})`;
-      renderHocha(); renderContract(); renderDoc();
+      SHEET_NAMES.forEach(name => { state[name] = readSheet(wb, name); });
+      syncAliases();
+      document.getElementById('fileStatus').textContent = `"${file.name}" 반영됨 - ${SHEET_NAMES.length}개 탭 읽음 (${new Date().toLocaleTimeString('ko-KR')})`;
+      renderAll();
     }catch(err){
       document.getElementById('fileStatus').textContent = "업로드 실패: 형식을 확인해주세요";
       console.error(err);
@@ -659,6 +923,184 @@ function renderDoc(){
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">해당 자료 없음</td></tr>`;
 }
 
+/* ---------------- 기사·동승자현황 ---------------- */
+let staffRoleFilter = "전체";
+let staffSearchTerm = "";
+let staffActiveOnly = true;
+
+function renderStaff(){
+  const drivers = (state['기사']||[]).map(r => ({...r, __role:'기사'}));
+  const attendants = (state['동승자']||[]).map(r => ({...r, __role:'동승자'}));
+  const all = [...drivers, ...attendants];
+  const has = all.length > 0;
+  document.getElementById('staff-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('staff-content').style.display = has ? 'block' : 'none';
+  if(!has) return;
+
+  let rows = all;
+  if(staffRoleFilter !== "전체") rows = rows.filter(r => r.__role === staffRoleFilter);
+  if(staffActiveOnly) rows = rows.filter(r => !r['퇴사일']);
+  if(staffSearchTerm){
+    const t = staffSearchTerm.toLowerCase();
+    rows = rows.filter(r => String(r['이름']||'').toLowerCase().includes(t));
+  }
+  current.staff = rows;
+
+  const activeCount = all.filter(r => !r['퇴사일']).length;
+  document.getElementById('staff-stats').innerHTML = `
+    <div class="stat-card"><div class="num">${all.length}</div><div class="label">전체 인원(기사+동승자)</div></div>
+    <div class="stat-card"><div class="num">${activeCount}</div><div class="label">재직중</div></div>
+    <div class="stat-card warn"><div class="num">${all.length - activeCount}</div><div class="label">퇴사</div></div>
+  `;
+
+  document.getElementById('staff-body').innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td data-label="이름">${r['이름']||'-'}</td>
+      <td data-label="역할"><span class="badge ${r.__role==='기사'?'top':'gray'}">${r.__role}</span></td>
+      <td data-label="연락처">${r['연락처']||'-'}</td>
+      <td data-label="소속업체">${r['소속업체']||'-'}</td>
+      <td data-label="배정호차/부">${r['현재배정호차']||'-'}${r['배정부(시간대)'] ? ' · '+r['배정부(시간대)'] : ''}</td>
+      <td data-label="채용일">${fmtDate(r['채용일'])}</td>
+      <td data-label="재직상태">${r['퇴사일'] ? `<span class="badge gray">퇴사(${fmtDate(r['퇴사일'])})</span>` : `<span class="badge green">재직중</span>`}</td>
+      <td data-label="범죄조회일">${fmtDate(r['범죄경력조회일'])}</td>
+      <td data-label="안전교육이수일">${fmtDate(r['안전교육이수일'])}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="9" style="text-align:center;color:var(--muted);">조건에 맞는 인원이 없습니다.</td></tr>`;
+}
+
+document.querySelectorAll('#view-staff [data-role]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#view-staff [data-role]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    staffRoleFilter = btn.dataset.role;
+    renderStaff();
+  });
+});
+document.getElementById('staff-search').addEventListener('input', (e) => { staffSearchTerm = e.target.value.trim(); renderStaff(); });
+document.getElementById('staff-active-only').addEventListener('change', (e) => { staffActiveOnly = e.target.checked; renderStaff(); });
+
+/* ---------------- 차량·업체현황 ---------------- */
+function renderVehicleCompany(){
+  const vehicles = state['차량']||[];
+  const companies = state['업체']||[];
+  const has = vehicles.length > 0 || companies.length > 0;
+  document.getElementById('vehicle-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('vehicle-content').style.display = has ? 'block' : 'none';
+  if(!has) return;
+
+  current.vehicle = vehicles;
+  current.company = companies;
+  const activeVehicles = vehicles.filter(v => !v['폐차일']).length;
+
+  document.getElementById('vehicle-stats').innerHTML = `
+    <div class="stat-card"><div class="num">${vehicles.length}</div><div class="label">전체 차량</div></div>
+    <div class="stat-card"><div class="num">${activeVehicles}</div><div class="label">운행중 차량</div></div>
+    <div class="stat-card"><div class="num">${companies.length}</div><div class="label">전체 업체</div></div>
+  `;
+
+  document.getElementById('vehicle-body').innerHTML = vehicles.length ? vehicles.map(v => `
+    <tr>
+      <td data-label="차량번호">${v['차량번호']||'-'}</td>
+      <td data-label="차종">${v['차종']||'-'}</td>
+      <td data-label="인승">${v['인승']||'-'}</td>
+      <td data-label="연식">${v['연식']||'-'}</td>
+      <td data-label="소유형태"><span class="badge gray">${v['소유형태']||'-'}</span></td>
+      <td data-label="배정호차">${v['현재배정호차']||'-'}</td>
+      <td data-label="폐차여부">${v['폐차일'] ? `<span class="badge red">폐차(${fmtDate(v['폐차일'])})</span>` : `<span class="badge green">운행중</span>`}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);">차량 자료 없음</td></tr>`;
+
+  document.getElementById('company-body').innerHTML = companies.length ? companies.map(c => `
+    <tr>
+      <td data-label="업체명">${c['업체명']||'-'}</td>
+      <td data-label="사업자등록번호">${c['사업자등록번호']||'-'}</td>
+      <td data-label="대표자">${c['대표자']||'-'}</td>
+      <td data-label="연락처">${c['연락처']||'-'}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="4" style="text-align:center;color:var(--muted);">업체 자료 없음</td></tr>`;
+}
+
+/* ---------------- 이슈(운행예외) 관리 ---------------- */
+function renderIssue(){
+  const rows = [...(state['이슈']||[])].sort((a,b)=> (toDate(b['발생일'])||0) - (toDate(a['발생일'])||0));
+  const has = rows.length > 0;
+  document.getElementById('issue-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('issue-content').style.display = has ? 'block' : 'none';
+  if(!has) return;
+  current.issue = rows;
+
+  const ongoing = rows.filter(r => !r['종료일']).length;
+  document.getElementById('issue-stats').innerHTML = `
+    <div class="stat-card"><div class="num">${rows.length}</div><div class="label">전체 이슈</div></div>
+    <div class="stat-card danger"><div class="num">${ongoing}</div><div class="label">진행중(미종료)</div></div>
+  `;
+
+  document.getElementById('issue-body').innerHTML = rows.map(r => `
+    <tr>
+      <td data-label="호차">${r['호차']||'-'}</td>
+      <td data-label="이슈종류"><span class="badge gray">${r['이슈종류']||'-'}</span></td>
+      <td data-label="발생일">${fmtDate(r['발생일'])}</td>
+      <td data-label="임시조치">${r['임시조치']||'-'}</td>
+      <td data-label="조치대상">${r['조치대상']||'-'}</td>
+      <td data-label="종료일">${r['종료일'] ? fmtDate(r['종료일']) : '-'}</td>
+      <td data-label="상태">${r['종료일'] ? `<span class="badge green">종료됨</span>` : `<span class="badge red">진행중</span>`}</td>
+    </tr>`).join('');
+}
+
+/* ---------------- 정류장·학생현황 ---------------- */
+let stopUsageFilter = "전체";
+function renderStopStudent(){
+  const stops = state['정류장']||[];
+  const students = state['학생_기본정보']||[];
+  const has = stops.length > 0 || students.length > 0;
+  document.getElementById('stop-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('stop-content').style.display = has ? 'block' : 'none';
+  if(!has) return;
+
+  let rows = stops;
+  if(stopUsageFilter === "사용중") rows = rows.filter(s => s['사용상태'] === '사용중');
+  current.stop = rows;
+  current.student = students;
+
+  const inUse = stops.filter(s => s['사용상태'] === '사용중').length;
+  document.getElementById('stop-stats').innerHTML = `
+    <div class="stat-card"><div class="num">${stops.length}</div><div class="label">전체 정류장</div></div>
+    <div class="stat-card"><div class="num">${inUse}</div><div class="label">사용중 정류장</div></div>
+    <div class="stat-card"><div class="num">${students.length}</div><div class="label">전체 학생</div></div>
+  `;
+
+  document.getElementById('stop-body').innerHTML = rows.length ? rows.map(s => `
+    <tr>
+      <td data-label="정류장명">${s['정류장명']||'-'}</td>
+      <td data-label="소속분원">${s['소속분원']||'-'}</td>
+      <td data-label="출처">${s['출처']||'-'}</td>
+      <td data-label="사용상태"><span class="badge ${s['사용상태']==='사용중'?'green':'gray'}">${s['사용상태']||'-'}</span></td>
+      <td data-label="등원">${s['등원포함여부']||'-'}</td>
+      <td data-label="하원">${s['하원포함여부']||'-'}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">조건에 맞는 정류장이 없습니다.</td></tr>`;
+
+  document.getElementById('student-body').innerHTML = students.length ? students.map(s => `
+    <tr>
+      <td data-label="학생명">${s['학생명']||'-'}</td>
+      <td data-label="소속분원">${s['소속분원']||'-'}</td>
+      <td data-label="왕복/편도">${s['왕복편도']||'-'}</td>
+      <td data-label="요일그룹">${s['요일그룹']||'-'}</td>
+      <td data-label="기본등원정류장">${s['기본등원정류장']||'-'}</td>
+      <td data-label="기본하원정류장">${s['기본하원정류장']||'-'}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">학생 자료 없음</td></tr>`;
+}
+
+document.querySelectorAll('#view-stop [data-usage]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#view-stop [data-usage]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    stopUsageFilter = btn.dataset.usage;
+    renderStopStudent();
+  });
+});
+
 /* ---------------- 엑셀 내보내기 ---------------- */
 document.getElementById('hocha-export').addEventListener('click', ()=>{
   exportExcel(current.hocha, '호차현황', '호차현황판');
@@ -671,6 +1113,24 @@ document.getElementById('doc-top-export').addEventListener('click', ()=>{
 });
 document.getElementById('doc-normal-export').addEventListener('click', ()=>{
   exportExcel(current.docNormal, '일반서류', '서류알림함_일반');
+});
+document.getElementById('staff-export').addEventListener('click', ()=>{
+  exportExcel(current.staff, '기사동승자현황', '기사동승자현황');
+});
+document.getElementById('vehicle-export').addEventListener('click', ()=>{
+  exportExcel(current.vehicle, '차량현황', '차량현황');
+});
+document.getElementById('company-export').addEventListener('click', ()=>{
+  exportExcel(current.company, '업체현황', '업체현황');
+});
+document.getElementById('issue-export').addEventListener('click', ()=>{
+  exportExcel(current.issue, '이슈현황', '이슈관리');
+});
+document.getElementById('stop-export').addEventListener('click', ()=>{
+  exportExcel(current.stop, '정류장현황', '정류장현황');
+});
+document.getElementById('student-export').addEventListener('click', ()=>{
+  exportExcel(current.student, '학생현황', '학생현황');
 });
 document.getElementById('doc-all-export').addEventListener('click', ()=>{
   const combined = [

@@ -3,13 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>바론링크 | 분원 관리대장 색인</title>
-<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAqUlEQVR4nO2XMQ5AQBBF/+AmEo2bONWeyk00EkcRKrGFsDvzxxa8UsJ/j8YKItqu3/ASyzwJAFQlxuM9KTEeU5UcB6JP8FmBhvWgMdSX14ew3t5HeQPacZqABbOApZ4iYMUkYK03CzBQCzDqTQIsVAKserUAk2wBZr1KgE2WALs+W8CDZAGP+iwBL5IEvOqTBTx5FPCsBwD5f8t/geOUWkwAOI/Kb7PMk+x/+DQmJFW0qAAAAABJRU5ErkJggg==">
-<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAC1UlEQVR4nO3Vy20cMRRE0ZbtTARoo0wclaJydga8sOGPrOL0TH/Y5DsnAIKLi3pPzy+vC3zkU+8PcF3iIBIHkTiIxEEkDiJxEImDSBxE4iASB5E4iMRBJA4icRCJg0gcROIgEgeROIjEQSQOInEQiYNIHETiIBIHkTiIxEEkDiJxEImDSBxEX3p/YDDf3j4f8ezXt+9HPLuR5SASxx1KzcYiDhrEsVa12VjEQYM4Vik4G4s4aBDHbTVnYxEHDeK4oexsLOKgQRwtlWdjEQcN4iASR1T8pizioEEcHzMbizhoEMcHzMZP4iASx3tm4zdxEInjH2bjb+IgEgeROP5wU94RB5E4fjEb/xMHkTiWxWwE4iASh9mIxEFUPQ6z0VA9DhpKx2E22krHQZs4iOrG4abcVDcObioah9lYo2gcrFExDrOxUsU4WKlcHGZjvXJxsF6tOMzGXWrFwV0KxWE27lUoDu4lDqIqcbgpD6gSBw8oEYfZeEyJOHjM/HGYjYfNHwcPmzwOs7HF5HGwxcxxmI2NZo6DjcRBNG0cbsp208bBdnPGYTZ2MWcc7GLCOMzGXiaMg73MFofZ2NFscbCjqeIwG/uaKg72NU8cZmN388TB7sRBNEkcbsoRJomDI8wQh9k4yAxxcJDh4zAbxxk+Do4zdhxm41Bjx8GhBo7DbBxt4Dg42qhxmI0TjBoHJxAH0ZBxuCnnGDIOzjFeHGbjNOPFwWkGi8NsnGmwODjTSHGYjZONFAcnGyYOs3G+YeLgfOIgGiMON6WLMeKgiwHiMBu9DBAHvVw9DrPR0dXjoKNLx2E2+rp0HPR13TjMRnfXjYPuLhqH2biCi8bBFTw9v7z2/gMXZTmIxEEkDiJxEImDSBxE4iASB5E4iMRBJA4icRCJg0gcROIgEgeROIjEQSQOInEQiYNIHETiIBIHkTiIxEEkDiJxEImDSBxE4iASB5E4iH4AyQGeUX1nG/8AAAAASUVORK5CYII=">
-<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIuuwlOuhoOunge2BrCIsICJzaG9ydF9uYW1lIjogIuuwlOuhoOunge2BrCIsICJzdGFydF91cmwiOiAiLiIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjRjJFRkU2IiwgInRoZW1lX2NvbG9yIjogIiMyMzI2MkIiLCAiaWNvbnMiOiBbeyJzcmMiOiAiZGF0YTppbWFnZS9wbmc7YmFzZTY0LGlWQk9SdzBLR2dvQUFBQU5TVWhFVWdBQUFNQUFBQURBQ0FZQUFBQlMzR3dIQUFBRUIwbEVRVlI0bk8zY1MwNGJVUkNHMGJhVG5TQXhZU2RaRmF2S1RwZ2dzWlNJVEdMa0dMdmQ3WDdjeDMvT0ZBa3pxSy9xRXFRY2hnS2VubDgrUzN3dTlmdDRmenZzK1htN2ZKaUI1MUZiQjdIWk56ZjByRzJMR0ZiOWhvYWV2YXdWdzNHTmJ6SU1ocDk5clRWdml5c3krSlMyNUJvc3VnQ0dueG9zbWNPSHlqSDQxR3J1TlpoOUFRdy9OWnM3bjdNQ01QeTBZTTZjVGc3QThOT1NxZk02S1FERFQ0dW16TzNkQUF3L0xiczN2Nk1CR0g1Nk1EYkhxLzBsR0ZwME13RGJuNTdjbXVlckFSaCtlblJ0cmoyQmlQWXRBTnVmbmwzTzkzSHNpOUNqOHpuM0JDS2FBSWoyRllEbkQwbE84KzRDRUUwQVJEc01nK2NQdVZ3QW9nbUFhQUlnMnRIN24yUXVBTkVFUURRQkVFMEFSQk1BMFFSQXRKK2xmd0RtK2YzNm85aG4vM3I5VSt5enQrSUNFRTBBRGJIOTF5Y0FvZ21nRWJiL05nUkFOQUUwd1BiZmpnQ0lKb0RLMmY3YkVnRFJCRkF4MjM5N0FpQ2FBQ3BsKys5REFFUVRBTkVFVUNIUG4vMElnR2dDcUl6dHZ5OEJFRTBBRmJIOTl5Y0FvZ21nRXJaL0dRSWdtZ0FxWVB1WEl3Q2lDYUF3Mjc4c0FSQk5BRVFUUUVHZVArVUpnR2dDS01UMnI0TUFpQ2FBQW16L2VnaUFhQUxZbWUxZkZ3RVFUUUE3c3Yzckl3Q2lDV0FudG4rZEJFQTBBUkJOQUR2dy9LbVhBSWdtZ0kzWi9uVVRBTkVFc0NIYnYzNENJSm9BTm1MN3QwRUFSQlBBQm16L2RnaUFhQUpZbWUzZkZnRVFUUUJFRThDS1BIL2FJd0NpQ1dBbHRuK2JCRUEwQWF6QTltK1hBSWdtZ0lWcy83WUpnR2dDV01EMmI1OEFpQ2FBQjluK2ZSQUEwUVR3QU51L0h3SWdtZ0NJSm9DWlBILzZJZ0NpQ1dBRzI3OC9BaUNhQUNheS9mc2tBS0lKWUFMYnYxOENJSm9BN3JEOSt5WUFvZ2xnaE8zZlB3RVFUUUJFRThBTm5qOFpCRUEwQVZ4aCsrY1FBTkVFY01IMnp5SUFvZ25nak8yZlJ3QkVFOEEvdG44bUFSQk5BSVB0bjB3QVJCTUEwZUlEOFB6SkZoOEEyYUlEc1AySkRnQmlBN0Q5R1liZ0FHQVlRZ093L1RtSkRBQk80Z0t3L1RrWEZ3Q2Npd3JBOXVkU1ZBQndTUUJFaXduQTg0ZHJZZ0tBYXlJQ3NQMjVKU0lBdUtYN0FHeC94blFmQUl6cE9nRGJuM3U2RGdEdTZUWUEyNThwdWcwQXB1Z3lBTnVmcWJvTUFLWTZQRDIvZkpiK0lhQVVGNEJvQWlDYUFJZ21BS0lKZ0dnQ0lKb0FpSGI4ZUg4N2xQNGhvQlFYZ0dnQ0lKb0FpSFljaG1Id2V3Q0pQdDdmRGk0QTBRUkF0SzhBUElOSWNwcDNGNEJvQWlEYWZ3RjRCcEhnZk02L1hRQVIwTFBMK2ZZRUl0clZBRndCZW5SdHJtOWVBQkhRazF2ejdBbEV0TkVBWEFGNk1EYkhkeStBQ0dqWnZmbWQ5QVFTQVMyYU1yZVRmd2NRQVMyWk9xK3pmZ2tXQVMyWU02ZXoveFZJQk5Sczdud3VHbWIvc3pTMWVIUXhML283Z0d0QURaYk00V29EN0Jxd3R6VVc4R3AvQ1hZTjJOTmE4N2JaMExvSXJHMkxKYnZMMWhZRGo5cjZaZkVYQkVCRmh2eVFmMDhBQUFBQVNVVk9SSzVDWUlJPSIsICJzaXplcyI6ICIxOTJ4MTkyIiwgInR5cGUiOiAiaW1hZ2UvcG5nIn0sIHsic3JjIjogImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBZ0FBQUFJQUNBWUFBQUQwZU5UNkFBQU8za2xFUVZSNG5PM2RUWEpUV1JhRlVVSFZUSWlndzB4cVZEbXFtZ2tkSWhoS0JkbklFaGdoMjlJNzk5Mi92ZFlJWkhYT3Q2OU41b2NMelh6Ni9PWEg2TThBc0x2djM3NStHUDBaZHVCTGZKSWpEekF2Y2ZBNFg5UWJISHVBOVltQyszd3BMemo0QVBzVEJQK0kveEljZllCY3lURVErWU03K2dEY1NvdUJxQi9XNFFmZ1BTa2hzUDBQNmVnRGNOVE9NYkR0RCtid0E5REtqaUd3M1EvazhBTndscDFDWUpzZnhPRUhvSmNkUW1ENUg4RGhCMkNVbFVOZzJRL3U4QU13aXhWRDRPUG9EM0NFNHcvQVRGYThTMHNWeTRwZk1BQlpWbmtOV09KRE92d0FyR2IyRUpqK1Z3Q09Qd0FybXYxK1RSMEFzMzk1QVBDV21lL1lsTThUTTM5aEFIREViTDhTbU80RndQRUhZRWV6M2JlcEFtQzJMd2NBV3BycHprM3hIREhURndJQVBZeitsY0R3RndESEg0QkVvKy9mMEFBWS9jTUR3RWdqNytDd0FIRDhBV0RjUFJ3U0FJNC9BUHd5NGk1MkR3REhId0QrMVBzK2RnMEF4eDhBWHRmelRuWUxBTWNmQU43WDYxNTJDUURISHdBZTErTnVuaDRBamo4QVBPL3MrM2xxQURqK0FIRGNtWGYwdEFCdy9BR2c3cXg3ZWtvQU9QNEEwTTRaZDNYNC93c0FBT2l2ZVFCWS93RFFYdXY3MmpRQUhIOEFPRS9MTzlzc0FCeC9BRGhmcTN2cmJ3QUFJRkNUQUxEK0FhQ2ZGbmUzSEFDT1B3RDBWNzIvcFFCdy9BRmduTW9kOWpjQUFCRG9jQUJZL3dBdzN0Rjc3QVVBQUFJZENnRHJId0RtY2VRdVB4MEFqajhBek9mWisreFhBQUFRNktrQXNQNEJZRjdQM0drdkFBQVE2T0VBc1A0QllINlAzbXN2QUFBUTZLRUFzUDRCWUIyUDNHMHZBQUFRNk4wQXNQNEJZRDN2M1c4dkFBQVE2TTBBc1A0QllGMXYzWEV2QUFBUVNBQUFRS0JYQThEelB3Q3M3N1Y3N2dVQUFBTGREUURySHdEMmNlK3Vld0VBZ0VBQ0FBQUMvUkVBbnY4QllEKzM5OTBMQUFBRUVnQUFFT2kzQVBEOER3RDdlbm5udlFBQVFDQUJBQUNCQkFBQUJQb1pBSDcvRHdEN3U5NTdMd0FBRUVnQUFFQWdBUUFBZ1FRQUFBVDZjTG40QTBBQVNPTUZBQUFDQ1FBQUNDUUFBQ0NRQUFDQVFBSUFBQUlKQUFBSTlORS9BUVNBUEY0QUFDQ1FBQUNBUUFJQUFBSUpBQUFJSkFBQUlKQUFBSUJBQWdBQUFna0FBQWdrQUFBZ2tBQUFnRUFDQUFBQ0NRQUFDQ1FBQUNEUXYwZC9BSUQvL3ZXdjBSOWhhZi81NjMralB3SUw4Z0lBQUlFRUFEQ1U5VjlqL1hPVUFBQ0FRQUlBR01iNnI3SCtxUkFBQUJCSUFBQkRXUDgxMWo5VkFnQUFBZ2tBb0R2cnY4YjZwd1VCQUFDQkJBRFFsZlZmWS8zVGlnQUFnRUFDQU9qRytxK3gvbWxKQUFCQUlBRUFkR0g5MTFqL3RDWUFBQ0NRQUFDQVFBSUFPSjNuL3hyUC81eEJBQUJBSUFFQW5NcjZyN0grT1lzQUFJQkFBZ0E0amZWZlkvMXpKZ0VBQUlFRUFIQUs2Ny9HK3Vkc0FnQUFBZ2tBb0RucnY4YjZwd2NCQUFDQkJBRFFsUFZmWS8zVGl3QUFnRUFDQUdqRytxK3gvdWxKQUFCQUlBRUFBSUVFQU5DRTUvOGF6Ly8wSmdBQUlKQUFBTXFzL3hycm54RUVBQUFFRWdCQWlmVmZZLzB6aWdBQWdFQUNBRGpNK3EreC9obEpBQUJBSUFFQUhHTDkxMWovakNZQUFDQ1FBQUNlWnYzWFdQL01RQUFBUUNBQkFEekYrcSt4L3BtRkFBQ0FRQUlBQUFJSkFPQmhudjlyUFA4ekV3RUFBSUVFQVBBUTY3L0crbWMyQWdBQUFna0E0RjNXZjQzMXo0d0VBQUFFRWdEQW02ei9HdXVmV1FrQUFBZ2tBSUJYV2Y4MTFqOHpFd0FBRUVnQUFIZFovelhXUDdNVEFBQVFTQUFBZjdEK2E2eC9WaUFBQUNDUUFBQ0FRQUlBK0kzbi94clAvNnhDQUFCQUlBRUEvR1Q5MTFqL3JFUUFBRUFnQVFCY0xoZnJ2OHI2WnpVQ0FBQUNDUURBK2kreS9sbVJBQUNBUUFJQXdsbi9OZFkvcXhJQUFCQklBRUF3NjcvRyttZGxBZ0FBQWdrQUNHWDkxMWovckU0QUFFQWdBUUFBZ1FRQUJQTDhYK1A1bngwSUFBQUlKQUFnalBWZlkvMnpDd0VBQUlFRUFBU3gvbXVzZjNZaUFBQWdrQUNBRU5aL2pmWFBiZ1FBQUFRU0FCREErcSt4L3RtUkFBQ0FRQUlBTm1mOTExai83RW9BQUVBZ0FRQWJzLzVyckg5MkpnQUFJSkFBQUlCQUFnQTI1Zm0veHZNL3V4TUFBQkJJQU1DR3JQOGE2NThFQWdBQUFna0EySXoxWDJQOWswSUFBRUFnQVFBYnNmNXJySCtTQ0FBQUNDUUFZQlBXZjQzMVR4b0JBQUNCQkFCc3dQcXZzZjVKSkFBQUlKQUFnTVZaL3pYV1A2a0VBQUFFRWdBQUVFZ0F3TUk4LzlkNC9pZVpBQUNBUUFJQUZtWDkxMWovcEJNQUFCQklBTUNDclA4YTZ4OEVBQUJFRWdDd0dPdS94dnFIZndnQUFBZ2tBR0FoMW4rTjlRKy9DQUFBQ0NRQVlCSFdmNDMxRDc4VEFBQVFTQURBQXF6L0d1c2YvaVFBQUNDUUFBQ0FRQUlBSnVmNXY4YnpQOXduQUFBZ2tBQ0FpVm4vTmRZL3ZFNEFBRUFnQVFDVHN2NXJySDk0bXdBQWdFQUNBQ1prL2RkWS8vQStBUUFBZ1FRQVRNYjZyN0grNFRFQ0FBQUNDUUNZaVBWZlkvM0Q0d1FBQUFRU0FEQUo2Ny9HK29mbkNBQUFDQ1FBQUNDUUFJQUplUDZ2OGZ3UHp4TUFBQkJJQU1CZzFuK045US9IQ0FBQUNDUUFZQ0RydjhiNmgrTUVBQUFFRWdBd2lQVmZZLzFEalFBQWdFQUNBQWF3L211c2Y2Z1RBQUFRU0FCQVo5Wi9qZlVQYlFnQUFBZ2tBS0FqNjcvRytvZDJCQUFBQkJJQUFCQklBRUFubnY5clBQOURXd0lBQUFJSkFPakErcSt4L3FFOUFRQUFnUVFBbk16NnI3SCs0UndDQUFBQ0NRQTRrZlZmWS8zRGVRUUFBQVFTQUhBUzY3L0crb2R6Q1FBQUNDUUE0QVRXZjQzMUQrY1RBQUFRU0FCQVk5Wi9qZlVQZlFnQUFBZ2tBS0FoNjcvRytvZCtCQUFBQkJJQUFCQklBRUFqbnY5clBQOURYd0lBQUFJSkFHakErcSt4L3FFL0FRQUFnUVFBRkZuL05kWS9qQ0VBQUNDUUFJQUM2Ny9HK29keEJBQUFCQklBY0pEMVgyUDl3MWdDQUFBQ0NRQTR3UHF2c2Y1aFBBRUFBSUVFQUR6SitxK3gvbUVPQWdBQUFna0FBQWdrQU9BSm52OXJQUC9EUEFRQUFBUVNBUEFnNjcvRytvZTVDQUFBQ0NRQTRBSFdmNDMxRC9NUkFBQVFTQURBTzZ6L0d1c2Y1aVFBQUNDUUFJQTNXUDgxMWovTVN3QUFRQ0FCQUsrdy9tdXNmNWliQUFDQVFBSUE3ckQrYTZ4L21KOEFBSUJBQWdBQUFna0F1T0g1djhielA2eEJBQUJBSUFFQUwxai9OZFkvckVNQUFFQWdBUUQvWi8zWFdQK3dGZ0VBQUlFRUFGeXMveXJySDlZakFBQWdrQUFnbnZWZlkvM0RtZ1FBQUFRU0FFU3ovbXVzZjFpWEFBQ0FRQUtBV05aL2pmVVBheE1BQUJCSUFBQkFJQUZBSk0vL05aNy9ZWDBDQUFBQ0NRRGlXUDgxMWovc1FRQUFRQ0FCUUJUcnY4YjZoMzBJQUFBSUpBQ0lZZjNYV1Ard0Z3RUFBSUVFQUJHcy94cnJIL1lqQUFBZ2tBQmdlOVovamZVUGV4SUFBQkJJQUxBMTY3L0crb2Q5Q1FBQUNDUUFBQ0NRQUdCYm52OXJQUC9EM2dRQUFBUVNBR3pKK3EreC9tRi9BZ0FBQWdrQXRtUDkxMWova0VFQUFFQWdBY0JXclA4YTZ4OXlDQUFBQ0NRQTJJYjFYMlA5UXhZQkFBQ0JCQUJic1A1cnJIL0lJd0FBSUpBQVlIbldmNDMxRDVrRUFBQUVFZ0FBRUVnQXNEVFAveldlL3lHWEFBQ0FRQUtBWlZuL05kWS9aQk1BQUJCSUFMQWs2Ny9HK2djRUFBQUVFZ0FzeC9xdnNmNkJ5MFVBQUVBa0FjQlNyUDhhNngrNEVnQUFFRWdBc0F6cnY4YjZCMTRTQUFBUVNBQ3dCT3UveHZvSGJna0FBQWdrQUFBZ2tBQmdlcDcvYXp6L0EvY0lBQUFJSkFDWW12VmZZLzBEcnhFQUFCQklBREF0NjcvRytnZmVJZ0FBSUpBQVlFcldmNDMxRDd4SEFBQkFJQUhBZEt6L0d1c2ZlSVFBQUlCQUFvQ3BXUDgxMWovd0tBRUFBSUVFQU5Pdy9tdXNmK0FaQWdBQUFna0FBQWdrQUppQzUvOGF6Ly9Bc3dRQUFBUVNBQXhuL2RkWS84QVJBZ0FBQWdrQWhyTCthNngvNENnQkFBQ0JCQUREV1A4MTFqOVFJUUFBSUpBQVlBanJ2OGI2QjZvRUFBQUVFZ0IwWi8zWFdQOUFDd0lBQUFJSkFMcXkvbXVzZjZBVkFRQUFnUVFBQUFRU0FIVGorYi9HOHovUWtnQUFnRUFDZ0M2cy94cnJIMmhOQUFCQUlBSEE2YXovR3VzZk9JTUFBSUJBQW9CVFdmODExajl3RmdFQUFJRUVBS2V4L211c2YrQk1BZ0FBQWdrQVRtSDkxMWovd05rRUFBQUVFZ0EwWi8zWFdQOUFEd0lBQUFJSkFBQUlKQUJveXZOL2plZC9vQmNCQUFDQkJBRE5XUDgxMWovUWt3QUFnRUFDZ0Nhcy94cnJIK2hOQUFCQUlBRkFtZlZmWS8wREl3Z0FBQWdrQUNpeC9tdXNmMkFVQVFBQWdRUUFoMW4vTmRZL01KSUFBSUJBQW9CRHJQOGE2eDhZVFFBQVFLQVBuejUvK1RINlF3QUFmWGtCQUlCQUFnQUFBZ2tBQUFna0FBQWdrQUFBZ0VBQ0FBQUNDUUFBQ0NRQUFDQ1FBQUNBUUFJQUFBSUpBQUFJSkFBQUlKQUFBSUJBQWdBQUFuMzgvdTNyaDlFZkFnRG95d3NBQUFRU0FBQVFTQUFBUUNBQkFBQ0JCQUFBQkJJQUFCRG80K1Z5dWZpbmdBQ1E0L3UzcngrOEFBQkFJQUVBQUlFRUFBQUVFZ0FBRU9obkFQaERRQURZMy9YZWV3RUFnRUFDQUFBQ0NRQUFDUFJiQVBnN0FBRFkxOHM3N3dVQUFBSUpBQUFJOUVjQStEVUFBT3puOXI1N0FRQ0FRQUlBQUFMZERRQy9CZ0NBZmR5NzYxNEFBQ0RRcXdIZ0ZRQUExdmZhUGZjQ0FBQ0JCQUFBQkhvekFQd2FBQURXOWRZZDl3SUFBSUhlRFFDdkFBQ3dudmZ1dHhjQUFBajBVQUI0QlFDQWRUeHl0NzBBQUVDZ2h3UEFLd0FBek8vUmUrMEZBQUFDUFJVQVhnRUFZRjdQM0drdkFBQVE2T2tBOEFvQUFQTjU5ajRmZWdFUUFRQXdqeU4zMmE4QUFDRFE0UUR3Q2dBQTR4Mjl4MTRBQUNCUUtRQzhBZ0RBT0pVN1hINEJFQUVBMEYvMS9qYjVGWUFJQUlCK1d0eGRmd01BQUlHYUJZQlhBQUE0WDZ0NzIvUUZRQVFBd0hsYTN0bm12d0lRQVFEUVh1djc2bThBQUNEUUtRSGdGUUFBMmpuanJwNzJBaUFDQUtEdXJIdDY2cThBUkFBQUhIZm1IVDM5YndCRUFBQTg3K3o3MmVXUEFFVUFBRHl1eDkzczlxOEFSQUFBdksvWHZlejZ6d0JGQUFDOHJ1ZWQ3UDdmQVJBQkFQQ24zdmR4eUg4SVNBUUF3QzhqN3VLdy94S2dDQUNBY2ZkdzZIOEtXQVFBa0d6a0hSeisvd0lRQVFBa0duMy9wanErbno1LytUSDZNd0RBbVVZZi9xdmhMd0F2emZLbEFNQVpacnB6VXdYQTVUTFhsd01BcmN4MjM2YjZNTGY4U2dDQTFjMTIrSyttZXdGNGFkWXZEUUFlTWZNZG16b0FMcGU1dnp3QWVNM3M5MnZxRDNmTHJ3UUFtTjNzaC85cWlROTVTd2dBTUp0VkR2L1Y5TDhDdUdlMUx4bUF2YTE0bDViN3dMZThCZ0F3eW9xSC8yclpEMzVMQ0FEUXk4cUgvMnI1SCtDV0VBRGdMRHNjL3F0dGZwQmJRZ0NBVm5ZNi9GZmIvVUMzaEFBQVIrMTQrSysyL2NIdUVRTUF2R2Zuby85U3hBOTVTd2dBY0N2bDhGOUYvYkQzaUFHQVhHbEgvNlhZSC93ZU1RQ3d2K1NqLzVJdjRRMkNBR0I5RHY1OXZwUW5pUUtBZVRuMmovc2JjM0Z2RHZweFR3VUFBQUFBU1VWT1JLNUNZSUk9IiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifV19">
-<meta name="theme-color" content="#23262B">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="바론링크">
+<title>바론링크 | 관리대장 색인</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -183,6 +177,33 @@
   }
   .branch-card.open .chevron{ transform:rotate(180deg); }
 
+  /* 준비중 배지 */
+  .soon-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    letter-spacing:.06em;
+    color:var(--ink-faint);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:3px 9px;
+    flex-shrink:0;
+  }
+  a.doc-row.disabled{
+    color:var(--ink-faint);
+    cursor:default;
+    pointer-events:none;
+  }
+  a.doc-row.disabled .doc-title{ color:var(--ink-faint); }
+  .branch-head.disabled{ cursor:default; }
+  .branch-head.disabled .branch-title h2{ color:var(--ink-faint); }
+
+  /* 바로가기(단일 링크) 카드: chevron 없이 카드 전체가 링크 */
+  a.branch-head-link{
+    text-decoration:none;
+    color:inherit;
+    display:flex;
+  }
+
   .doc-list{
     display:grid;
     grid-template-rows:0fr;
@@ -328,10 +349,10 @@
       </div>
       <div class="title-row"><h1>바론링크</h1></div>
     </div>
-    <p class="sub">분원별 관리대장 색인입니다. 분원을 눌러 펼치고, 원하는 대장을 클릭하면 해당 구글시트로 이동합니다.</p>
+    <p class="sub">항목을 클릭하면 해당 대장/앱으로 이동합니다. '청소관리대장'과 '노선최적화앱'은 분원을 펼쳐서 고를 수 있습니다.</p>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="searchInput" type="text" placeholder="분원명 또는 대장 종류 검색 (예: 남동탄, 셔틀)">
+      <input id="searchInput" type="text" placeholder="대장 이름 또는 분원명 검색 (예: 남동탄, 셔틀)">
     </div>
   </header>
 
@@ -353,6 +374,10 @@ const iconPaths = {
   '시설': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   '청소': '<path d="M3 21l6-6M14 3l7 7-8.5 8.5a4.95 4.95 0 1 1-7-7L14 3z"/>',
   '셔틀': '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="7.5" cy="19" r="1.5"/><circle cx="16.5" cy="19" r="1.5"/><path d="M3 12h18"/>',
+  '소모품': '<path d="M21 8L12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  '강사': '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/>',
+  '교습비': '<rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 6V4h12v2"/>',
+  '노선': '<path d="M9 20l-5-2V6l5 2m0 12l6-2m-6 2V8m6 10l5 2V8l-5-2m0 12V6m0 0L9 8"/>',
   'default': '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h5"/>'
 };
 function iconFor(category){
@@ -361,6 +386,19 @@ function iconFor(category){
   }
   return iconPaths.default;
 }
+
+// 카테고리 표시 순서 / 라벨 재정의 / 유형(단일링크 vs 분원별펼치기) 고정
+const CATEGORY_ORDER = ['시설관리대장','청소관리대장','셔틀현황','소모품관리대장','강사채용해임현황','교습비등록현황','노선최적화앱'];
+const CATEGORY_LABELS = { '셔틀현황':'셔틀운영대시보드' };
+const CATEGORY_TYPE = {
+  '시설관리대장':'simple',
+  '청소관리대장':'expandable',
+  '셔틀현황':'simple',
+  '소모품관리대장':'simple',
+  '강사채용해임현황':'simple',
+  '교습비등록현황':'simple',
+  '노선최적화앱':'expandable',
+};
 
 const statusEl = document.getElementById('status');
 const branchesEl = document.getElementById('branches');
@@ -404,32 +442,76 @@ async function loadLinks(){
   }
 }
 
-function groupByBranch(rows){
-  const order = [];
+function groupByCategory(rows){
   const map = {};
   rows.forEach(r=>{
-    if(!map[r.branch]){ map[r.branch] = []; order.push(r.branch); }
-    map[r.branch].push(r);
+    if(!map[r.category]) map[r.category] = [];
+    map[r.category].push(r);
   });
-  return order.map(b => ({ branch:b, items:map[b] }));
+  const known = CATEGORY_ORDER.filter(c => map[c]);
+  const unknown = Object.keys(map).filter(c => !CATEGORY_ORDER.includes(c));
+  return [...known, ...unknown].map(c => ({ category:c, items:map[c] }));
 }
 
 function render(rows){
-  const groups = groupByBranch(rows);
+  const groups = groupByCategory(rows);
   branchesEl.innerHTML = '';
-  countLabel.textContent = rows.length + ' ENTRIES · ' + groups.length + ' BRANCHES';
+  const totalLinks = rows.filter(r => r.url).length;
+  countLabel.textContent = totalLinks + ' LINKS · ' + groups.length + ' CATEGORIES';
 
-  groups.forEach((g, idx) => {
+  groups.forEach(g => {
+    const type = CATEGORY_TYPE[g.category] || (g.items.length > 1 ? 'expandable' : 'simple');
+    const label = CATEGORY_LABELS[g.category] || g.category;
+
     const card = document.createElement('div');
     card.className = 'branch-card';
-    card.dataset.branch = g.branch;
+    card.dataset.category = g.category;
 
+    if(type === 'simple'){
+      // 단일 링크: 대표 URL 하나만 사용 (여러 행이 있어도 첫 번째 유효 url 사용)
+      const target = g.items.find(it => it.url);
+      const searchText = (label + ' ' + g.items.map(it=>it.title||'').join(' ')).toLowerCase();
+
+      if(!target){
+        card.innerHTML = `
+          <div class="branch-head disabled">
+            <div class="branch-title">
+              <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconFor(g.category)}</svg></div>
+              <h2>${label}</h2>
+            </div>
+            <span class="soon-badge">준비중</span>
+          </div>`;
+        card.dataset.search = searchText;
+      }else{
+        const a = document.createElement('a');
+        a.className = 'branch-head branch-head-link';
+        a.href = target.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.dataset.search = searchText;
+        a.innerHTML = `
+          <div class="branch-title">
+            <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconFor(g.category)}</svg></div>
+            <h2>${label}</h2>
+          </div>
+          <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div>
+        `;
+        card.appendChild(a);
+        card.dataset.search = searchText;
+      }
+      branchesEl.appendChild(card);
+      return;
+    }
+
+    // expandable: 분원별로 펼쳐서 선택
     const head = document.createElement('div');
     head.className = 'branch-head';
+    const availableCount = g.items.filter(it => it.url).length;
     head.innerHTML = `
       <div class="branch-title">
-        <h2>${g.branch}</h2>
-        <span class="branch-count">${g.items.length}건</span>
+        <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconFor(g.category)}</svg></div>
+        <h2>${label}</h2>
+        <span class="branch-count">${availableCount}/${g.items.length}건</span>
       </div>
       <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
     `;
@@ -442,19 +524,18 @@ function render(rows){
 
     g.items.forEach(item => {
       const row = document.createElement('a');
-      row.className = 'doc-row';
-      row.href = item.url;
-      row.target = '_blank';
-      row.rel = 'noopener noreferrer';
-      row.dataset.search = (g.branch + ' ' + item.category + ' ' + item.title).toLowerCase();
+      const hasUrl = !!item.url;
+      row.className = 'doc-row' + (hasUrl ? '' : ' disabled');
+      row.href = hasUrl ? item.url : '#';
+      if(hasUrl){ row.target = '_blank'; row.rel = 'noopener noreferrer'; }
+      row.dataset.search = (g.category + ' ' + label + ' ' + item.branch + ' ' + (item.title||'')).toLowerCase();
       row.innerHTML = `
-        <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconFor(item.category)}</svg></div>
         <div class="doc-text">
-          <div class="doc-title">${item.title || item.category}</div>
-          <div class="doc-cat">${item.category}</div>
+          <div class="doc-title">${item.branch}</div>
         </div>
-        <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div>
-        <div class="stamp-mark">열람<br>완료</div>
+        ${hasUrl
+          ? `<div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div><div class="stamp-mark">열람<br>완료</div>`
+          : `<span class="soon-badge">준비중</span>`}
       `;
       inner.appendChild(row);
     });
@@ -462,31 +543,40 @@ function render(rows){
     list.appendChild(inner);
     card.appendChild(head);
     card.appendChild(list);
+    card.dataset.search = (label + ' ' + g.items.map(it=>it.branch).join(' ')).toLowerCase();
     branchesEl.appendChild(card);
   });
 }
 
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim().toLowerCase();
-  let visibleBranches = 0;
+  let visibleCards = 0;
 
   document.querySelectorAll('.branch-card').forEach(card => {
-    let branchMatches = 0;
     const rows = card.querySelectorAll('.doc-row');
-    rows.forEach(row => {
-      const match = !q || row.dataset.search.includes(q);
-      row.style.display = match ? 'flex' : 'none';
-      if(match) branchMatches++;
-    });
-    const show = branchMatches > 0;
-    card.style.display = show ? 'block' : 'none';
-    if(show){
-      visibleBranches++;
-      if(q) card.classList.add('open');
+    if(rows.length > 0){
+      // expandable 카드: 하위 분원 항목 단위로 필터링
+      let branchMatches = 0;
+      rows.forEach(row => {
+        const match = !q || row.dataset.search.includes(q);
+        row.style.display = match ? 'flex' : 'none';
+        if(match) branchMatches++;
+      });
+      const show = branchMatches > 0;
+      card.style.display = show ? 'block' : 'none';
+      if(show){
+        visibleCards++;
+        if(q) card.classList.add('open');
+      }
+    }else{
+      // simple 카드: 카드 자체를 검색어와 비교
+      const match = !q || (card.dataset.search || '').includes(q);
+      card.style.display = match ? 'block' : 'none';
+      if(match) visibleCards++;
     }
   });
 
-  noMatchEl.style.display = (visibleBranches === 0) ? 'block' : 'none';
+  noMatchEl.style.display = (visibleCards === 0) ? 'block' : 'none';
 });
 
 loadLinks();

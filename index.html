@@ -448,9 +448,14 @@ function groupByCategory(rows){
     if(!map[r.category]) map[r.category] = [];
     map[r.category].push(r);
   });
-  const known = CATEGORY_ORDER.filter(c => map[c]);
-  const unknown = Object.keys(map).filter(c => !CATEGORY_ORDER.includes(c));
-  return [...known, ...unknown].map(c => ({ category:c, items:map[c] }));
+  // 카테고리 순서는 각 카테고리에 속한 행들의 sort_order 최솟값 기준으로 정렬한다
+  // (시트에서 sort_order 숫자만 바꾸면 화면 순서도 그대로 바뀐다)
+  const categories = Object.keys(map).sort((a, b) => {
+    const minA = Math.min(...map[a].map(r => Number(r.sort_order ?? 9999)));
+    const minB = Math.min(...map[b].map(r => Number(r.sort_order ?? 9999)));
+    return minA - minB;
+  });
+  return categories.map(c => ({ category:c, items:map[c] }));
 }
 
 function render(rows){

@@ -386,9 +386,33 @@
 
   <!-- 기사·동승자현황 -->
   <section class="view" id="view-staff">
+    <div class="card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 기사·동승자 등록</div>
+      <div class="filter-row">
+        <select id="staffFormRole" class="search-input" style="min-width:100px;">
+          <option value="기사">기사</option>
+          <option value="동승자">동승자</option>
+        </select>
+        <input class="search-input" id="staffFormName" placeholder="이름">
+        <input class="search-input" id="staffFormPhone" placeholder="연락처">
+        <input class="search-input" id="staffFormCompany" placeholder="소속업체">
+        <input class="search-input" id="staffFormHocha" placeholder="배정호차 (예: 장안 11호)">
+      </div>
+      <div class="filter-row">
+        <label style="font-size:12px;color:var(--muted);">채용일 <input type="date" id="staffFormHireDate" style="margin-left:4px;"></label>
+        <label style="font-size:12px;color:var(--muted);">범죄조회일 <input type="date" id="staffFormCrimeCheck" style="margin-left:4px;"></label>
+        <label style="font-size:12px;color:var(--muted);">안전교육이수일 <input type="date" id="staffFormEduDate" style="margin-left:4px;"></label>
+        <select id="staffFormType" class="search-input" style="min-width:90px;">
+          <option value="정규">정규</option>
+          <option value="대체">대체</option>
+        </select>
+        <button class="upload-btn" id="staffFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+    </div>
+
     <div id="staff-empty" class="empty">
       <div class="icon">🧑‍✈️</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>'기사' 또는 '동승자' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 기사·동승자가 아직 없습니다. 위에서 첫 인원을 등록해보세요.</p>
     </div>
     <div id="staff-content" style="display:none;">
       <div class="stat-row" id="staff-stats"></div>
@@ -413,9 +437,37 @@
 
   <!-- 차량·업체현황 -->
   <section class="view" id="view-vehicle">
+    <div class="card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 차량 등록</div>
+      <div class="filter-row">
+        <input class="search-input" id="vehicleFormNo" placeholder="차량번호 (예: 71가1234)">
+        <input class="search-input" id="vehicleFormType" placeholder="차종 (예: 스타리아)">
+        <input class="search-input" id="vehicleFormSeats" placeholder="인승" style="max-width:80px;">
+        <input class="search-input" id="vehicleFormYear" placeholder="연식" style="max-width:80px;">
+        <select id="vehicleFormOwn" class="search-input" style="min-width:90px;">
+          <option value="전세">전세</option>
+          <option value="개인">개인</option>
+          <option value="지입">지입</option>
+        </select>
+        <input class="search-input" id="vehicleFormHocha" placeholder="배정호차">
+        <button class="upload-btn" id="vehicleFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+    </div>
+
+    <div class="card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 업체 등록</div>
+      <div class="filter-row">
+        <input class="search-input" id="companyFormName" placeholder="업체명">
+        <input class="search-input" id="companyFormBizNo" placeholder="사업자등록번호">
+        <input class="search-input" id="companyFormCeo" placeholder="대표자">
+        <input class="search-input" id="companyFormPhone" placeholder="연락처">
+        <button class="upload-btn" id="companyFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+    </div>
+
     <div id="vehicle-empty" class="empty">
       <div class="icon">🚐</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>'차량' 또는 '업체' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 차량·업체가 아직 없습니다. 위에서 첫 항목을 등록해보세요.</p>
     </div>
     <div id="vehicle-content" style="display:none;">
       <div class="stat-row" id="vehicle-stats"></div>
@@ -1122,6 +1174,103 @@ document.getElementById('vehicle-export').addEventListener('click', ()=>{
 });
 document.getElementById('company-export').addEventListener('click', ()=>{
   exportExcel(current.company, '업체현황', '업체현황');
+});
+
+/* ---------------- 신규 등록 폼 (직접입력) ---------------- */
+function genId(prefix){
+  return prefix + '-' + Date.now().toString(36).toUpperCase();
+}
+
+async function submitAndSave(btn, doAppend){
+  const original = btn.textContent;
+  btn.textContent = '등록 중...'; btn.disabled = true;
+  try{
+    doAppend();
+    await saveToServer();
+  }catch(err){
+    console.error(err);
+    alert('서버 저장에 실패했습니다. 콘솔을 확인해주세요.');
+  }finally{
+    btn.textContent = original; btn.disabled = false;
+  }
+}
+
+document.getElementById('staffFormSubmit').addEventListener('click', async () => {
+  const role = document.getElementById('staffFormRole').value;
+  const name = document.getElementById('staffFormName').value.trim();
+  if(!name){ alert('이름을 입력해주세요.'); return; }
+  const record = {
+    '내부고유ID': genId(role === '기사' ? 'DRV' : 'ATT'),
+    '이름': name,
+    '연락처': document.getElementById('staffFormPhone').value.trim(),
+    '소속업체': document.getElementById('staffFormCompany').value.trim(),
+    '현재배정호차': document.getElementById('staffFormHocha').value.trim(),
+    '채용일': document.getElementById('staffFormHireDate').value,
+    '퇴사일': '',
+    '범죄경력조회일': document.getElementById('staffFormCrimeCheck').value,
+    '안전교육이수일': document.getElementById('staffFormEduDate').value,
+    '인력구분': document.getElementById('staffFormType').value,
+    '비고': '',
+  };
+  const btn = document.getElementById('staffFormSubmit');
+  await submitAndSave(btn, () => {
+    const key = role === '기사' ? '기사' : '동승자';
+    state[key] = state[key] || [];
+    state[key].push(record);
+    syncAliases();
+  });
+  ['staffFormName','staffFormPhone','staffFormCompany','staffFormHocha','staffFormHireDate','staffFormCrimeCheck','staffFormEduDate']
+    .forEach(id => document.getElementById(id).value = '');
+  renderStaff();
+});
+
+document.getElementById('vehicleFormSubmit').addEventListener('click', async () => {
+  const no = document.getElementById('vehicleFormNo').value.trim();
+  if(!no){ alert('차량번호를 입력해주세요.'); return; }
+  const record = {
+    '내부고유ID': genId('CAR'),
+    '차량번호': no,
+    '차종': document.getElementById('vehicleFormType').value.trim(),
+    '인승': document.getElementById('vehicleFormSeats').value.trim(),
+    '연식': document.getElementById('vehicleFormYear').value.trim(),
+    '소유형태': document.getElementById('vehicleFormOwn').value,
+    '등록일': new Date().toISOString().slice(0,10),
+    '폐차일': '',
+    '현재배정호차': document.getElementById('vehicleFormHocha').value.trim(),
+    '비고': '',
+  };
+  const btn = document.getElementById('vehicleFormSubmit');
+  await submitAndSave(btn, () => {
+    state['차량'] = state['차량'] || [];
+    state['차량'].push(record);
+    syncAliases();
+  });
+  ['vehicleFormNo','vehicleFormType','vehicleFormSeats','vehicleFormYear','vehicleFormHocha']
+    .forEach(id => document.getElementById(id).value = '');
+  renderVehicleCompany();
+});
+
+document.getElementById('companyFormSubmit').addEventListener('click', async () => {
+  const name = document.getElementById('companyFormName').value.trim();
+  if(!name){ alert('업체명을 입력해주세요.'); return; }
+  const record = {
+    '내부고유ID': genId('CO'),
+    '업체명': name,
+    '사업자등록번호': document.getElementById('companyFormBizNo').value.trim(),
+    '대표자': document.getElementById('companyFormCeo').value.trim(),
+    '연락처': document.getElementById('companyFormPhone').value.trim(),
+    '사업자등록증': '',
+    '비고': '',
+  };
+  const btn = document.getElementById('companyFormSubmit');
+  await submitAndSave(btn, () => {
+    state['업체'] = state['업체'] || [];
+    state['업체'].push(record);
+    syncAliases();
+  });
+  ['companyFormName','companyFormBizNo','companyFormCeo','companyFormPhone']
+    .forEach(id => document.getElementById(id).value = '');
+  renderVehicleCompany();
 });
 document.getElementById('issue-export').addEventListener('click', ()=>{
   exportExcel(current.issue, '이슈현황', '이슈관리');

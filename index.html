@@ -802,9 +802,9 @@ document.getElementById('reorderSaveBtn').addEventListener('click', async () => 
 
   reorderBar.querySelector('.save-btn').textContent = '저장 중...';
   try{
-    await Promise.all(updates.map(u => {
+    const results = await Promise.all(updates.map(async (u) => {
       const { id, ...fields } = u;
-      return fetch(`${SUPABASE_URL}/rest/v1/links?id=eq.${id}`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/links?id=eq.${id}`, {
         method: 'PATCH',
         headers:{
           apikey: SUPABASE_ANON_KEY,
@@ -814,12 +814,18 @@ document.getElementById('reorderSaveBtn').addEventListener('click', async () => 
         },
         body: JSON.stringify(fields)
       });
+      if(!res.ok){
+        let detail = '';
+        try{ detail = (await res.json()).message || await res.text(); }catch(e){ detail = res.statusText; }
+        throw new Error(`id=${id} 저장 실패 (${res.status}): ${detail}`);
+      }
+      return res;
     }));
     exitReorderMode();
     await loadLinks();
   }catch(err){
     console.error(err);
-    alert('저장에 실패했습니다. 콘솔을 확인해주세요.');
+    alert('저장에 실패했습니다.\n\n' + err.message + '\n\n(Supabase 테이블에 sort_order/hidden 컬럼이 있는지, RLS 설정을 확인해주세요.)');
     reorderBar.querySelector('.save-btn').textContent = '순서 저장';
   }
 });

@@ -320,9 +320,22 @@
 
   <!-- 호차현황판 -->
   <section class="view active" id="view-hocha">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 호차 등록</div>
+      <div class="filter-row">
+        <input class="search-input" id="hochaFormNo" placeholder="호차번호 (예: 11호)">
+        <select id="hochaFormBranch" class="search-input" style="min-width:100px;"></select>
+        <input class="search-input" id="hochaFormCar" placeholder="현재차량(차량번호)">
+        <input class="search-input" id="hochaFormDriver" placeholder="현재기사(이름)">
+        <input class="search-input" id="hochaFormAttendant" placeholder="현재동승자(이름)">
+        <input class="search-input" id="hochaFormCompany" placeholder="현재업체">
+        <button class="upload-btn" id="hochaFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+    </div>
+
     <div id="hocha-empty" class="empty">
       <div class="icon">🚌</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>구글시트 템플릿에서 '호차' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 호차가 아직 없습니다. 위에서 첫 호차를 등록해보세요.</p>
     </div>
     <div id="hocha-content" style="display:none;">
       <div class="filter-row" id="branch-filter"></div>
@@ -1174,6 +1187,39 @@ document.getElementById('vehicle-export').addEventListener('click', ()=>{
 });
 document.getElementById('company-export').addEventListener('click', ()=>{
   exportExcel(current.company, '업체현황', '업체현황');
+});
+
+/* ---------------- 신규 호차 등록 ---------------- */
+(function initHochaForm(){
+  const sel = document.getElementById('hochaFormBranch');
+  sel.innerHTML = BRANCHES.map(b => `<option value="${b}">${b}</option>`).join('');
+})();
+
+document.getElementById('hochaFormSubmit').addEventListener('click', async () => {
+  const no = document.getElementById('hochaFormNo').value.trim();
+  if(!no){ alert('호차번호를 입력해주세요.'); return; }
+  const record = {
+    '내부고유ID': genId('HOCHA'),
+    '호차번호': no,
+    '소속분원': document.getElementById('hochaFormBranch').value,
+    '개설일': new Date().toISOString().slice(0,10),
+    '폐지일': '',
+    '폐지사유': '',
+    '현재차량(차량번호)': document.getElementById('hochaFormCar').value.trim(),
+    '현재기사(이름)': document.getElementById('hochaFormDriver').value.trim(),
+    '현재동승자(이름)': document.getElementById('hochaFormAttendant').value.trim(),
+    '현재업체': document.getElementById('hochaFormCompany').value.trim(),
+    '비고': '',
+  };
+  const btn = document.getElementById('hochaFormSubmit');
+  await submitAndSave(btn, () => {
+    state['호차'] = state['호차'] || [];
+    state['호차'].push(record);
+    syncAliases();
+  });
+  ['hochaFormNo','hochaFormCar','hochaFormDriver','hochaFormAttendant','hochaFormCompany']
+    .forEach(id => document.getElementById(id).value = '');
+  renderHocha();
 });
 
 /* ---------------- 신규 등록 폼 (직접입력) ---------------- */

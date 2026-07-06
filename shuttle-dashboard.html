@@ -392,9 +392,37 @@
 
   <!-- 서류알림함 -->
   <section class="view" id="view-doc">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 서류 등록</div>
+      <div class="filter-row">
+        <select id="docFormType" class="search-input" style="min-width:150px;"></select>
+        <select id="docFormTargetType" class="search-input" style="min-width:90px;">
+          <option value="기사">기사</option>
+          <option value="동승자">동승자</option>
+          <option value="차량">차량</option>
+          <option value="업체">업체</option>
+          <option value="호차">호차</option>
+        </select>
+        <input class="search-input" id="docFormTarget" placeholder="대상 (예: 홍길동, 71가1234)">
+      </div>
+      <div class="filter-row">
+        <label style="font-size:12px;color:var(--muted);">발급/재조회일 <input type="date" id="docFormIssued" style="margin-left:4px;"></label>
+        <label style="font-size:12px;color:var(--muted);">만료일(해당시) <input type="date" id="docFormExpires" style="margin-left:4px;"></label>
+        <select id="docFormStatus" class="search-input" style="min-width:90px;">
+          <option value="유효">유효</option>
+          <option value="만료임박">만료임박</option>
+          <option value="만료">만료</option>
+          <option value="재발급필요">재발급필요</option>
+        </select>
+        <input class="search-input" id="docFormReissueReason" placeholder="재발급사유(선택)">
+        <button class="upload-btn" id="docFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">※ 관리등급(⭐최상/상/하)은 서류종류에 따라 자동으로 매겨집니다. 만료 개념이 없는 서류(범죄경력조회·통학버스신고필증)는 만료일을 비워두세요.</div>
+    </div>
+
     <div id="doc-empty" class="empty">
       <div class="icon">📁</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>구글시트 템플릿에서 '서류' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 서류가 아직 없습니다. 위에서 첫 서류를 등록해보세요.</p>
     </div>
     <div id="doc-content" style="display:none;">
       <div class="stat-row" id="doc-stats"></div>
@@ -1276,6 +1304,44 @@ document.getElementById('contractFormSubmit').addEventListener('click', async ()
    'contractFormTrips','contractFormArea','contractFormPenalty','contractFormInsurance','contractFormMaint']
     .forEach(id => document.getElementById(id).value = '');
   renderContract();
+});
+
+/* ---------------- 신규 서류 등록 ---------------- */
+const DOC_TYPES = ["범죄경력조회","안전교육확인증","통학버스신고필증","계약서","보험증서","차량등록증","통장사본","신분증사본","등본","사업자등록증"];
+const DOC_GRADE = {
+  "범죄경력조회":"최상", "안전교육확인증":"최상", "통학버스신고필증":"최상",
+  "계약서":"상", "보험증서":"상",
+  "차량등록증":"하", "통장사본":"하", "신분증사본":"하", "등본":"하", "사업자등록증":"하",
+};
+(function initDocForm(){
+  const sel = document.getElementById('docFormType');
+  sel.innerHTML = DOC_TYPES.map(t => `<option value="${t}">${t} (${DOC_GRADE[t]})</option>`).join('');
+})();
+
+document.getElementById('docFormSubmit').addEventListener('click', async () => {
+  const target = document.getElementById('docFormTarget').value.trim();
+  if(!target){ alert('대상을 입력해주세요.'); return; }
+  const docType = document.getElementById('docFormType').value;
+  const record = {
+    '서류종류': docType,
+    '소속대상유형': document.getElementById('docFormTargetType').value,
+    '소속대상(ID/이름)': target,
+    '발급일': document.getElementById('docFormIssued').value,
+    '만료일': document.getElementById('docFormExpires').value,
+    '재발급사유': document.getElementById('docFormReissueReason').value.trim(),
+    '파일(링크)': '',
+    '상태': document.getElementById('docFormStatus').value,
+    '관리등급': DOC_GRADE[docType],
+  };
+  const btn = document.getElementById('docFormSubmit');
+  await submitAndSave(btn, () => {
+    state['서류'] = state['서류'] || [];
+    state['서류'].push(record);
+    syncAliases();
+  });
+  ['docFormTarget','docFormIssued','docFormExpires','docFormReissueReason']
+    .forEach(id => document.getElementById(id).value = '');
+  renderDoc();
 });
 
 /* ---------------- 신규 등록 폼 (직접입력) ---------------- */

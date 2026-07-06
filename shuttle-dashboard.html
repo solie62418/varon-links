@@ -349,9 +349,32 @@
 
   <!-- 계약관리 -->
   <section class="view" id="view-contract">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 계약 등록</div>
+      <div class="filter-row">
+        <input class="search-input" id="contractFormHocha" placeholder="호차 (예: 장안 11호)">
+        <input class="search-input" id="contractFormCompany" placeholder="업체명">
+        <label style="font-size:12px;color:var(--muted);">계약시작일 <input type="date" id="contractFormStart" style="margin-left:4px;"></label>
+        <label style="font-size:12px;color:var(--muted);">계약종료일 <input type="date" id="contractFormEnd" style="margin-left:4px;"></label>
+        <input class="search-input" id="contractFormPay" placeholder="급여 (예: 3,200,000)" style="max-width:150px;">
+      </div>
+      <div class="filter-row">
+        <input class="search-input" id="contractFormTrips" placeholder="운행횟수 (예: 1일2회)">
+        <input class="search-input" id="contractFormArea" placeholder="운행지역">
+        <input class="search-input" id="contractFormPenalty" placeholder="위약조항">
+        <input class="search-input" id="contractFormInsurance" placeholder="보험의무">
+        <input class="search-input" id="contractFormMaint" placeholder="정비의무">
+        <select id="contractFormRenewal" class="search-input" style="min-width:90px;">
+          <option value="신규">신규</option>
+          <option value="갱신">갱신</option>
+        </select>
+        <button class="upload-btn" id="contractFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+    </div>
+
     <div id="contract-empty" class="empty">
       <div class="icon">📄</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>구글시트 템플릿에서 '계약' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 계약이 아직 없습니다. 위에서 첫 계약을 등록해보세요.</p>
     </div>
     <div id="contract-content" style="display:none;">
       <div class="stat-row" id="contract-stats"></div>
@@ -1220,6 +1243,39 @@ document.getElementById('hochaFormSubmit').addEventListener('click', async () =>
   ['hochaFormNo','hochaFormCar','hochaFormDriver','hochaFormAttendant','hochaFormCompany']
     .forEach(id => document.getElementById(id).value = '');
   renderHocha();
+});
+
+/* ---------------- 신규 계약 등록 ---------------- */
+document.getElementById('contractFormSubmit').addEventListener('click', async () => {
+  const hocha = document.getElementById('contractFormHocha').value.trim();
+  const company = document.getElementById('contractFormCompany').value.trim();
+  if(!hocha || !company){ alert('호차와 업체명을 입력해주세요.'); return; }
+  const record = {
+    '내부고유ID': genId('CT'),
+    '호차': hocha,
+    '업체': company,
+    '계약시작일': document.getElementById('contractFormStart').value,
+    '계약종료일': document.getElementById('contractFormEnd').value,
+    '급여': document.getElementById('contractFormPay').value.trim(),
+    '운행횟수': document.getElementById('contractFormTrips').value.trim(),
+    '운행지역': document.getElementById('contractFormArea').value.trim(),
+    '위약조항': document.getElementById('contractFormPenalty').value.trim(),
+    '보험의무': document.getElementById('contractFormInsurance').value.trim(),
+    '정비의무': document.getElementById('contractFormMaint').value.trim(),
+    '계약서': '',
+    '갱신여부': document.getElementById('contractFormRenewal').value,
+  };
+  if(!record['계약종료일']){ alert('계약종료일을 입력해주세요 (만료 알림 계산에 필요합니다).'); return; }
+  const btn = document.getElementById('contractFormSubmit');
+  await submitAndSave(btn, () => {
+    state['계약'] = state['계약'] || [];
+    state['계약'].push(record);
+    syncAliases();
+  });
+  ['contractFormHocha','contractFormCompany','contractFormStart','contractFormEnd','contractFormPay',
+   'contractFormTrips','contractFormArea','contractFormPenalty','contractFormInsurance','contractFormMaint']
+    .forEach(id => document.getElementById(id).value = '');
+  renderContract();
 });
 
 /* ---------------- 신규 등록 폼 (직접입력) ---------------- */

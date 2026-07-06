@@ -556,9 +556,28 @@
 
   <!-- 이슈(운행예외) 관리 -->
   <section class="view" id="view-issue">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;">➕ 신규 이슈 등록</div>
+      <div class="filter-row">
+        <input class="search-input" id="issueFormHocha" placeholder="호차 (예: 장안 11호)">
+        <select id="issueFormType" class="search-input" style="min-width:110px;">
+          <option value="차량고장">차량고장</option>
+          <option value="기사결원">기사결원</option>
+          <option value="동승자결원">동승자결원</option>
+          <option value="사고">사고</option>
+          <option value="기타">기타</option>
+        </select>
+        <label style="font-size:12px;color:var(--muted);">발생일 <input type="date" id="issueFormDate" style="margin-left:4px;"></label>
+        <input class="search-input" id="issueFormAction" placeholder="임시조치 (예: 대체차량 투입)">
+        <input class="search-input" id="issueFormTarget" placeholder="조치대상 (예: 72나5678)">
+        <button class="upload-btn" id="issueFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">※ 종료일은 비워두고 등록하면 '진행중'으로 표시됩니다. 조치가 끝나면 아래 목록에서 종료 처리해주세요.</div>
+    </div>
+
     <div id="issue-empty" class="empty">
       <div class="icon">⚠️</div>
-      <p><b>업로드된 자료가 없습니다.</b><br>'이슈' 탭이 포함된 엑셀 파일을 업로드해주세요.</p>
+      <p>등록된 이슈가 없습니다. 문제가 생기면 위에서 바로 등록해주세요.</p>
     </div>
     <div id="issue-content" style="display:none;">
       <div class="stat-row" id="issue-stats"></div>
@@ -1159,8 +1178,28 @@ function renderIssue(){
       <td data-label="임시조치">${r['임시조치']||'-'}</td>
       <td data-label="조치대상">${r['조치대상']||'-'}</td>
       <td data-label="종료일">${r['종료일'] ? fmtDate(r['종료일']) : '-'}</td>
-      <td data-label="상태">${r['종료일'] ? `<span class="badge green">종료됨</span>` : `<span class="badge red">진행중</span>`}</td>
+      <td data-label="상태">${
+        r['종료일']
+          ? `<span class="badge green">종료됨</span>`
+          : `<span class="badge red">진행중</span> <button type="button" class="export-btn small resolve-issue-btn" data-idx="${state['이슈'].indexOf(r)}" style="margin-left:6px;">종료처리</button>`
+      }</td>
     </tr>`).join('');
+
+  document.querySelectorAll('.resolve-issue-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = Number(btn.dataset.idx);
+      btn.textContent = '처리 중...'; btn.disabled = true;
+      try{
+        state['이슈'][idx]['종료일'] = new Date().toISOString().slice(0,10);
+        await saveToServer();
+        renderIssue();
+      }catch(err){
+        console.error(err);
+        alert('서버 저장에 실패했습니다.');
+        btn.textContent = '종료처리'; btn.disabled = false;
+      }
+    });
+  });
 }
 
 /* ---------------- 정류장·학생현황 ---------------- */
@@ -1342,6 +1381,29 @@ document.getElementById('docFormSubmit').addEventListener('click', async () => {
   ['docFormTarget','docFormIssued','docFormExpires','docFormReissueReason']
     .forEach(id => document.getElementById(id).value = '');
   renderDoc();
+});
+
+/* ---------------- 신규 이슈 등록 ---------------- */
+document.getElementById('issueFormSubmit').addEventListener('click', async () => {
+  const hocha = document.getElementById('issueFormHocha').value.trim();
+  if(!hocha){ alert('호차를 입력해주세요.'); return; }
+  const record = {
+    '이슈ID': genId('ISS'),
+    '호차': hocha,
+    '이슈종류': document.getElementById('issueFormType').value,
+    '발생일': document.getElementById('issueFormDate').value || new Date().toISOString().slice(0,10),
+    '임시조치': document.getElementById('issueFormAction').value.trim(),
+    '조치대상': document.getElementById('issueFormTarget').value.trim(),
+    '종료일': '',
+  };
+  const btn = document.getElementById('issueFormSubmit');
+  await submitAndSave(btn, () => {
+    state['이슈'] = state['이슈'] || [];
+    state['이슈'].push(record);
+  });
+  ['issueFormHocha','issueFormAction','issueFormTarget']
+    .forEach(id => document.getElementById(id).value = '');
+  renderIssue();
 });
 
 /* ---------------- 신규 등록 폼 (직접입력) ---------------- */

@@ -83,14 +83,6 @@
   .stat.active{background:var(--navy);border-color:var(--navy);}
   .stat.active .num,.stat.active .lab{color:#fff;}
   .stat.warn.active{background:#B45309;border-color:#B45309;}
-  .status-chip{
-    display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    border:1px solid var(--border);border-radius:999px;
-    padding:7px 16px;margin-right:10px;
-    cursor:pointer;background:#fff;
-  }
-  .status-chip input{width:15px;height:15px;margin:0;accent-color:var(--navy);flex-shrink:0;}
-  .status-chip .badge{font-size:11px;pointer-events:none;}
   .stat .num{font-size:20px;font-weight:800;color:var(--navy);}
   .stat .lab{font-size:11px;color:var(--muted);margin-top:2px;}
   .stat.warn .num{color:var(--danger);}
@@ -223,7 +215,7 @@
         </select>
         <input type="text" id="st_search" placeholder="위치/내용/요청자 검색" oninput="renderStatusTable()">
       </div>
-      <div class="filters" id="st_status_checks"></div>
+
       <div class="stat-grid" id="statusStatGrid"></div>
       <div class="table-wrap">
         <table class="status-table">
@@ -288,13 +280,13 @@
         </div>
         <div class="filters">
           <select id="af_branch" onchange="renderAdminList()"><option value="">전체 분원</option></select>
+          <select id="af_status" onchange="renderAdminList()"><option value="">전체 상태</option></select>
           <select id="af_category" onchange="renderAdminList()"><option value="">전체 항목</option></select>
           <span style="align-self:center;font-size:12px;color:var(--muted);white-space:nowrap;">작성일자</span>
           <input type="date" id="af_from" onchange="renderAdminList()">
           <span style="align-self:center;color:var(--muted);">~</span>
           <input type="date" id="af_to" onchange="renderAdminList()">
         </div>
-        <div class="filters" id="af_status_checks"></div>
         <div id="adminList"><div class="empty">불러오는 중...</div></div>
       </div>
     </div>
@@ -369,11 +361,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
   fillSelect(document.getElementById('myStatusFilter'), STATUSES, '전체 상태');
   fillSelect(document.getElementById('viewBranchFilter'), BRANCHES, '전체 분원');
   fillSelect(document.getElementById('af_branch'), BRANCHES, '전체 분원');
+  fillSelect(document.getElementById('af_status'), STATUSES, '전체 상태');
   fillSelect(document.getElementById('af_category'), CATEGORIES, '전체 항목');
   fillSelect(document.getElementById('e_status'), STATUSES);
   fillSelect(document.getElementById('st_branch'), BRANCHES);
-  renderStatusCheckboxes('af_status_checks', renderAdminList);
-  renderStatusCheckboxes('st_status_checks', () => { quickFilterMode = ''; overdueOnlyFilter = false; renderStatusTable(); });
 
   document.getElementById('f_date').value = todayStr();
   document.getElementById('reportMonth').value = todayStr().slice(0,7);
@@ -491,8 +482,9 @@ function changePage(delta){
 
 let overdueOnlyFilter = false;
 
+let stFilterStatuses = []; // 빈 배열 = 전체(필터 없음)
+
 function statusFilteredRows(){
-  const statusList = getCheckedStatuses('st_status_checks');
   const kw = document.getElementById('st_search').value.trim().toLowerCase();
   const sort = document.getElementById('st_sort').value;
 
@@ -501,7 +493,7 @@ function statusFilteredRows(){
     const b = document.getElementById('st_branch').value;
     if(b) rows = rows.filter(r=>r.branch===b);
   }
-  if(statusList.length) rows = rows.filter(r=>statusList.includes(r.status));
+  if(stFilterStatuses.length) rows = rows.filter(r=>stFilterStatuses.includes(r.status));
   if(overdueOnlyFilter){
     rows = rows.filter(r => (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS);
   }
@@ -577,16 +569,16 @@ let quickFilterMode = 'all';
 function setStatQuickFilter(mode){
   quickFilterMode = mode;
   if(mode === 'all'){
-    setCheckedStatuses('st_status_checks', STATUSES);
+    stFilterStatuses = [];
     overdueOnlyFilter = false;
   }else if(mode === 'open'){
-    setCheckedStatuses('st_status_checks', ['접수','처리중']);
+    stFilterStatuses = ['접수','처리중'];
     overdueOnlyFilter = false;
   }else if(mode === 'overdue'){
-    setCheckedStatuses('st_status_checks', ['접수','처리중']);
+    stFilterStatuses = ['접수','처리중'];
     overdueOnlyFilter = true;
   }else if(mode === 'done'){
-    setCheckedStatuses('st_status_checks', ['완료']);
+    stFilterStatuses = ['완료'];
     overdueOnlyFilter = false;
   }
   renderStatusTable();
@@ -732,26 +724,6 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-/* ===================== 상태 체크박스 필터 ===================== */
-function renderStatusCheckboxes(containerId, onChangeCb){
-  const el = document.getElementById(containerId);
-  el.innerHTML = STATUSES.map(s => `
-    <label class="status-chip">
-      <input type="checkbox" class="${containerId}-item" value="${s}" checked>
-      <span class="badge ${s}">${s}</span>
-    </label>
-  `).join('');
-  el.querySelectorAll(`.${containerId}-item`).forEach(cb => cb.addEventListener('change', onChangeCb));
-}
-function getCheckedStatuses(containerId){
-  return [...document.querySelectorAll(`.${containerId}-item:checked`)].map(cb => cb.value);
-}
-function setCheckedStatuses(containerId, values){
-  document.querySelectorAll(`.${containerId}-item`).forEach(cb => {
-    cb.checked = values.includes(cb.value);
-  });
-}
-
 function showPhoto(url){
   document.getElementById('photoModalImg').src = url;
   document.getElementById('photoModalBg').classList.add('show');
@@ -801,7 +773,7 @@ function renderStats(){
 function currentAdminFilters(){
   return {
     branch: document.getElementById('af_branch').value,
-    statuses: getCheckedStatuses('af_status_checks'),
+    status: document.getElementById('af_status').value,
     category: document.getElementById('af_category').value,
     from: document.getElementById('af_from').value,
     to: document.getElementById('af_to').value
@@ -812,7 +784,7 @@ function filteredAdminRows(){
   const f = currentAdminFilters();
   return allAdminRequests.filter(r=>{
     if(f.branch && r.branch!==f.branch) return false;
-    if(f.statuses.length && !f.statuses.includes(r.status)) return false;
+    if(f.status && r.status!==f.status) return false;
     if(f.category && r.category!==f.category) return false;
     if(f.from && r.created_date < f.from) return false;
     if(f.to && r.created_date > f.to) return false;

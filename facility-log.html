@@ -78,7 +78,19 @@
   .filters select,.filters input{width:auto;flex:1;min-width:110px;}
 
   .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
-  .stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;transition:.15s;}
+  .stat:hover{border-color:var(--primary);}
+  .stat.active{background:var(--primary);border-color:var(--primary);}
+  .stat.active .num,.stat.active .lab{color:#fff;}
+  .stat.warn.active{background:#B45309;border-color:#B45309;}
+  .status-chip{
+    display:inline-flex;align-items:center;gap:6px;
+    border:1px solid var(--border);border-radius:999px;
+    padding:5px 12px 5px 10px;margin-right:10px;
+    cursor:pointer;background:#fff;
+  }
+  .status-chip input{width:auto;margin:0;accent-color:var(--primary);}
+  .status-chip .badge{font-size:11px;pointer-events:none;}
   .stat .num{font-size:20px;font-weight:800;color:var(--navy);}
   .stat .lab{font-size:11px;color:var(--muted);margin-top:2px;}
   .stat.warn .num{color:var(--danger);}
@@ -103,7 +115,10 @@
   table.status-table td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
   table.status-table tr:nth-child(even){background:#FAFBFC;}
   table.status-table tr.overdue{background:var(--danger-bg) !important;}
-  table.status-table td.wrap{white-space:normal;overflow-wrap:break-word;word-break:break-word;max-width:260px;}
+  table.status-table td.wrap{
+    white-space:normal;overflow-wrap:break-word;word-break:break-word;max-width:260px;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  }
   .pager{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12.5px;color:var(--muted);}
   .pager .pbtns{display:flex;gap:6px;}
 
@@ -206,11 +221,11 @@
         </select>
         <select id="st_sort" onchange="renderStatusTable()">
           <option value="asc">오래된순</option>
-          <option value="desc">최신순</option>
+          <option value="desc" selected>최신순</option>
         </select>
         <input type="text" id="st_search" placeholder="위치/내용/요청자 검색" oninput="renderStatusTable()">
       </div>
-      <div class="filters" id="st_status_checks" style="gap:14px;"></div>
+      <div class="filters" id="st_status_checks"></div>
       <div class="stat-grid" id="statusStatGrid"></div>
       <div class="table-wrap">
         <table class="status-table">
@@ -281,7 +296,7 @@
           <span style="align-self:center;color:var(--muted);">~</span>
           <input type="date" id="af_to" onchange="renderAdminList()">
         </div>
-        <div class="filters" id="af_status_checks" style="gap:14px;"></div>
+        <div class="filters" id="af_status_checks"></div>
         <div id="adminList"><div class="empty">불러오는 중...</div></div>
       </div>
     </div>
@@ -335,7 +350,7 @@ const FACILITY_COLLECTION = 'facility_log';
 // 총무팀 비밀번호 - 필요하면 이 값만 바꾸세요
 const ADMIN_PASSWORD = '2026';
 
-const BRANCHES = ['장안','서수원','수원','운정1','운정2','남동탄'];
+const BRANCHES = ['장안','서수원','수원','운정1','운정2','남동탄','바론'];
 const CATEGORIES = ['전기/조명','냉난방','누수/배관','도장/벽지/바닥','창호/방충망','가구/집기','청소/위생','보안/출입','인터넷/통신','PC/전자기기','기타'];
 const STATUSES = ['접수','처리중','보류','완료'];
 const OVERDUE_DAYS = 3;
@@ -360,7 +375,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   fillSelect(document.getElementById('e_status'), STATUSES);
   fillSelect(document.getElementById('st_branch'), BRANCHES);
   renderStatusCheckboxes('af_status_checks', renderAdminList);
-  renderStatusCheckboxes('st_status_checks', renderStatusTable);
+  renderStatusCheckboxes('st_status_checks', () => { quickFilterMode = ''; overdueOnlyFilter = false; renderStatusTable(); });
 
   document.getElementById('f_date').value = todayStr();
   document.getElementById('reportMonth').value = todayStr().slice(0,7);
@@ -476,6 +491,8 @@ function changePage(delta){
   renderStatusTable();
 }
 
+let overdueOnlyFilter = false;
+
 function statusFilteredRows(){
   const statusList = getCheckedStatuses('st_status_checks');
   const kw = document.getElementById('st_search').value.trim().toLowerCase();
@@ -487,6 +504,9 @@ function statusFilteredRows(){
     if(b) rows = rows.filter(r=>r.branch===b);
   }
   if(statusList.length) rows = rows.filter(r=>statusList.includes(r.status));
+  if(overdueOnlyFilter){
+    rows = rows.filter(r => (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS);
+  }
   if(kw){
     rows = rows.filter(r =>
       (r.location||'').toLowerCase().includes(kw) ||
@@ -529,14 +549,14 @@ function renderStatusTable(){
         <td>${r.created_date}</td>
         <td>${r.category} ${repeatBadge(repeatMap[r.id])}</td>
         <td>${escapeHtml(r.location||'')}</td>
-        <td class="wrap">${escapeHtml(r.request_content||'')}</td>
+        <td class="wrap" title="${escapeHtml(r.request_content||'')}">${escapeHtml(r.request_content||'')}</td>
         <td>${escapeHtml(r.requester||'')}</td>
         <td><span class="badge ${r.status}">${r.status}${overdue?' ⚠':''}</span></td>
-        <td class="wrap">${escapeHtml(r.handle_content||'')}</td>
+        <td class="wrap" title="${escapeHtml(r.handle_content||'')}">${escapeHtml(r.handle_content||'')}</td>
         <td>${r.handled_date||''}</td>
         <td>${escapeHtml(r.handler||'')}</td>
         <td>${r.cost?Number(r.cost).toLocaleString():''}</td>
-        <td class="wrap">${escapeHtml(r.items_note||'')}</td>
+        <td class="wrap" title="${escapeHtml(r.items_note||'')}">${escapeHtml(r.items_note||'')}</td>
       </tr>`;
     }).join('');
   }
@@ -548,11 +568,30 @@ function renderStatusTable(){
   const overdueCnt = open.filter(r=>daysSince(r.created_date)>=OVERDUE_DAYS).length;
   const done = rows.filter(r=>r.status==='완료').length;
   document.getElementById('statusStatGrid').innerHTML = `
-    <div class="stat"><div class="num">${rows.length}</div><div class="lab">조건 내 전체</div></div>
-    <div class="stat"><div class="num">${open.length}</div><div class="lab">미처리</div></div>
-    <div class="stat warn"><div class="num">${overdueCnt}</div><div class="lab">3일 이상 지연</div></div>
-    <div class="stat"><div class="num">${done}</div><div class="lab">완료</div></div>
+    <div class="stat ${quickFilterMode==='all'?'active':''}" onclick="setStatQuickFilter('all')" style="cursor:pointer"><div class="num">${rows.length}</div><div class="lab">조건 내 전체</div></div>
+    <div class="stat ${quickFilterMode==='open'?'active':''}" onclick="setStatQuickFilter('open')" style="cursor:pointer"><div class="num">${open.length}</div><div class="lab">미처리</div></div>
+    <div class="stat warn ${quickFilterMode==='overdue'?'active':''}" onclick="setStatQuickFilter('overdue')" style="cursor:pointer"><div class="num">${overdueCnt}</div><div class="lab">3일 이상 지연</div></div>
+    <div class="stat ${quickFilterMode==='done'?'active':''}" onclick="setStatQuickFilter('done')" style="cursor:pointer"><div class="num">${done}</div><div class="lab">완료</div></div>
   `;
+}
+
+let quickFilterMode = 'all';
+function setStatQuickFilter(mode){
+  quickFilterMode = mode;
+  if(mode === 'all'){
+    setCheckedStatuses('st_status_checks', STATUSES);
+    overdueOnlyFilter = false;
+  }else if(mode === 'open'){
+    setCheckedStatuses('st_status_checks', ['접수','처리중']);
+    overdueOnlyFilter = false;
+  }else if(mode === 'overdue'){
+    setCheckedStatuses('st_status_checks', ['접수','처리중']);
+    overdueOnlyFilter = true;
+  }else if(mode === 'done'){
+    setCheckedStatuses('st_status_checks', ['완료']);
+    overdueOnlyFilter = false;
+  }
+  renderStatusTable();
 }
 
 /* ===================== 분원: 등록 ===================== */
@@ -699,15 +738,20 @@ function escapeHtml(s){
 function renderStatusCheckboxes(containerId, onChangeCb){
   const el = document.getElementById(containerId);
   el.innerHTML = STATUSES.map(s => `
-    <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;">
-      <input type="checkbox" class="${containerId}-item" value="${s}" checked style="width:auto;margin:0;">
-      <span class="badge ${s}" style="font-size:11px;">${s}</span>
+    <label class="status-chip">
+      <input type="checkbox" class="${containerId}-item" value="${s}" checked>
+      <span class="badge ${s}">${s}</span>
     </label>
   `).join('');
   el.querySelectorAll(`.${containerId}-item`).forEach(cb => cb.addEventListener('change', onChangeCb));
 }
 function getCheckedStatuses(containerId){
   return [...document.querySelectorAll(`.${containerId}-item:checked`)].map(cb => cb.value);
+}
+function setCheckedStatuses(containerId, values){
+  document.querySelectorAll(`.${containerId}-item`).forEach(cb => {
+    cb.checked = values.includes(cb.value);
+  });
 }
 
 function showPhoto(url){

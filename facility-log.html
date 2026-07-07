@@ -100,10 +100,10 @@
   .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
   table.status-table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:920px;}
   table.status-table th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;white-space:nowrap;position:sticky;top:0;}
-  table.status-table td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;}
+  table.status-table td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
   table.status-table tr:nth-child(even){background:#FAFBFC;}
   table.status-table tr.overdue{background:var(--danger-bg) !important;}
-  table.status-table td.wrap{white-space:normal;}
+  table.status-table td.wrap{white-space:normal;overflow-wrap:break-word;word-break:break-word;max-width:260px;}
   .pager{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12.5px;color:var(--muted);}
   .pager .pbtns{display:flex;gap:6px;}
 
@@ -208,9 +208,9 @@
           <option value="asc">오래된순</option>
           <option value="desc">최신순</option>
         </select>
-        <select id="st_status" onchange="renderStatusTable()"><option value="">전체 상태</option></select>
         <input type="text" id="st_search" placeholder="위치/내용/요청자 검색" oninput="renderStatusTable()">
       </div>
+      <div class="filters" id="st_status_checks" style="gap:14px;"></div>
       <div class="stat-grid" id="statusStatGrid"></div>
       <div class="table-wrap">
         <table class="status-table">
@@ -275,13 +275,13 @@
         </div>
         <div class="filters">
           <select id="af_branch" onchange="renderAdminList()"><option value="">전체 분원</option></select>
-          <select id="af_status" onchange="renderAdminList()"><option value="">전체 상태</option></select>
           <select id="af_category" onchange="renderAdminList()"><option value="">전체 항목</option></select>
           <span style="align-self:center;font-size:12px;color:var(--muted);white-space:nowrap;">작성일자</span>
           <input type="date" id="af_from" onchange="renderAdminList()">
           <span style="align-self:center;color:var(--muted);">~</span>
           <input type="date" id="af_to" onchange="renderAdminList()">
         </div>
+        <div class="filters" id="af_status_checks" style="gap:14px;"></div>
         <div id="adminList"><div class="empty">불러오는 중...</div></div>
       </div>
     </div>
@@ -356,11 +356,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
   fillSelect(document.getElementById('myStatusFilter'), STATUSES, '전체 상태');
   fillSelect(document.getElementById('viewBranchFilter'), BRANCHES, '전체 분원');
   fillSelect(document.getElementById('af_branch'), BRANCHES, '전체 분원');
-  fillSelect(document.getElementById('af_status'), STATUSES, '전체 상태');
   fillSelect(document.getElementById('af_category'), CATEGORIES, '전체 항목');
   fillSelect(document.getElementById('e_status'), STATUSES);
   fillSelect(document.getElementById('st_branch'), BRANCHES);
-  fillSelect(document.getElementById('st_status'), STATUSES, '전체 상태');
+  renderStatusCheckboxes('af_status_checks', renderAdminList);
+  renderStatusCheckboxes('st_status_checks', renderStatusTable);
 
   document.getElementById('f_date').value = todayStr();
   document.getElementById('reportMonth').value = todayStr().slice(0,7);
@@ -477,7 +477,7 @@ function changePage(delta){
 }
 
 function statusFilteredRows(){
-  const statusF = document.getElementById('st_status').value;
+  const statusList = getCheckedStatuses('st_status_checks');
   const kw = document.getElementById('st_search').value.trim().toLowerCase();
   const sort = document.getElementById('st_sort').value;
 
@@ -486,7 +486,7 @@ function statusFilteredRows(){
     const b = document.getElementById('st_branch').value;
     if(b) rows = rows.filter(r=>r.branch===b);
   }
-  if(statusF) rows = rows.filter(r=>r.status===statusF);
+  if(statusList.length) rows = rows.filter(r=>statusList.includes(r.status));
   if(kw){
     rows = rows.filter(r =>
       (r.location||'').toLowerCase().includes(kw) ||
@@ -695,6 +695,21 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+/* ===================== 상태 체크박스 필터 ===================== */
+function renderStatusCheckboxes(containerId, onChangeCb){
+  const el = document.getElementById(containerId);
+  el.innerHTML = STATUSES.map(s => `
+    <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;">
+      <input type="checkbox" class="${containerId}-item" value="${s}" checked style="width:auto;margin:0;">
+      <span class="badge ${s}" style="font-size:11px;">${s}</span>
+    </label>
+  `).join('');
+  el.querySelectorAll(`.${containerId}-item`).forEach(cb => cb.addEventListener('change', onChangeCb));
+}
+function getCheckedStatuses(containerId){
+  return [...document.querySelectorAll(`.${containerId}-item:checked`)].map(cb => cb.value);
+}
+
 function showPhoto(url){
   document.getElementById('photoModalImg').src = url;
   document.getElementById('photoModalBg').classList.add('show');
@@ -744,7 +759,7 @@ function renderStats(){
 function currentAdminFilters(){
   return {
     branch: document.getElementById('af_branch').value,
-    status: document.getElementById('af_status').value,
+    statuses: getCheckedStatuses('af_status_checks'),
     category: document.getElementById('af_category').value,
     from: document.getElementById('af_from').value,
     to: document.getElementById('af_to').value
@@ -755,7 +770,7 @@ function filteredAdminRows(){
   const f = currentAdminFilters();
   return allAdminRequests.filter(r=>{
     if(f.branch && r.branch!==f.branch) return false;
-    if(f.status && r.status!==f.status) return false;
+    if(f.statuses.length && !f.statuses.includes(r.status)) return false;
     if(f.category && r.category!==f.category) return false;
     if(f.from && r.created_date < f.from) return false;
     if(f.to && r.created_date > f.to) return false;

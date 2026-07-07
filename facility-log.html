@@ -256,6 +256,20 @@
 
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h2 style="margin:0">📥 과거기록 일괄 업로드</h2>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          지정된 양식의 엑셀 파일을 올리면 여러 건을 한 번에 등록합니다. 먼저 <a href="#" onclick="downloadImportTemplate();return false;" style="color:var(--primary);font-weight:600;">업로드 양식(엑셀) 다운로드</a>로 형식을 확인하세요.
+        </div>
+        <div class="filters">
+          <button class="secondary small" onclick="document.getElementById('bulkImportFile').click()">엑셀 파일 선택</button>
+          <input type="file" id="bulkImportFile" accept=".xlsx,.xls" style="display:none" onchange="handleBulkImport(event)">
+        </div>
+        <div id="bulkImportStatus" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
           <h2 style="margin:0">전체 요청 목록</h2>
           <button class="secondary small" onclick="exportExcel()">엑셀 내보내기</button>
         </div>
@@ -892,6 +906,101 @@ function exportExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '시설관리대장');
   XLSX.writeFile(wb, `시설관리대장_${todayStr()}.xlsx`);
+}
+
+/* ===================== 과거기록 일괄 업로드 ===================== */
+function downloadImportTemplate(){
+  const headers = ['분원','작성일자','점검항목','위치','요청내용','요청자','상태','처리내용','처리일자','확인자','소모비용','비고'];
+  const sample = ['장안','2026-02-21','가구/집기','J강의실','[손잡이] 손잡이 파손','박치옥','완료','창고 손잡이로 대체','2026-02-21','장완','','← 입력 예시(삭제 후 실제 데이터 입력)'];
+  const rows = [headers, sample];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [8,12,12,14,30,10,8,26,12,10,10,26].map(w=>({wch:w}));
+
+  const dvBranch = { type:'list', formula1:`"${BRANCHES.join(',')}"`, allowBlank:true };
+  const dvCategory = { type:'list', formula1:`"${CATEGORIES.join(',')}"`, allowBlank:true };
+  const dvStatus = { type:'list', formula1:`"${STATUSES.join(',')}"`, allowBlank:true };
+  ws['!dataValidations'] = [
+    { sqref:'A3:A500', ...dvBranch },
+    { sqref:'C3:C500', ...dvCategory },
+    { sqref:'G3:G500', ...dvStatus },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '업로드양식');
+  XLSX.writeFile(wb, '시설관리대장_업로드양식.xlsx');
+}
+
+async function handleBulkImport(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('bulkImportStatus');
+  statusEl.textContent = '읽는 중...';
+  try{
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type:'array', cellDates:true });
+    const wsName = wb.SheetNames.includes('업로드양식') ? '업로드양식' : wb.SheetNames[0];
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wsName], { header:1, defval:'' });
+    const headers = aoa[0] || [];
+    const dataRows = aoa.slice(2); // 0=헤더, 1=예시행 → 3행부터 실제 데이터
+    const idx = (name) => headers.indexOf(name);
+
+    const toDateStr = (v) => {
+      if(!v) return '';
+      if(v instanceof Date) return v.toISOString().slice(0,10);
+      const s = String(v).trim();
+      const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
+      if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+      return s;
+    };
+
+    const records = dataRows
+      .filter(r => r.some(v => String(v).trim() !== ''))
+      .map(r => {
+        const branch = r[idx('분원')] || '';
+        const category = r[idx('점검항목')] || '기타';
+        const status = r[idx('상태')] || '접수';
+        const cost = r[idx('소모비용')];
+        return {
+          branch,
+          created_date: toDateStr(r[idx('작성일자')]),
+          category: CATEGORIES.includes(category) ? category : '기타',
+          location: r[idx('위치')] || '',
+          request_content: r[idx('요청내용')] || '',
+          requester: r[idx('요청자')] || '',
+          status: STATUSES.includes(status) ? status : '접수',
+          photo_url: null,
+          handle_content: r[idx('처리내용')] || '',
+          handled_date: toDateStr(r[idx('처리일자')]) || null,
+          handler: r[idx('확인자')] || '',
+          cost: cost ? Number(String(cost).replace(/[^0-9.-]/g,'')) || null : null,
+          items_note: r[idx('비고')] || '',
+          created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+      })
+      .filter(rec => rec.branch && BRANCHES.includes(rec.branch));
+
+    if(records.length === 0){
+      statusEl.textContent = '가져올 유효한 행이 없습니다. 분원명이 정확한지 확인해주세요.';
+      return;
+    }
+
+    statusEl.textContent = `${records.length}건 업로드 중...`;
+    const CHUNK = 400; // Firestore batch 제한(500) 이내로 나눠서 처리
+    for(let i=0; i<records.length; i+=CHUNK){
+      const batch = db.batch();
+      records.slice(i, i+CHUNK).forEach(rec => {
+        const ref = db.collection(FACILITY_COLLECTION).doc();
+        batch.set(ref, rec);
+      });
+      await batch.commit();
+    }
+    statusEl.textContent = `✅ ${records.length}건 업로드 완료 (${new Date().toLocaleTimeString('ko-KR')})`;
+    event.target.value = '';
+    if(typeof loadAdminRequests === 'function') loadAdminRequests();
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = '업로드 실패: ' + (err.message || err);
+  }
 }
 </script>
 </body>

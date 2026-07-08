@@ -64,6 +64,7 @@
   .req-body{font-size:13.5px;margin:8px 0;line-height:1.5;}
   .req-meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;}
   .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap;}
+  .badge.요청{background:#D9822B;}
   .badge.접수{background:var(--wait);}
   .badge.처리중{background:#3E7BD6;}
   .badge.보류{background:var(--hold);}
@@ -342,7 +343,8 @@ const ADMIN_PASSWORD = '2026';
 
 const BRANCHES = ['장안','서수원','수원','운정1','운정2','남동탄','바론'];
 const CATEGORIES = ['전기/조명','냉난방','누수/배관','도장/벽지/바닥','창호/방충망','가구/집기','청소/위생','보안/출입','인터넷/통신','PC/전자기기','기타'];
-const STATUSES = ['접수','처리중','보류','완료'];
+const STATUSES = ['요청','접수','처리중','보류','완료'];
+const OVERDUE_STATUSES = ['요청','접수','처리중'];
 const OVERDUE_DAYS = 3;
 
 let allMyRequests = [];
@@ -495,7 +497,7 @@ function statusFilteredRows(){
   }
   if(stFilterStatuses.length) rows = rows.filter(r=>stFilterStatuses.includes(r.status));
   if(overdueOnlyFilter){
-    rows = rows.filter(r => (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS);
+    rows = rows.filter(r => (OVERDUE_STATUSES.includes(r.status)) && daysSince(r.created_date) >= OVERDUE_DAYS);
   }
   if(kw){
     rows = rows.filter(r =>
@@ -532,7 +534,7 @@ function renderStatusTable(){
     body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">조건에 맞는 요청이 없습니다.</td></tr>`;
   }else{
     body.innerHTML = pageRows.map((r,i)=>{
-      const overdue = (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS;
+      const overdue = (OVERDUE_STATUSES.includes(r.status)) && daysSince(r.created_date) >= OVERDUE_DAYS;
       return `<tr class="${overdue?'overdue':''}">
         <td>${startIdx+i+1}</td>
         ${showBranch?`<td>${r.branch}</td>`:''}
@@ -541,7 +543,7 @@ function renderStatusTable(){
         <td>${escapeHtml(r.location||'')}</td>
         <td class="wrap" title="${escapeHtml(r.request_content||'')}">${escapeHtml(r.request_content||'')}</td>
         <td>${escapeHtml(r.requester||'')}</td>
-        <td><span class="badge ${r.status}">${r.status}${overdue?' ⚠':''}</span></td>
+        <td><span class="badge ${r.status}">${r.status}${overdue?(' D+'+daysSince(r.created_date)):''}</span></td>
         <td class="wrap" title="${escapeHtml(r.handle_content||'')}">${escapeHtml(r.handle_content||'')}</td>
         <td>${r.handled_date||''}</td>
         <td>${escapeHtml(r.handler||'')}</td>
@@ -554,7 +556,7 @@ function renderStatusTable(){
   document.getElementById('pagerInfo').textContent =
     rows.length ? `${startIdx+1}-${Math.min(startIdx+pageSize, rows.length)} / 총 ${rows.length}건` : '0건';
 
-  const open = rows.filter(r=>r.status==='접수'||r.status==='처리중');
+  const open = rows.filter(r=>OVERDUE_STATUSES.includes(r.status));
   const overdueCnt = open.filter(r=>daysSince(r.created_date)>=OVERDUE_DAYS).length;
   const done = rows.filter(r=>r.status==='완료').length;
   document.getElementById('statusStatGrid').innerHTML = `
@@ -572,10 +574,10 @@ function setStatQuickFilter(mode){
     stFilterStatuses = [];
     overdueOnlyFilter = false;
   }else if(mode === 'open'){
-    stFilterStatuses = ['접수','처리중'];
+    stFilterStatuses = ['요청','접수','처리중'];
     overdueOnlyFilter = false;
   }else if(mode === 'overdue'){
-    stFilterStatuses = ['접수','처리중'];
+    stFilterStatuses = ['요청','접수','처리중'];
     overdueOnlyFilter = true;
   }else if(mode === 'done'){
     stFilterStatuses = ['완료'];
@@ -627,7 +629,7 @@ async function submitRequest(e){
       location: document.getElementById('f_location').value,
       request_content: document.getElementById('f_content').value,
       requester: document.getElementById('f_requester').value,
-      status: '접수',
+      status: '요청',
       photo_url,
       created_at: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -691,7 +693,7 @@ function renderMyRequests(){
 }
 
 function reqCardHtml(r, showBranch, repeatCount){
-  const overdue = (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS;
+  const overdue = (OVERDUE_STATUSES.includes(r.status)) && daysSince(r.created_date) >= OVERDUE_DAYS;
   const handleBox = r.handle_content || r.handled_date || r.handler ? `
     <div class="handle-box">
       <div><b>처리내용</b> ${escapeHtml(r.handle_content||'-')}</div>
@@ -708,7 +710,7 @@ function reqCardHtml(r, showBranch, repeatCount){
         ${showBranch? `<span class="req-cat" style="background:#F3EBD9;color:#8A6200;">${r.branch}</span>`:''}
         <div class="req-loc">${escapeHtml(r.location||'')}</div>
       </div>
-      <span class="badge ${r.status}">${r.status}${overdue?' ⚠':''}</span>
+      <span class="badge ${r.status}">${r.status}${overdue?(' D+'+daysSince(r.created_date)):''}</span>
     </div>
     <div class="req-body">${escapeHtml(r.request_content)}</div>
     ${r.photo_url ? `<div class="req-photo"><img src="${r.photo_url}" onclick="showPhoto('${r.photo_url}')"></div>`:''}
@@ -758,7 +760,7 @@ async function loadAdminRequests(){
 
 function renderStats(){
   const rows = allAdminRequests;
-  const open = rows.filter(r=>r.status==='접수'||r.status==='처리중');
+  const open = rows.filter(r=>OVERDUE_STATUSES.includes(r.status));
   const overdue = open.filter(r=>daysSince(r.created_date)>=OVERDUE_DAYS);
   const done = rows.filter(r=>r.status==='완료');
   const grid = document.getElementById('statGrid');
@@ -798,7 +800,7 @@ function renderAdminList(){
   const repeatMap = computeRepeatMap(allAdminRequests);
   if(!rows.length){ list.innerHTML = '<div class="empty">조건에 맞는 요청이 없습니다.</div>'; return; }
   list.innerHTML = rows.map(r=>{
-    const overdue = (r.status==='접수'||r.status==='처리중') && daysSince(r.created_date) >= OVERDUE_DAYS;
+    const overdue = (OVERDUE_STATUSES.includes(r.status)) && daysSince(r.created_date) >= OVERDUE_DAYS;
     return `
     <div class="req-card ${overdue?'overdue':''}" onclick="openEditModal('${r.id}')" style="cursor:pointer">
       <div class="req-top">
@@ -808,13 +810,19 @@ function renderAdminList(){
           <span class="req-cat" style="background:#F3EBD9;color:#8A6200;">${r.branch}</span>
           <div class="req-loc">${escapeHtml(r.location||'')}</div>
         </div>
-        <span class="badge ${r.status}">${r.status}${overdue?' ⚠':''}</span>
+        <span class="badge ${r.status}">${r.status}${overdue?(' D+'+daysSince(r.created_date)):''}</span>
       </div>
       <div class="req-body">${escapeHtml(r.request_content)}</div>
       ${r.photo_url ? `<div class="req-photo"><img src="${r.photo_url}" onclick="event.stopPropagation();showPhoto('${r.photo_url}')"></div>`:''}
+      ${r.status==='요청' ? `<button type="button" class="secondary small" style="margin-top:8px;" onclick="event.stopPropagation();quickAcknowledge('${r.id}')">✅ 접수 확인</button>` : ''}
       <div class="req-meta"><span>작성 ${r.created_date} · ${escapeHtml(r.requester||'')}</span><span>탭하여 처리 입력 ›</span></div>
     </div>`;
   }).join('');
+}
+
+async function quickAcknowledge(id){
+  await db.collection(FACILITY_COLLECTION).doc(id).update({ status: '접수' });
+  await loadAdminRequests();
 }
 
 /* ===================== 총무팀: 처리 입력 모달 ===================== */

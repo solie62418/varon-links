@@ -103,7 +103,7 @@
 <header>
   <div>
     <h1>바론 분원정보·계정관리</h1>
-    <div class="sub">분원정보 · 학교안전지원 · 주차등록 · 기타계정 · 범죄경력시설 · 출입보안현황 · <a href="https://solie62418.github.io/varon-links/">← 바론링크로 돌아가기</a></div>
+    <div class="sub">분원정보 · 학교안전지원 · 주차등록 · 기타정보 · 범죄경력시설 · 출입보안현황 · <a href="https://solie62418.github.io/varon-links/">← 바론링크로 돌아가기</a></div>
   </div>
   <button class="lock-btn" onclick="lockApp()">🔒 잠그기</button>
 </header>
@@ -114,7 +114,7 @@
   <button onclick="switchTab('parking')">주차등록</button>
   <button onclick="switchTab('crime')">범죄경력 시설정보</button>
   <button onclick="switchTab('fingerprint')">출입보안현황</button>
-  <button onclick="switchTab('etc')">기타 계정</button>
+  <button onclick="switchTab('etc')">기타 정보</button>
 </nav>
 
 <main>
@@ -197,7 +197,7 @@
   <!-- ===================== 4. 기타 계정 ===================== -->
   <section class="view" id="view-etc">
     <div class="card">
-      <h2>기타 계정 / 비밀번호 메모</h2>
+      <h2>기타 정보 메모</h2>
       <div class="note" style="margin-bottom:10px;">와이파이, 출입문 비밀번호, 기타 사이트 로그인 등 분원 구분 없이 이름/아이디/비밀번호로만 간단히 기록합니다.</div>
       <button class="ghost-add" onclick="toggleForm('etcForm')">➕ 새로 등록</button>
       <div class="form-box" id="etcForm">
@@ -685,8 +685,8 @@ function exportEtc(){
   const rows = state.etc.map(r=>({ 이름:r.name, 아이디:r.id, 비밀번호:r.pw, 비고:r.note }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '기타계정');
-  XLSX.writeFile(wb, `기타계정_${todayStr()}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, '기타정보');
+  XLSX.writeFile(wb, `기타정보_${todayStr()}.xlsx`);
 }
 
 /* ---------------- 5. 범죄경력 시설정보 ---------------- */

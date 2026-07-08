@@ -514,6 +514,7 @@ function openDetail(id){
     <div class="modal-actions">
       <button class="danger" onclick="deleteInstructor('${p.id}')" style="margin-right:auto;">🗑 이 강사 삭제</button>
       ${effectiveLifecycle(p)==='재직중' ? `<button class="danger" onclick="startTermination('${p.id}')">해임 처리 시작</button>` : ''}
+      ${p.lifecycle==='퇴사중' ? `<button class="secondary" onclick="cancelTermination('${p.id}')">↩ 해임 처리 철회</button>` : ''}
       <button class="secondary" onclick="closeDetail()">닫기</button>
       <button class="primary" onclick="saveDetail()">저장</button>
     </div>
@@ -617,13 +618,50 @@ async function deleteInstructor(id){
 
 async function startTermination(id){
   if(!confirm('해임 처리를 시작하시겠습니까? 재직중 → 퇴사중으로 전환되고, 퇴사 체크리스트가 새로 시작됩니다.')) return;
+  const p = allInstructors.find(x=>x.id===id);
+  const snapshot = {
+    lifecycle: effectiveLifecycle(p),
+    substatus: p.substatus || '승인완료',
+    event_base_date: p.event_base_date || p.hire_date || null,
+    checklist: p.checklist || [],
+    report_method: p.report_method || '',
+    report_date_request: p.report_date_request || '',
+    report_date_complete: p.report_date_complete || '',
+  };
   await db.collection(COL).doc(id).update({
     lifecycle: '퇴사중',
     substatus: '서류준비',
     event_base_date: todayStr(),
     checklist: LEAVE_CHECKLIST_DEFAULT.map(item => ({ item, checked: false, date: null })),
     report_method: '', report_date_request: '', report_date_complete: '',
+    pre_termination_snapshot: snapshot,
   });
+  await loadAll(); renderStats(); renderList();
+  closeDetail();
+}
+
+async function cancelTermination(id){
+  const p = allInstructors.find(x=>x.id===id);
+  if(!confirm('해임 처리를 철회하고 재직중 상태로 되돌리시겠습니까?\n퇴사 체크리스트 진행 내용은 사라지고, 해임 시작 전 상태로 복원됩니다.')) return;
+  const snap = p.pre_termination_snapshot;
+  const restore = snap ? {
+    lifecycle: null, // 재직중 여부는 입사일 기준으로 자동 판단되므로 비워둠
+    substatus: snap.substatus,
+    event_base_date: snap.event_base_date,
+    checklist: snap.checklist,
+    report_method: snap.report_method,
+    report_date_request: snap.report_date_request,
+    report_date_complete: snap.report_date_complete,
+  } : {
+    lifecycle: null,
+    substatus: '승인완료',
+    event_base_date: p.hire_date || todayStr(),
+    checklist: HIRE_CHECKLIST_DEFAULT.map(item => ({ item, checked: true, date: null })),
+    report_method: '', report_date_request: '', report_date_complete: '',
+  };
+  restore.leave_date = null;
+  restore.pre_termination_snapshot = firebase.firestore.FieldValue.delete();
+  await db.collection(COL).doc(id).update(restore);
   await loadAll(); renderStats(); renderList();
   closeDetail();
 }

@@ -281,7 +281,7 @@
         </div>
         <div class="filters">
           <select id="af_branch" onchange="renderAdminList()"><option value="">전체 분원</option></select>
-          <select id="af_status" onchange="renderAdminList()"><option value="">전체 상태</option></select>
+          <select id="af_status" onchange="resetAdminQuickFilter()"><option value="">전체 상태</option></select>
           <select id="af_category" onchange="renderAdminList()"><option value="">전체 항목</option></select>
           <span style="align-self:center;font-size:12px;color:var(--muted);white-space:nowrap;">작성일자</span>
           <input type="date" id="af_from" onchange="renderAdminList()">
@@ -765,11 +765,31 @@ function renderStats(){
   const done = rows.filter(r=>r.status==='완료');
   const grid = document.getElementById('statGrid');
   grid.innerHTML = `
-    <div class="stat"><div class="num">${rows.length}</div><div class="lab">전체 요청</div></div>
-    <div class="stat"><div class="num">${open.length}</div><div class="lab">미처리(접수/처리중)</div></div>
-    <div class="stat warn"><div class="num">${overdue.length}</div><div class="lab">3일 이상 지연</div></div>
-    <div class="stat"><div class="num">${done.length}</div><div class="lab">완료</div></div>
+    <div class="stat ${adminQuickFilterMode==='all'?'active':''}" onclick="setAdminQuickFilter('all')" style="cursor:pointer"><div class="num">${rows.length}</div><div class="lab">전체 요청</div></div>
+    <div class="stat ${adminQuickFilterMode==='open'?'active':''}" onclick="setAdminQuickFilter('open')" style="cursor:pointer"><div class="num">${open.length}</div><div class="lab">미처리(요청/접수/처리중)</div></div>
+    <div class="stat warn ${adminQuickFilterMode==='overdue'?'active':''}" onclick="setAdminQuickFilter('overdue')" style="cursor:pointer"><div class="num">${overdue.length}</div><div class="lab">3일 이상 지연</div></div>
+    <div class="stat ${adminQuickFilterMode==='done'?'active':''}" onclick="setAdminQuickFilter('done')" style="cursor:pointer"><div class="num">${done.length}</div><div class="lab">완료</div></div>
   `;
+}
+
+let adminQuickFilterMode = 'all';
+let adminFilterStatuses = [];
+let adminOverdueOnlyFilter = false;
+
+function setAdminQuickFilter(mode){
+  adminQuickFilterMode = mode;
+  document.getElementById('af_status').value = '';
+  if(mode === 'all'){ adminFilterStatuses = []; adminOverdueOnlyFilter = false; }
+  else if(mode === 'open'){ adminFilterStatuses = ['요청','접수','처리중']; adminOverdueOnlyFilter = false; }
+  else if(mode === 'overdue'){ adminFilterStatuses = ['요청','접수','처리중']; adminOverdueOnlyFilter = true; }
+  else if(mode === 'done'){ adminFilterStatuses = ['완료']; adminOverdueOnlyFilter = false; }
+  renderStats();
+  renderAdminList();
+}
+function resetAdminQuickFilter(){
+  adminQuickFilterMode = ''; adminFilterStatuses = []; adminOverdueOnlyFilter = false;
+  renderStats();
+  renderAdminList();
 }
 
 function currentAdminFilters(){
@@ -786,7 +806,9 @@ function filteredAdminRows(){
   const f = currentAdminFilters();
   return allAdminRequests.filter(r=>{
     if(f.branch && r.branch!==f.branch) return false;
-    if(f.status && r.status!==f.status) return false;
+    if(adminFilterStatuses.length){ if(!adminFilterStatuses.includes(r.status)) return false; }
+    else if(f.status && r.status!==f.status) return false;
+    if(adminOverdueOnlyFilter && daysSince(r.created_date) < OVERDUE_DAYS) return false;
     if(f.category && r.category!==f.category) return false;
     if(f.from && r.created_date < f.from) return false;
     if(f.to && r.created_date > f.to) return false;
@@ -822,7 +844,7 @@ function renderAdminList(){
 
 async function quickAcknowledge(id){
   await db.collection(FACILITY_COLLECTION).doc(id).update({ status: '접수' });
-  await loadAdminRequests();
+  await Promise.all([loadAdminRequests(), loadMyRequests()]);
 }
 
 /* ===================== 총무팀: 처리 입력 모달 ===================== */
@@ -859,7 +881,7 @@ async function saveEdit(){
   try{
     await db.collection(FACILITY_COLLECTION).doc(editingId).update(payload);
     closeEditModal();
-    loadAdminRequests();
+    await Promise.all([loadAdminRequests(), loadMyRequests()]);
   }catch(err){
     alert('저장 중 오류: ' + (err.message||err));
   }
@@ -1033,7 +1055,8 @@ async function handleBulkImport(event){
     }
     statusEl.textContent = `✅ ${records.length}건 업로드 완료 (${new Date().toLocaleTimeString('ko-KR')})`;
     event.target.value = '';
-    if(typeof loadAdminRequests === 'function') loadAdminRequests();
+    loadAdminRequests();
+    loadMyRequests();
   }catch(err){
     console.error(err);
     statusEl.textContent = '업로드 실패: ' + (err.message || err);

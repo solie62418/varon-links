@@ -61,9 +61,12 @@
   table tr:nth-child(even) td{background:#FAFBFC;}
   .tag{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:800;}
   .tag.branch{background:#E7F0FF;color:var(--navy);}
-  .tag.affiliate{background:#FDF0DA;color:var(--gold);}
+  .tag.hq{background:#FDF0DA;color:var(--gold);}
+  .tag.franchise{background:#E8F5E9;color:#2F7D3C;}
+  .tag.etc{background:#F1F2F4;color:var(--muted);}
   .pw{font-family:'Courier New',monospace;background:#F3F4F6;padding:2px 6px;border-radius:5px;}
-  .actions-cell{white-space:nowrap;display:flex;gap:6px;}
+  .actions-cell{white-space:nowrap;}
+  .actions-inner{display:flex;gap:6px;}
 
   .form-box{border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;background:#FAFBFC;display:none;}
   .form-box.open{display:block;}
@@ -122,7 +125,7 @@
       <button class="ghost-add" onclick="toggleForm('brForm')">➕ 새로 등록</button>
       <div class="form-box" id="brForm">
         <div class="form-grid">
-          <label>구분 <select id="brFormType"><option value="분원">분원</option><option value="관계사">관계사</option></select></label>
+          <label>구분 <select id="brFormType"><option value="분원">분원</option><option value="본사">본사</option><option value="가맹본사">가맹본사</option><option value="기타">기타</option></select></label>
           <label>이름 <input type="text" id="brFormName" placeholder="예: 장안"></label>
           <label>주소 <input type="text" id="brFormAddr"></label>
           <label>전화번호 <input type="text" id="brFormPhone"></label>
@@ -137,7 +140,9 @@
       <div class="filters">
         <button class="secondary small" id="brFilterAll" onclick="setBranchFilter('전체')">전체</button>
         <button class="secondary small" id="brFilterBranch" onclick="setBranchFilter('분원')">분원만</button>
-        <button class="secondary small" id="brFilterAffiliate" onclick="setBranchFilter('관계사')">관계사만</button>
+        <button class="secondary small" id="brFilterHq" onclick="setBranchFilter('본사')">본사만</button>
+        <button class="secondary small" id="brFilterFranchise" onclick="setBranchFilter('가맹본사')">가맹본사만</button>
+        <button class="secondary small" id="brFilterEtc" onclick="setBranchFilter('기타')">기타만</button>
         <input type="text" id="brSearch" placeholder="이름/주소 검색" oninput="renderBranches()">
         <button class="secondary small" onclick="exportBranches()">⬇ 엑셀로 내보내기</button>
       </div>
@@ -339,9 +344,9 @@ const SEED_BRANCHES = [
   ['분원','운정1','경기도 파주시 교하로 83, 5층(목동동, 동광프라자)','031-949-7200','598-12-00683','1416','제이엘에스 네트웍스 운정'],
   ['분원','운정2','경기도 파주시 경의로 1240번길 37-1, 8층(와동동, 명품프라자)','031-949-0506','651-28-01062','1690','제이엘에스네트웍스 운정2관'],
   ['분원','남동탄','경기도 화성시 동탄순환대로 14길 77, 5층 501~512호(산척동, 트램프라자)','031-377-0503','142-13-02151','4609','제이엘에스 네트웍스 동탄'],
-  ['관계사','바론네트웍스','경기도 용인시 기흥구 구성로 357, B동 7층 701호(청덕동, 용인테크노밸리)','031-299-2900','462-87-02852 / 134511-0635556','','주식회사 바론네트웍스'],
-  ['관계사','제이엘에스네트웍스','경기도 용인시 기흥구 구성로 357, B동 7층 701호(청덕동, 용인테크노밸리)','031-299-2900','292-86-02504 / 134511-0579762','','주식회사 제이엘에스네트웍스'],
-  ['관계사','정상제이엘에스','서울특별시 강남구 영동대로 229(대치동)','02-3413-9109','130-81-42974 / 124311-0039762','','주식회사 정상제이엘에스'],
+  ['본사','바론네트웍스','경기도 용인시 기흥구 구성로 357, B동 7층 701호(청덕동, 용인테크노밸리)','031-299-2900','462-87-02852 / 134511-0635556','','주식회사 바론네트웍스'],
+  ['본사','제이엘에스네트웍스','경기도 용인시 기흥구 구성로 357, B동 7층 701호(청덕동, 용인테크노밸리)','031-299-2900','292-86-02504 / 134511-0579762','','주식회사 제이엘에스네트웍스'],
+  ['가맹본사','정상제이엘에스','서울특별시 강남구 영동대로 229(대치동)','02-3413-9109','130-81-42974 / 124311-0039762','','주식회사 정상제이엘에스'],
 ];
 const SEED_SCHOOL = [
   ['장안','수원장안분원정상어학원(장안캠퍼스)','8728102983001','jls0503@','기관장: 김효성'],
@@ -486,8 +491,8 @@ async function saveFingerprint(){ await db.collection(COL).doc('fingerprint').se
 /* ---------------- 1. 분원 기본정보 ---------------- */
 function setBranchFilter(mode){
   branchFilterMode = mode;
-  ['brFilterAll','brFilterBranch','brFilterAffiliate'].forEach(id=>document.getElementById(id).classList.remove('primary'));
-  const map = {'전체':'brFilterAll','분원':'brFilterBranch','관계사':'brFilterAffiliate'};
+  ['brFilterAll','brFilterBranch','brFilterHq','brFilterFranchise','brFilterEtc'].forEach(id=>document.getElementById(id).classList.remove('primary'));
+  const map = {'전체':'brFilterAll','분원':'brFilterBranch','본사':'brFilterHq','가맹본사':'brFilterFranchise','기타':'brFilterEtc'};
   document.getElementById(map[mode]).classList.add('primary');
   renderBranches();
 }
@@ -501,13 +506,11 @@ function renderBranches(){
   ${rows.map(r => {
     const idx = state.branches.indexOf(r);
     return `<tr>
-      <td><span class="tag ${r.type==='분원'?'branch':'affiliate'}">${r.type}</span></td>
+      <td><span class="tag ${ {'분원':'branch','본사':'hq','가맹본사':'franchise','기타':'etc'}[r.type] || 'etc' }">${r.type}</span></td>
       <td><b>${r.name}</b></td><td>${r.address||'-'}</td><td>${r.phone||'-'}</td>
       <td>${r.biz_no||'-'}</td><td>${r.license_no||'-'}</td><td>${r.note||'-'}</td>
-      <td class="actions-cell">
-        <button class="edit-btn" onclick="editBranch(${idx})">수정</button>
-        <button class="danger" onclick="deleteBranch(${idx})">삭제</button>
-      </td>
+      <td class="actions-cell"><div class="actions-inner"><button class="edit-btn" onclick="editBranch(${idx})">수정</button>
+        <button class="danger" onclick="deleteBranch(${idx})">삭제</button></div></td>
     </tr>`;
   }).join('')}
   </tbody></table>${rows.length===0?'<div class="empty">결과가 없습니다.</div>':''}`;
@@ -575,10 +578,8 @@ function renderSimpleAccountTable(key){
     return `<tr>
       <td><b>${r.branch}</b></td><td>${r.site||'-'}</td>
       <td class="pw">${r.id||'-'}</td><td class="pw">${r.pw||'-'}</td><td>${r.note||'-'}</td>
-      <td class="actions-cell">
-        <button class="edit-btn" onclick="editSimpleAccount('${key}',${idx})">수정</button>
-        <button class="danger" onclick="deleteSimpleAccount('${key}',${idx})">삭제</button>
-      </td>
+      <td class="actions-cell"><div class="actions-inner"><button class="edit-btn" onclick="editSimpleAccount('${key}',${idx})">수정</button>
+        <button class="danger" onclick="deleteSimpleAccount('${key}',${idx})">삭제</button></div></td>
     </tr>`;
   }).join('')}
   </tbody></table>${rows.length===0?'<div class="empty">등록된 계정이 없습니다.</div>':''}`;
@@ -641,10 +642,8 @@ function renderEtc(){
     const idx = state.etc.indexOf(r);
     return `<tr>
       <td><b>${r.name}</b></td><td class="pw">${r.id||'-'}</td><td class="pw">${r.pw||'-'}</td><td>${r.note||'-'}</td>
-      <td class="actions-cell">
-        <button class="edit-btn" onclick="editEtc(${idx})">수정</button>
-        <button class="danger" onclick="deleteEtc(${idx})">삭제</button>
-      </td>
+      <td class="actions-cell"><div class="actions-inner"><button class="edit-btn" onclick="editEtc(${idx})">수정</button>
+        <button class="danger" onclick="deleteEtc(${idx})">삭제</button></div></td>
     </tr>`;
   }).join('')}
   </tbody></table>${rows.length===0?'<div class="empty">등록된 항목이 없습니다.</div>':''}`;
@@ -700,10 +699,8 @@ function renderCrime(){
     return `<tr>
       <td><b>${r.branch}</b></td><td class="pw">${r.facility_id||'-'}</td><td class="pw">${r.verify_no||'-'}</td>
       <td>${r.police||'-'}</td><td>${r.note||'-'}</td>
-      <td class="actions-cell">
-        <button class="edit-btn" onclick="editCrime(${idx})">수정</button>
-        <button class="danger" onclick="deleteCrime(${idx})">삭제</button>
-      </td>
+      <td class="actions-cell"><div class="actions-inner"><button class="edit-btn" onclick="editCrime(${idx})">수정</button>
+        <button class="danger" onclick="deleteCrime(${idx})">삭제</button></div></td>
     </tr>`;
   }).join('')}
   </tbody></table>${state.crime.length===0?'<div class="empty">등록된 정보가 없습니다.</div>':''}`;
@@ -778,10 +775,8 @@ function renderFingerprintList(){
     return `<tr>
       <td><span class="roster-badge ${r.type}">${r.type}</span></td><td>${r.no||'-'}</td>
       <td><b>${r.name}</b></td><td>${r.date||'-'}</td><td>${r.by||'-'}</td>
-      <td class="actions-cell">
-        <button class="edit-btn" onclick="editFingerprint('${branch}',${idx})">수정</button>
-        <button class="danger" onclick="deleteFingerprint('${branch}',${idx})">삭제</button>
-      </td>
+      <td class="actions-cell"><div class="actions-inner"><button class="edit-btn" onclick="editFingerprint('${branch}',${idx})">수정</button>
+        <button class="danger" onclick="deleteFingerprint('${branch}',${idx})">삭제</button></div></td>
     </tr>`;
   }).join('')}
   </tbody></table>${rows.length===0?'<div class="empty">등록된 인원이 없습니다.</div>':''}`;

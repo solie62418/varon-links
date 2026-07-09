@@ -61,6 +61,9 @@
   .todo-branch{font-weight:800;color:var(--navy);}
   .todo-doc{color:var(--text);}
   .todo-next{font-size:11px;color:var(--muted);margin-top:2px;}
+  .todo-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  .chip{border:1px solid var(--border);background:#fff;padding:6px 14px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;}
+  .chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
   .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap;}
   .badge.대기{background:var(--hold);} .badge.진행중{background:var(--wait);}
   .badge.완료{background:var(--ok);} .badge.미완료{background:var(--danger);}
@@ -139,6 +142,7 @@
   <!-- 지금 할 일 -->
   <div class="card">
     <h2>지금 할 일</h2>
+    <div class="todo-filter-row" id="todoBranchFilter"></div>
     <div id="todoList"><div class="empty">불러오는 중...</div></div>
   </div>
 
@@ -420,8 +424,19 @@ function showStageTip(n){
   document.getElementById('stageTipModalBg').classList.add('show');
 }
 
+let todoBranchFilter = '전체';
+function renderTodoBranchChips(){
+  const wrap = document.getElementById('todoBranchFilter');
+  wrap.innerHTML = ['전체', ...BRANCHES].map(b => `<button type="button" class="chip ${b===todoBranchFilter?'active':''}" data-branch="${b}">${b}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => { todoBranchFilter = btn.dataset.branch; renderTodoList(); });
+  });
+}
+
 function renderTodoList(){
-  const pending = Object.values(allRecords).filter(r => !isFullyDone(r));
+  renderTodoBranchChips();
+  let pending = Object.values(allRecords).filter(r => !isFullyDone(r));
+  if(todoBranchFilter !== '전체') pending = pending.filter(r => r.branch === todoBranchFilter);
   const box = document.getElementById('todoList');
   if(!pending.length){ box.innerHTML = '<div class="empty">모든 서류가 완료됐어요 🎉</div>'; return; }
 

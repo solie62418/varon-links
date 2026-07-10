@@ -443,6 +443,7 @@
 
 <div class="reorder-bar" id="reorderBar">
   <span>드래그로 순서를 바꾸거나, 카드 아래 '👁 노출 중' 배지를 눌러 숨길 수 있습니다</span>
+  <span id="visitCountDisplay" style="font-weight:700;">접속 횟수 불러오는 중...</span>
   <button class="cancel-btn" id="reorderCancelBtn">취소</button>
   <button class="save-btn" id="reorderSaveBtn">순서 저장</button>
 </div>
@@ -694,6 +695,97 @@ let reorderMode = false;
 let draggedCard = null;
 let pendingHidden = {};
 
+/* ---------------- 접속 횟수 카운터 (전체 열람 횟수 + 실사용자 수 추정) ---------------- */
+let totalVisits = null;
+let uniqueVisitors = null;
+
+function getOrCreateVisitorId(){
+  let id = localStorage.getItem('baronlink_visitor_id');
+  if(!id){
+    id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('baronlink_visitor_id', id);
+  }
+  return id;
+}
+
+async function trackVisit(){
+  try{
+    // 1) 전체 열람 횟수 +1
+    const getRes = await fetch(`${SUPABASE_URL}/rest/v1/page_stats?select=value&key=eq.total_visits`, {
+      headers:{ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if(getRes.ok){
+      const rows = await getRes.json();
+      const current = (Array.isArray(rows) && rows.length > 0) ? Number(rows[0].value) || 0 : 0;
+      const next = current + 1;
+      await fetch(`${SUPABASE_URL}/rest/v1/page_stats`, {
+        method: 'POST',
+        headers:{
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ key: 'total_visits', value: next })
+      });
+      totalVisits = next;
+    }
+
+    // 2) 이 브라우저(기기)의 방문 기록 남기기 (실사용자 수 추정용)
+    const visitorId = getOrCreateVisitorId();
+    const nowIso = new Date().toISOString();
+    const visitorRes = await fetch(`${SUPABASE_URL}/rest/v1/page_visitors?select=visit_count&visitor_id=eq.${visitorId}`, {
+      headers:{ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if(visitorRes.ok){
+      const vRows = await visitorRes.json();
+      const prevCount = (Array.isArray(vRows) && vRows.length > 0) ? Number(vRows[0].visit_count) || 0 : 0;
+      await fetch(`${SUPABASE_URL}/rest/v1/page_visitors`, {
+        method: 'POST',
+        headers:{
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          visitor_id: visitorId,
+          visit_count: prevCount + 1,
+          last_seen: nowIso,
+          first_seen: prevCount === 0 ? nowIso : undefined,
+        })
+      });
+    }
+
+    // 3) 전체 고유 방문자 수 조회 (count=exact 헤더로 행 개수만 가볍게 받아옴)
+    const countRes = await fetch(`${SUPABASE_URL}/rest/v1/page_visitors?select=visitor_id`, {
+      headers:{
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'count=exact',
+        'Range': '0-0'
+      }
+    });
+    if(countRes.ok){
+      const range = countRes.headers.get('content-range'); // 예: "0-0/17"
+      if(range && range.includes('/')){
+        const total = range.split('/')[1];
+        if(total && total !== '*') uniqueVisitors = Number(total);
+      }
+    }
+
+    updateVisitDisplay();
+  }catch(err){ /* 통계 실패는 무시하고 페이지는 정상 작동 */ }
+}
+function updateVisitDisplay(){
+  const el = document.getElementById('visitCountDisplay');
+  if(!el) return;
+  const parts = [];
+  parts.push(totalVisits === null ? '열람 횟수 불러오는 중...' : `누적 열람 횟수: ${totalVisits.toLocaleString()}회`);
+  parts.push(uniqueVisitors === null ? '실사용자 수 불러오는 중...' : `실사용자 수(추정): ${uniqueVisitors.toLocaleString()}명`);
+  el.textContent = parts.join('   ·   ');
+}
+
 const reorderToggleBtn = document.getElementById('reorderToggleBtn');
 const reorderBar = document.getElementById('reorderBar');
 
@@ -717,6 +809,7 @@ function enterReorderMode(){
   searchInput.value = '';
   render(allRows); // 검색 필터 해제한 전체 목록으로 다시 렌더링 (숨김 카테고리도 함께 표시)
   makeCardsDraggable();
+  updateVisitDisplay();
 }
 
 function exitReorderMode(){
@@ -833,6 +926,7 @@ document.getElementById('reorderSaveBtn').addEventListener('click', async () => 
 });
 
 loadLinks();
+trackVisit();
 </script>
 </body>
 </html>

@@ -408,6 +408,21 @@
     pointer-events:auto;
   }
   .hide-toggle.is-hidden{ background:#FDECEC; color:var(--stamp); border-color:var(--stamp); }
+  .protect-toggle{
+    display:inline-block;
+    margin:8px 0 10px 8px;
+    padding:5px 12px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-family:'Pretendard', sans-serif;
+    font-size:11px;
+    font-weight:700;
+    cursor:pointer;
+    color:var(--ink-soft);
+    pointer-events:auto;
+  }
+  .protect-toggle.is-protected{ background:#EAF2FB; color:#2E6FD9; border-color:#2E6FD9; }
   body.reorder-mode .branch-card.category-hidden{ opacity:.45; }
   body.reorder-mode .branch-card.category-hidden .branch-head{ background:#F5F5F3; }
 </style>
@@ -423,8 +438,8 @@
       </div>
       <div class="title-row"><h1>바론링크</h1></div>
     </div>
-    <p class="sub">항목을 클릭하면 해당 대장/앱으로 이동합니다. '청소관리대장'과 '노선최적화앱'은 분원을 펼쳐서 고를 수 있습니다.</p>
-    <div class="search">
+    <p class="sub">항목을 클릭하면 해당 대장/앱으로 이동합니다. 앱 접속 권한이 필요하신 분은 총무팀으로 문의해주세요.</p>
+    <div class="search" style="display:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="searchInput" type="text" placeholder="대장 이름 또는 분원명 검색 (예: 남동탄, 셔틀)">
     </div>
@@ -442,7 +457,7 @@
 </div>
 
 <div class="reorder-bar" id="reorderBar">
-  <span>드래그로 순서를 바꾸거나, 카드 아래 '👁 노출 중' 배지를 눌러 숨길 수 있습니다</span>
+  <span>드래그로 순서를 바꾸거나, 카드 아래 '👁 노출 중' 배지로 숨김을, '🔓 비밀번호 없음' 배지로 비밀번호 보호 여부를 설정할 수 있습니다</span>
   <button class="cancel-btn" id="reorderCancelBtn">취소</button>
   <button class="save-btn" id="reorderSaveBtn">순서 저장</button>
 </div>
@@ -574,6 +589,22 @@ function render(rows){
       return btn;
     })() : null;
 
+    const isProtected = g.items.length > 0 && g.items.some(it => it.password_protected === true);
+    const protectToggle = reorderMode ? (() => {
+      const btn = document.createElement('button');
+      btn.className = 'protect-toggle' + (isProtected ? ' is-protected' : '');
+      btn.textContent = isProtected ? '🔒 비밀번호 필요' : '🔓 비밀번호 없음';
+      btn.type = 'button';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const nowProtected = pendingProtected[g.category] === undefined ? isProtected : pendingProtected[g.category];
+        pendingProtected[g.category] = !nowProtected;
+        btn.classList.toggle('is-protected', pendingProtected[g.category]);
+        btn.textContent = pendingProtected[g.category] ? '🔒 비밀번호 필요' : '🔓 비밀번호 없음';
+      });
+      return btn;
+    })() : null;
+
     if(type === 'simple'){
       // 단일 링크: 대표 URL 하나만 사용 (여러 행이 있어도 첫 번째 유효 url 사용)
       const target = g.items.find(it => it.url);
@@ -603,10 +634,20 @@ function render(rows){
           </div>
           <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div>
         `;
+        if(!reorderMode && isProtected){
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pw = prompt(`"${label}"은(는) 비밀번호가 필요한 항목입니다.\n비밀번호를 입력해주세요.`);
+            if(pw === null) return;
+            if(pw !== ADMIN_PASSWORD){ alert('비밀번호가 올바르지 않습니다.'); return; }
+            window.open(target.url, '_blank', 'noopener,noreferrer');
+          });
+        }
         card.appendChild(a);
         card.dataset.search = searchText;
       }
       if(hideToggle) card.appendChild(hideToggle);
+      if(protectToggle) card.appendChild(protectToggle);
       branchesEl.appendChild(card);
       return;
     }
@@ -693,6 +734,7 @@ const ADMIN_PASSWORD = "5555";
 let reorderMode = false;
 let draggedCard = null;
 let pendingHidden = {};
+let pendingProtected = {};
 
 const reorderToggleBtn = document.getElementById('reorderToggleBtn');
 const reorderBar = document.getElementById('reorderBar');
@@ -711,6 +753,7 @@ reorderToggleBtn.addEventListener('click', () => {
 function enterReorderMode(){
   reorderMode = true;
   pendingHidden = {};
+  pendingProtected = {};
   document.body.classList.add('reorder-mode');
   reorderToggleBtn.classList.add('active');
   reorderBar.classList.add('active');
@@ -722,6 +765,7 @@ function enterReorderMode(){
 function exitReorderMode(){
   reorderMode = false;
   pendingHidden = {};
+  pendingProtected = {};
   document.body.classList.remove('reorder-mode');
   reorderToggleBtn.classList.remove('active');
   reorderBar.classList.remove('active');
@@ -791,6 +835,15 @@ document.getElementById('reorderSaveBtn').addEventListener('click', async () => 
       itemsInCat.forEach(item => {
         if(item.hidden !== newHidden){
           addUpdate(item.id, { hidden:newHidden });
+        }
+      });
+    }
+
+    if(Object.prototype.hasOwnProperty.call(pendingProtected, cat)){
+      const newProtected = pendingProtected[cat];
+      itemsInCat.forEach(item => {
+        if(item.password_protected !== newProtected){
+          addUpdate(item.id, { password_protected:newProtected });
         }
       });
     }

@@ -337,7 +337,7 @@
     *{ transition:none !important; }
   }
 
-  /* ---------- 관리자 순서 편집 모드 ---------- */
+  /* ---------- 관리자 설정 모드 ---------- */
   .reorder-toggle-btn{
     margin-top:14px;
     padding:8px 16px;
@@ -443,7 +443,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="searchInput" type="text" placeholder="대장 이름 또는 분원명 검색 (예: 남동탄, 셔틀)">
     </div>
-    <button id="reorderToggleBtn" class="reorder-toggle-btn">⚙ 순서 편집</button>
+    <button id="reorderToggleBtn" class="reorder-toggle-btn">⚙ 관리자 설정</button>
   </header>
 
   <div id="status">색인을 불러오는 중입니다…</div>
@@ -458,6 +458,7 @@
 
 <div class="reorder-bar" id="reorderBar">
   <span>드래그로 순서를 바꾸거나, 카드 아래 '👁 노출 중' 배지로 숨김을, '🔓 비밀번호 없음' 배지로 비밀번호 보호 여부를 설정할 수 있습니다</span>
+  <button class="cancel-btn" id="changePwBtn">🔑 편집 비밀번호 변경</button>
   <button class="cancel-btn" id="reorderCancelBtn">취소</button>
   <button class="save-btn" id="reorderSaveBtn">순서 저장</button>
 </div>
@@ -505,6 +506,33 @@ const countLabel = document.getElementById('countLabel');
 const searchInput = document.getElementById('searchInput');
 
 let allRows = [];
+
+async function loadAdminPassword(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_config?select=value&key=eq.reorder_password`, {
+      headers:{ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if(!res.ok) return; // 테이블이 아직 없으면 기본값(5555) 그대로 사용
+    const data = await res.json();
+    if(Array.isArray(data) && data.length > 0 && data[0].value){
+      ADMIN_PASSWORD = data[0].value;
+    }
+  }catch(err){ /* 조용히 기본값 유지 */ }
+}
+async function saveAdminPassword(newPw){
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_config`, {
+    method: 'POST',
+    headers:{
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify({ key: 'reorder_password', value: newPw })
+  });
+  if(!res.ok) throw new Error('저장 실패: ' + res.status);
+  ADMIN_PASSWORD = newPw;
+}
 
 async function loadLinks(){
   statusEl.style.display = 'block';
@@ -589,7 +617,7 @@ function render(rows){
       return btn;
     })() : null;
 
-    const isProtected = g.items.length > 0 && g.items.some(it => it.password_protected === true);
+    const isProtected = g.items.length > 0 && g.items.every(it => it.password_protected === true);
     const protectToggle = reorderMode ? (() => {
       const btn = document.createElement('button');
       btn.className = 'protect-toggle' + (isProtected ? ' is-protected' : '');
@@ -639,7 +667,7 @@ function render(rows){
             e.preventDefault();
             const pw = prompt(`"${label}"은(는) 비밀번호가 필요한 항목입니다.\n비밀번호를 입력해주세요.`);
             if(pw === null) return;
-            if(pw !== ADMIN_PASSWORD){ alert('비밀번호가 올바르지 않습니다.'); return; }
+            if(pw !== APP_ACCESS_PASSWORD){ alert('비밀번호가 올바르지 않습니다.'); return; }
             window.open(target.url, '_blank', 'noopener,noreferrer');
           });
         }
@@ -686,6 +714,15 @@ function render(rows){
           ? `<div class="go"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg></div><div class="stamp-mark">열람<br>완료</div>`
           : `<span class="soon-badge">준비중</span>`}
       `;
+      if(hasUrl && !reorderMode && isProtected){
+        row.addEventListener('click', (e) => {
+          e.preventDefault();
+          const pw = prompt(`"${label} - ${item.branch}"은(는) 비밀번호가 필요한 항목입니다.\n비밀번호를 입력해주세요.`);
+          if(pw === null) return;
+          if(pw !== APP_ACCESS_PASSWORD){ alert('비밀번호가 올바르지 않습니다.'); return; }
+          window.open(item.url, '_blank', 'noopener,noreferrer');
+        });
+      }
       inner.appendChild(row);
     });
 
@@ -693,6 +730,7 @@ function render(rows){
     card.appendChild(head);
     card.appendChild(list);
     if(hideToggle) card.appendChild(hideToggle);
+    if(protectToggle) card.appendChild(protectToggle);
     card.dataset.search = (label + ' ' + g.items.map(it=>it.branch).join(' ')).toLowerCase();
     branchesEl.appendChild(card);
   });
@@ -729,8 +767,9 @@ searchInput.addEventListener('input', () => {
   noMatchEl.style.display = (visibleCards === 0) ? 'block' : 'none';
 });
 
-/* ---------------- 관리자 순서 편집 모드 ---------------- */
-const ADMIN_PASSWORD = "5555";
+/* ---------------- 관리자 설정 모드 ---------------- */
+let ADMIN_PASSWORD = "5555"; // 관리자 설정 비밀번호 — Supabase에 저장된 값이 있으면 그 값으로 덮어씀
+const APP_ACCESS_PASSWORD = "2026"; // 개별 앱 접속 잠금 비밀번호
 let reorderMode = false;
 let draggedCard = null;
 let pendingHidden = {};
@@ -738,6 +777,23 @@ let pendingProtected = {};
 
 const reorderToggleBtn = document.getElementById('reorderToggleBtn');
 const reorderBar = document.getElementById('reorderBar');
+
+document.getElementById('changePwBtn').addEventListener('click', async () => {
+  const cur = prompt('현재 편집 비밀번호를 입력하세요');
+  if(cur === null) return;
+  if(cur !== ADMIN_PASSWORD){ alert('현재 비밀번호가 올바르지 않습니다.'); return; }
+  const next = prompt('새 편집 비밀번호를 입력하세요 (4자리 이상 권장)');
+  if(next === null || !next.trim()) return;
+  const confirmNext = prompt('확인을 위해 새 비밀번호를 한 번 더 입력하세요');
+  if(confirmNext !== next){ alert('입력한 두 비밀번호가 일치하지 않습니다.'); return; }
+  try{
+    await saveAdminPassword(next.trim());
+    alert('편집 비밀번호가 변경되었습니다.');
+  }catch(err){
+    console.error(err);
+    alert('비밀번호 저장에 실패했습니다.\n\n(Supabase에 app_config 테이블이 있는지 확인해주세요.)');
+  }
+});
 
 reorderToggleBtn.addEventListener('click', () => {
   if(reorderMode) return; // 편집 중엔 하단 바의 저장/취소로만 종료
@@ -885,6 +941,7 @@ document.getElementById('reorderSaveBtn').addEventListener('click', async () => 
   }
 });
 
+loadAdminPassword();
 loadLinks();
 </script>
 </body>

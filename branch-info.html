@@ -769,6 +769,14 @@ function renderFingerprintList(){
   const branch = document.getElementById('fpViewBranch').value || BRANCHES[0];
   document.getElementById('fpFormBranch').value = branch;
   const rows = state.fingerprint[branch] || [];
+  // 번호(카드번호) 순으로 정렬 — 원본 배열을 직접 정렬해서 수정/삭제 시 인덱스가 어긋나지 않게 함
+  rows.sort((a, b) => {
+    const na = parseInt(a.no, 10);
+    const nb = parseInt(b.no, 10);
+    const va = isNaN(na) ? Infinity : na;
+    const vb = isNaN(nb) ? Infinity : nb;
+    return va - vb;
+  });
   let html = `<table><thead><tr><th>구분</th><th>번호</th><th>이름</th><th>등록일</th><th>등록자</th><th></th></tr></thead><tbody>
   ${rows.map(r => {
     const idx = rows.indexOf(r);

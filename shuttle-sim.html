@@ -7,7 +7,8 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8a3a366186ca2e7f70a53a60e624b719&autoload=false"></script>
+<!-- 장안 셔틀앱과 동일 앱키 · 카카오 콘솔 JavaScript SDK 도메인에 https://solie62418.github.io 등록 필요 -->
+<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=8a3a366186ca2e7f70a53a60e624b719&autoload=false"></script>
 <style>
 :root{
   --navy:#24467D; --logobg:#2B2E33; --slate:#2E5395;
@@ -91,10 +92,13 @@ main{padding:24px 28px 60px;max-width:1180px;margin:0 auto}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 footer{text-align:center;font-size:11px;color:var(--muted);padding:20px}
 main.map-mode{max-width:none}
-.map-layout{display:grid;grid-template-columns:300px 1fr;gap:14px;min-height:520px;height:calc(100vh - 210px)}
+.map-layout{display:grid;grid-template-columns:300px 1fr;gap:14px;min-height:560px;height:calc(100vh - 210px)}
 .map-side{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
-.map-main{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:#E8EEF5;min-height:420px}
-#kakaoMap{width:100%;height:100%;min-height:420px}
+.map-main{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:#E8EEF5;height:100%;min-height:480px}
+#kakaoMap{width:100%;height:480px;min-height:480px}
+@media (min-width:901px){
+  #kakaoMap{height:100%;min-height:480px}
+}
 .map-banner{background:#FFF8E1;border:1px solid #F0D78C;color:#7A5B00;font-size:12px;font-weight:700;padding:8px 10px;border-radius:10px;line-height:1.4}
 .map-bus-item{border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;transition:background .15s,border-color .15s}
 .map-bus-item:hover,.map-bus-item.drop-hot{background:#F4F7FC;border-color:var(--slate)}
@@ -696,16 +700,45 @@ function bindStopDrag(el, busId, stop){
   el.addEventListener('pointerdown', onDown);
 }
 
-function renderKakaoMap(fitBounds){
+function setMapEmptyMessage(html, show){
   const empty = document.getElementById('mapEmpty');
+  if(!empty) return;
+  if(html != null) empty.innerHTML = html;
+  empty.classList.toggle('show', !!show);
+}
+
+function forceMapRelayout(){
+  if(!lmap) return;
+  try{ lmap.relayout(); }catch(e){}
+  [80, 250, 600].forEach(ms => setTimeout(() => {
+    try{ if(lmap) lmap.relayout(); }catch(e){}
+  }, ms));
+}
+
+function renderKakaoMap(fitBounds){
   const buses = mapVisibleBuses();
   const hasGeo = buses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null));
-  empty.classList.toggle('show', !hasGeo);
-  if(!lmap || !hasGeo){
+
+  if(!hasGeo){
     clearMapLayers();
+    setMapEmptyMessage(`<div>
+      <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+      <p><b>지도에 표시할 좌표가 없습니다.</b></p>
+      <p class="map-tip">상단에서 <b>장안</b> 또는 <b>남동탄</b> 분원을 선택한 뒤, 데이터가 로드될 때까지 기다려주세요.</p>
+    </div>`, true);
     return;
   }
 
+  if(!lmap){
+    setMapEmptyMessage(`<div>
+      <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+      <p><b>카카오맵 로딩 중…</b></p>
+      <p class="map-tip">잠시만 기다려주세요. 계속 안 되면 새로고침하거나<br>카카오 개발자 콘솔에 <code>https://solie62418.github.io</code> 도메인이 등록됐는지 확인하세요.</p>
+    </div>`, true);
+    return;
+  }
+
+  setMapEmptyMessage(null, false);
   clearMapLayers();
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
@@ -729,9 +762,9 @@ function renderKakaoMap(fitBounds){
     stops.forEach(s => {
       const n = Number(s.passengers) || 0;
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
-      const id = `ms-${bus.id}-${s.id}`;
-      const html = `<div id="${id}" class="stop-bubble" title="${esc(s.name||'')} · ${n}명 → 드래그하여 이동"
-        style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:${Math.max(9,Math.round(sz*.32))}px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${n > 0 ? n : ''}</div>`;
+      const id = 'ms-' + bus.id.replace(/__/g,'-') + '-' + s.id;
+      const html = '<div id="'+id+'" class="stop-bubble" title="'+esc(s.name||'')+' · '+n+'명 → 드래그하여 이동"'
+        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(n > 0 ? n : '')+'</div>';
       const pos = new kakao.maps.LatLng(s.lat, s.lng);
       const overlay = new kakao.maps.CustomOverlay({
         position: pos,
@@ -752,83 +785,98 @@ function renderKakaoMap(fitBounds){
   });
 
   if(fitBounds && boundCount){
-    if(boundCount === 1){
-      lmap.setCenter(bounds.getNorthEast());
-      lmap.setLevel(5);
-    } else {
-      lmap.setBounds(bounds, 40, 40, 40, 40);
+    try{
+      if(boundCount === 1){
+        lmap.setCenter(bounds.getNorthEast());
+        lmap.setLevel(5);
+      } else {
+        lmap.setBounds(bounds);
+      }
+    }catch(e){
+      console.warn('setBounds', e);
+      const branch = effectiveMapBranch();
+      const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+      lmap.setCenter(new kakao.maps.LatLng(c.lat, c.lng));
+      lmap.setLevel(c.level);
     }
-  } else if(fitBounds){
-    const branch = state.branchFilter !== '전체' ? state.branchFilter : (buses[0] && buses[0].branch);
-    const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
-    lmap.setCenter(new kakao.maps.LatLng(c.lat, c.lng));
-    lmap.setLevel(c.level);
   }
+  forceMapRelayout();
 }
 
 function initKakaoMap(){
-  if(state.mapReady) return;
+  if(state.mapReady && lmap){
+    forceMapRelayout();
+    renderKakaoMap(true);
+    return;
+  }
+
+  const start = () => {
+    try{
+      const el = document.getElementById('kakaoMap');
+      if(!el) return;
+      if(el.offsetWidth < 40 || el.offsetHeight < 40){
+        setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>지도 영역을 준비하는 중…</b></p></div>', true);
+        setTimeout(start, 120);
+        return;
+      }
+      const branch = effectiveMapBranch();
+      const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+      lmap = new kakao.maps.Map(el, {
+        center: new kakao.maps.LatLng(c.lat, c.lng),
+        level: c.level
+      });
+      state.mapReady = true;
+      setMapEmptyMessage(null, false);
+      ensureMapWorking();
+      renderMapSide();
+      renderKakaoMap(true);
+      forceMapRelayout();
+    }catch(err){
+      console.error(err);
+      state.mapReady = false;
+      lmap = null;
+      setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 초기화에 실패했습니다.</b></p><p class="map-tip">'+esc(err && err.message ? err.message : String(err))+'<br>카카오 개발자 콘솔 → 플랫폼 키 → JavaScript 키 → <b>JavaScript SDK 도메인</b>에<br><code>https://solie62418.github.io</code> 가 있는지 확인하세요.<br>(장안 셔틀앱 지도가 같은 주소에서 되는지도 같이 확인해 주세요)</p></div>', true);
+    }
+  };
+
   if(typeof kakao === 'undefined' || !kakao.maps){
-    const empty = document.getElementById('mapEmpty');
-    empty.classList.add('show');
-    empty.innerHTML = `<div>
-      <div style="font-size:32px;margin-bottom:8px">🗺️</div>
-      <p><b>카카오맵 SDK를 불러오지 못했습니다.</b></p>
-      <p class="map-tip">네트워크·도메인(카카오 앱키) 설정을 확인한 뒤 새로고침 해주세요.<br>로컬에서는 GitHub Pages에 등록된 도메인과 다를 수 있습니다.</p>
-    </div>`;
-    // SDK가 늦게 로드되면 한 번 더 시도
+    setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 SDK를 불러오지 못했습니다.</b></p><p class="map-tip">네트워크를 확인하거나, 카카오 콘솔에<br><code>https://solie62418.github.io</code> 도메인을 등록한 뒤 새로고침 해주세요.</p></div>', true);
     let tries = 0;
     const timer = setInterval(() => {
       tries++;
       if(typeof kakao !== 'undefined' && kakao.maps){
         clearInterval(timer);
-        empty.classList.remove('show');
-        empty.innerHTML = `<div>
-          <div style="font-size:32px;margin-bottom:8px">🗺️</div>
-          <p><b>지도에 표시할 좌표가 없습니다.</b></p>
-          <p class="map-tip">장안·남동탄처럼 분원 노선앱 좌표가 있는 분원을 선택해주세요.</p>
-        </div>`;
-        initKakaoMap();
-      } else if(tries > 20){
+        kakao.maps.load(start);
+      } else if(tries > 40){
         clearInterval(timer);
       }
     }, 250);
     return;
   }
-  kakao.maps.load(() => {
-    const el = document.getElementById('kakaoMap');
-    if(!el) return;
-    const branch = effectiveMapBranch();
-    const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
-    lmap = new kakao.maps.Map(el, {
-      center: new kakao.maps.LatLng(c.lat, c.lng),
-      level: c.level
-    });
-    state.mapReady = true;
-    ensureMapWorking();
-    renderMapSide();
-    renderKakaoMap(true);
-    setTimeout(() => { if(lmap) lmap.relayout(); }, 50);
-  });
+
+  setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 로딩 중…</b></p></div>', true);
+  kakao.maps.load(start);
 }
 
 function showMapView(){
   document.querySelector('main').classList.add('map-mode');
   ensureMapWorking();
   renderMapSide();
-  if(!state.mapReady){
-    initKakaoMap();
-  } else {
+  requestAnimationFrame(() => {
     setTimeout(() => {
-      if(lmap) lmap.relayout();
-      renderKakaoMap(true);
-    }, 40);
-  }
+      if(!state.mapReady || !lmap) initKakaoMap();
+      else {
+        forceMapRelayout();
+        renderKakaoMap(true);
+      }
+    }, 50);
+  });
 }
 
 function hideMapMode(){
   document.querySelector('main').classList.remove('map-mode');
 }
+
 function comboKey(branch, no){
   return `${branch} ${busNo(no)}호`;
 }

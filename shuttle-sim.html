@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>셔틀 노선조정·감차 시뮬레이션</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8a3a366186ca2e7f70a53a60e624b719&autoload=false"></script>
+<style>
+:root{
+  --navy:#24467D; --logobg:#2B2E33; --slate:#2E5395;
+  --busyellow:#FFC72C; --busyellow-dark:#E6A800; --gold:#BF8F00;
+  --red:#C0392B; --green:#2F9E44; --bg:#F3F4F7; --card:#FFFFFF;
+  --border:#E1E4EA; --text:#1B1F27; --muted:#6B7280; --radius:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.topbar{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-badge{width:40px;height:40px;border-radius:10px;background:var(--logobg);display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand h1{font-size:17px;margin:0;font-weight:800}
+.brand p{margin:0;font-size:12px;color:#B9C4DC}
+.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:12px;color:#CBD5EA}
+.btn{border:none;border-radius:999px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-yellow{background:var(--busyellow);color:var(--navy)}
+.btn-yellow:hover{background:var(--busyellow-dark)}
+.btn-ghost{background:rgba(255,255,255,.12);color:#fff}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-outline{background:var(--card);border:1px solid var(--slate);color:var(--slate)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.tabs{display:flex;gap:6px;padding:14px 28px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--bg)}
+.tab-btn{border:none;background:transparent;padding:12px 18px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;border-radius:8px 8px 0 0;font-family:inherit}
+.tab-btn.active{color:var(--navy);border-bottom-color:var(--busyellow);background:var(--card)}
+main{padding:24px 28px 60px;max-width:1180px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+.branch-row,.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.chip{border:1px solid var(--border);background:var(--card);padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit}
+.chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;flex:1;min-width:130px}
+.stat-card .num{font-size:26px;font-weight:800;color:var(--navy)}
+.stat-card.warn .num{color:var(--gold)}
+.stat-card.danger .num{color:var(--red)}
+.stat-card .label{font-size:12px;color:var(--muted);margin-top:2px}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.bus-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.bus-card:hover{border-color:var(--slate);box-shadow:0 4px 14px rgba(36,70,125,.08)}
+.bus-card.candidate{border-color:#E8B04A;box-shadow:inset 0 0 0 1px #E8B04A}
+.bus-card .head{display:flex;align-items:center;gap:10px}
+.hocha-badge{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;background:var(--busyellow);color:var(--navy);border-radius:10px;padding:6px 10px;min-width:64px;box-shadow:inset 0 0 0 2px rgba(31,56,100,.25)}
+.hocha-badge .num{font-size:16px;font-weight:800;line-height:1.1}
+.hocha-badge .branch{font-size:9px;font-weight:700;letter-spacing:.5px}
+.meta{font-size:12px;color:var(--muted)}
+.util-bar{height:8px;background:#EEF0F3;border-radius:999px;overflow:hidden}
+.util-bar > span{display:block;height:100%;border-radius:999px}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700}
+.badge.red{background:#FDEDEC;color:var(--red)}
+.badge.gold{background:#FFF3D6;color:var(--gold)}
+.badge.green{background:#E7F6EC;color:var(--green)}
+.badge.gray{background:#EEF0F3;color:var(--muted)}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.panel h2{margin:0 0 8px;font-size:16px;color:var(--navy)}
+.panel p.desc{margin:0 0 16px;font-size:13px;color:var(--muted);line-height:1.5}
+.result-card{background:#F8FAFD;border:1px solid var(--border);border-radius:12px;padding:18px;margin-top:16px}
+.result-card h3{margin:0 0 12px;font-size:15px;color:var(--navy)}
+.result-card ul{margin:0;padding-left:18px;font-size:13px;line-height:1.7}
+.result-card.fail{border-color:#E8A0A0;background:#FDF6F6}
+.result-card.ok{border-color:#A8D5B5;background:#F4FBF6}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit}
+.hint{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}
+.alert-banner{background:#FDEDEC;border:1px solid #F5C2C0;color:#922B21;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:600;line-height:1.5;cursor:pointer}
+.alert-banner.warn{background:#FFF8E1;border-color:#F0D78C;color:#7A5B00}
+.alert-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.alert-item .kind{font-size:11px;font-weight:800;padding:4px 8px;border-radius:6px;flex-shrink:0}
+.alert-item .kind.doc{background:#FDEDEC;color:var(--red)}
+.alert-item .kind.contract{background:#FFF3D6;color:var(--gold)}
+.alert-item .kind.staff{background:#EAF2FF;color:var(--slate)}
+.alert-item h4{margin:0 0 4px;font-size:14px}
+.alert-item p{margin:0;font-size:12px;color:var(--muted);line-height:1.45}
+.sim-section-gap{height:16px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,24,32,.55);align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-overlay.active{display:flex}
+.modal-card{background:#fff;border-radius:16px;padding:24px;max-width:420px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal-card h3{margin:0 0 8px;color:var(--navy)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+footer{text-align:center;font-size:11px;color:var(--muted);padding:20px}
+main.map-mode{max-width:none}
+.map-layout{display:grid;grid-template-columns:300px 1fr;gap:14px;min-height:520px;height:calc(100vh - 210px)}
+.map-side{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.map-main{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:#E8EEF5;min-height:420px}
+#kakaoMap{width:100%;height:100%;min-height:420px}
+.map-banner{background:#FFF8E1;border:1px solid #F0D78C;color:#7A5B00;font-size:12px;font-weight:700;padding:8px 10px;border-radius:10px;line-height:1.4}
+.map-bus-item{border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;transition:background .15s,border-color .15s}
+.map-bus-item:hover,.map-bus-item.drop-hot{background:#F4F7FC;border-color:var(--slate)}
+.map-bus-item .row{display:flex;align-items:center;gap:8px}
+.map-swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.map-preview-log{font-size:12px;color:var(--muted);line-height:1.55;background:#F8FAFD;border-radius:10px;padding:10px;border:1px solid var(--border)}
+.map-preview-log b{color:var(--navy)}
+.map-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(243,244,247,.92);z-index:2;padding:24px;text-align:center}
+.map-empty.show{display:flex}
+.map-drag-ghost{position:fixed;z-index:9999;pointer-events:none;padding:6px 10px;border-radius:999px;background:var(--navy);color:#fff;font-size:12px;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.25);transform:translate(-50%,-120%)}
+.stop-list-item{border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;cursor:grab;background:#fff;display:flex;align-items:center;gap:8px}
+.stop-list-item:active{cursor:grabbing}
+.stop-list-item .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.map-tip{font-size:11px;color:var(--muted);line-height:1.45}
+@media (max-width:900px){
+  .map-layout{grid-template-columns:1fr;height:auto}
+  #kakaoMap{height:420px}
+}
+@media (max-width:640px){
+  .topbar, .tabs, main{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-badge">🚌</div>
+    <div>
+      <h1>셔틀 노선조정·감차 시뮬레이션</h1>
+      <p>의사결정 지원 · 원본 데이터 읽기 전용 · <a href="index.html" style="color:#FFC72C">바론링크</a> · <a href="shuttle-dashboard.html" style="color:#FFC72C">운영 대시보드</a></p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span class="status" id="loadStatus">불러오는 중…</span>
+    <button class="btn btn-ghost" type="button" id="reloadBtn">새로고침</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabsBar"></nav>
+
+<main>
+  <div id="alertBanner" class="alert-banner" style="display:none"></div>
+  <div class="branch-row" id="branchRow"></div>
+
+  <section class="view active" id="view-dash">
+    <div class="stat-row" id="dashStats"></div>
+    <div class="filter-row">
+      <button class="chip active" data-dash-filter="all" type="button">전체 호차</button>
+      <button class="chip" data-dash-filter="candidate" type="button">감차 후보만</button>
+      <button class="chip" data-dash-filter="expiring" type="button">계약 만료 임박</button>
+    </div>
+    <div class="card-grid" id="dashGrid"></div>
+  </section>
+
+  <section class="view" id="view-map">
+    <div class="map-layout">
+      <aside class="map-side">
+        <div class="map-banner">시뮬레이션 모드 · 정류장 드래그는 미리보기만 반영합니다 (Firestore 원본 변경 없음)</div>
+        <p class="map-tip">정류장 원을 <b>다른 호차 카드</b>로 드래그하거나, 다른 호차 정류장 근처에 놓으면 해당 호차로 학생 이동이 미리보기로 표시됩니다.</p>
+        <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
+        <div id="mapBusList"></div>
+        <div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 목록 (드래그 → 왼쪽 호차 카드)</div>
+        <div id="mapStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
+        <div class="map-preview-log" id="mapPreviewLog">아직 미리보기 이동이 없습니다.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" type="button" id="mapResetBtn">미리보기 초기화</button>
+        </div>
+      </aside>
+      <div class="map-main">
+        <div id="kakaoMap"></div>
+        <div class="map-empty" id="mapEmpty"><div>
+          <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+          <p><b>지도에 표시할 좌표가 없습니다.</b></p>
+          <p class="map-tip">장안·남동탄처럼 분원 노선앱 좌표가 있는 분원을 선택해주세요.</p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-sim">
+    <div class="panel">
+      <h2>감차 시뮬레이션</h2>
+      <p class="desc">선택한 호차를 없앤다고 가정하고, 인근 호차가 학생을 흡수할 수 있는지 읽기 전용으로 계산합니다. Firestore 원본은 변경되지 않습니다.</p>
+      <div class="form-grid">
+        <div class="field">
+          <label>대상 호차</label>
+          <select id="simBusSelect"></select>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="btn btn-navy" type="button" id="runSimBtn">감차 시뮬레이션 실행</button>
+        </div>
+      </div>
+      <div id="simResult"></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>증차 시뮬레이션</h2>
+      <p class="desc">특정 지점에 신규 수요가 생겼을 때, 기존 호차가 흡수 가능한지 먼저 보고, 불가능하면 <b>신규 호차 필요</b>로 판단합니다. (읽기 전용)</p>
+      <div class="form-grid">
+        <div class="field">
+          <label>기준 정류장 (기존 노선에서 선택)</label>
+          <select id="incStopSelect"></select>
+        </div>
+        <div class="field">
+          <label>신규 수요 인원</label>
+          <input type="number" id="incDemand" min="1" step="1" value="8">
+        </div>
+        <div class="field">
+          <label>위도 (선택 · 비우면 기준 정류장 좌표 사용)</label>
+          <input type="number" id="incLat" step="0.000001" placeholder="예: 37.295">
+        </div>
+        <div class="field">
+          <label>경도 (선택)</label>
+          <input type="number" id="incLng" step="0.000001" placeholder="예: 127.005">
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="btn btn-navy" type="button" id="runIncBtn">증차 시뮬레이션 실행</button>
+        </div>
+      </div>
+      <div id="incResult"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-alerts">
+    <div class="stat-row" id="alertStats"></div>
+    <div class="panel" style="margin-bottom:14px">
+      <h2>임박·조치 필요 알림</h2>
+      <p class="desc">범죄경력조회 · 안전교육확인증 · 통학버스신고필증(서류 시트)과 계약종료일, 기사·동승자 시트의 조회/교육일 미비를 모읍니다. 원본은 읽기만 합니다.</p>
+      <div class="filter-row" style="margin-bottom:0">
+        <button class="chip active" type="button" data-alert-filter="all">전체</button>
+        <button class="chip" type="button" data-alert-filter="doc">서류</button>
+        <button class="chip" type="button" data-alert-filter="contract">계약</button>
+        <button class="chip" type="button" data-alert-filter="staff">기사·동승자</button>
+      </div>
+    </div>
+    <div id="alertList"></div>
+  </section>
+
+  <section class="view" id="view-settings">
+    <div class="panel">
+      <h2>운영 규칙 설정</h2>
+      <p class="desc"><code>shuttle_data/rules</code> 문서를 수정합니다. 감차 후보 판정·재배정 여유석 등에 즉시 반영됩니다.</p>
+      <div id="settingsLocked">
+        <div class="field" style="max-width:280px">
+          <label>관리자 비밀번호</label>
+          <input type="password" id="adminPw" placeholder="비밀번호 입력">
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn btn-navy" type="button" id="unlockSettingsBtn">잠금 해제</button>
+        </div>
+      </div>
+      <div id="settingsForm" style="display:none">
+        <div class="form-grid">
+          <div class="field">
+            <label>감차 후보 이용률 기준 (minUtilizationRate)</label>
+            <input type="number" id="ruleMinUtil" min="0" max="1" step="0.05">
+          </div>
+          <div class="field">
+            <label>허용 추가 운행시간(분) (maxDetourMinutes)</label>
+            <input type="number" id="ruleMaxDetour" min="0" step="1">
+          </div>
+          <div class="field">
+            <label>도보 허용 거리(m) (walkToleranceMeters)</label>
+            <input type="number" id="ruleWalk" min="0" step="50">
+          </div>
+          <div class="field">
+            <label>여유석 (capacityBufferSeats)</label>
+            <input type="number" id="ruleBuffer" min="0" step="1">
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px">
+          <button class="btn btn-navy" type="button" id="saveRulesBtn">규칙 저장</button>
+          <button class="btn btn-outline" type="button" id="resetRulesBtn">기본값으로</button>
+        </div>
+        <p class="hint">저장 시 원본 호차/학생/계약 시트는 건드리지 않고 <b>rules</b> 문서만 갱신합니다.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>바론네트웍스(주) 총무팀 · 원본 shuttle_data 읽기 전용 · 시뮬레이션 결과는 별도 계산</footer>
+
+<div class="modal-overlay" id="pwOverlay">
+  <div class="modal-card">
+    <h3>관리자 인증</h3>
+    <p class="desc" style="font-size:13px;color:var(--muted)">규칙을 수정하려면 비밀번호를 입력하세요.</p>
+    <input type="password" id="pwModalInput" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px">
+    <div class="modal-actions">
+      <button class="btn btn-outline" type="button" id="pwCancel">취소</button>
+      <button class="btn btn-navy" type="button" id="pwOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BRANCHES = ['장안','서수원','수원','운정1','운정2','남동탄'];
+const SHEETS = ['호차','차량','계약','정류장','학생_기본정보','배정이력_정류장','서류','기사','동승자'];
+const DEFAULT_RULES = {
+  minUtilizationRate: 0.5,
+  maxDetourMinutes: 15,
+  walkToleranceMeters: 500,
+  capacityBufferSeats: 2
+};
+const BRANCH_APPS = {
+  '장안': 'jangan-shuttle.html',
+  '남동탄': 'namdontan-shuttle.html'
+};
+const BACKUP_DOCS = { '장안': 'jangan' };
+const ADMIN_PASSWORD = '2026';
+const AVG_SPEED_KMH = 25;
+const CONTRACT_EXPIRY_DAYS = 60;
+const DOC_ALERT_DAYS = 60;
+const TOP_DOCS = ['범죄경력조회','안전교육확인증','통학버스신고필증'];
+const STAFF_DOC_STALE_DAYS = 365;
+
+const TABS = [
+  { key:'dash', label:'대시보드', view:'view-dash' },
+  { key:'map', label:'지도', view:'view-map' },
+  { key:'sim', label:'시뮬레이션', view:'view-sim' },
+  { key:'alerts', label:'알림함', view:'view-alerts' },
+  { key:'settings', label:'설정', view:'view-settings' }
+];
+
+const BUS_COLOR_FIXED = {
+  '11':'#E74C3C','13':'#E67E22','15':'#C8A000','19':'#27AE60',
+  '21':'#1ABC9C','23':'#2E86C1','25':'#8E44AD','31':'#E91E8C',
+  '61':'#E74C3C','62':'#E67E22','63':'#C8A000','65':'#27AE60',
+  '67':'#1ABC9C','68':'#2E86C1'
+};
+const BUS_PALETTE = ['#E74C3C','#E67E22','#C8A000','#27AE60','#1ABC9C','#2E86C1','#8E44AD','#E91E8C','#16A085','#D35400','#2980B9','#9B59B6'];
+const BRANCH_MAP_CENTER = {
+  '장안': { lat: 37.295, lng: 127.005, level: 6 },
+  '남동탄': { lat: 37.165, lng: 127.11, level: 6 },
+  '서수원': { lat: 37.26, lng: 126.97, level: 7 },
+  '수원': { lat: 37.263, lng: 127.028, level: 7 },
+  '운정1': { lat: 37.72, lng: 126.76, level: 7 },
+  '운정2': { lat: 37.73, lng: 126.77, level: 7 }
+};
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyACokruLFwbkCpxriOdQgVZAQfryYBmUxM',
+  authDomain: 'baron-shuttle-ops.firebaseapp.com',
+  projectId: 'baron-shuttle-ops',
+  storageBucket: 'baron-shuttle-ops.firebasestorage.app',
+  messagingSenderId: '278466071248',
+  appId: '1:278466071248:web:e22df780d05e6b46772cd5'
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const state = {
+  sheets: {},
+  rules: { ...DEFAULT_RULES },
+  buses: [],
+  branchFilter: '전체',
+  dashFilter: 'all',
+  activeTab: 'dash',
+  adminUnlocked: false,
+  dataSources: [],
+  mapWorking: [],
+  mapMoves: [],
+  mapBusFilter: 'ALL',
+  mapReady: false,
+  alertFilter: 'all',
+  alerts: []
+};
+
+let lmap = null;
+let lLayers = [];
+let mapDrag = null;
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toDate(v){
+  if(!v) return null;
+  if(v instanceof Date) return v;
+  if(typeof v === 'object' && v.seconds) return new Date(v.seconds * 1000);
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+function dDay(dateVal){
+  const d = toDate(dateVal);
+  if(!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  d.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+}
+function fmtPct(rate){
+  if(rate == null || Number.isNaN(rate)) return '-';
+  return Math.round(rate * 1000) / 10 + '%';
+}
+function fmtDate(v){
+  const d = toDate(v);
+  if(!d) return '-';
+  return d.toISOString().slice(0, 10);
+}
+function fmtWon(n){
+  if(n == null || Number.isNaN(n)) return '미등록';
+  return Number(n).toLocaleString('ko-KR') + '원';
+}
+function parseSalary(v){
+  if(v == null || v === '') return null;
+  if(typeof v === 'number') return v;
+  const n = Number(String(v).replace(/[^0-9.-]/g,''));
+  return Number.isFinite(n) ? n : null;
+}
+function busNo(raw){
+  return String(raw || '').replace(/\s+/g,'').replace(/호$/,'').trim();
+}
+function busColor(bus){
+  const no = busNo(bus.no || bus);
+  if(BUS_COLOR_FIXED[no]) return BUS_COLOR_FIXED[no];
+  let h = 0;
+  const key = String(bus.id || no);
+  for(let i=0;i<key.length;i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return BUS_PALETTE[h % BUS_PALETTE.length];
+}
+
+function cloneMapBuses(list){
+  return JSON.parse(JSON.stringify(list.map(b => ({
+    id: b.id,
+    branch: b.branch,
+    no: b.no,
+    label: b.label,
+    capacity: b.capacity,
+    seatSlots: b.seatSlots,
+    passengers: b.passengers,
+    stops: (b.stops || []).map(s => ({
+      id: String(s.id),
+      lat: s.lat,
+      lng: s.lng,
+      name: s.name || '',
+      passengers: Number(s.passengers) || 0
+    }))
+  }))));
+}
+
+function effectiveMapBranch(){
+  if(state.branchFilter !== '전체') return state.branchFilter;
+  const preferred = ['장안','남동탄',...BRANCHES];
+  for(const br of preferred){
+    if(state.buses.some(b => b.branch === br && (b.stops||[]).some(s => s.lat != null && s.lng != null))) return br;
+  }
+  return '장안';
+}
+
+function busesForMap(){
+  const branch = effectiveMapBranch();
+  return state.buses.filter(b => b.branch === branch && (b.stops || []).some(s => s.lat != null && s.lng != null));
+}
+
+function resetMapPreview(){
+  state.mapWorking = cloneMapBuses(busesForMap());
+  state.mapMoves = [];
+  state.mapBusFilter = 'ALL';
+  renderMapSide();
+  renderKakaoMap(true);
+}
+
+function ensureMapWorking(){
+  const geoBuses = busesForMap();
+  const ids = geoBuses.map(b => b.id).sort().join('|');
+  const cur = state.mapWorking.map(b => b.id).sort().join('|');
+  if(!state.mapWorking.length || ids !== cur){
+    state.mapWorking = cloneMapBuses(geoBuses);
+    state.mapMoves = [];
+    state.mapBusFilter = 'ALL';
+  }
+}
+
+function mapVisibleBuses(){
+  ensureMapWorking();
+  if(state.mapBusFilter === 'ALL') return state.mapWorking;
+  return state.mapWorking.filter(b => b.id === state.mapBusFilter);
+}
+
+function recalcMapPassengers(bus){
+  bus.passengers = (bus.stops || []).reduce((a,s) => a + (Number(s.passengers)||0), 0);
+}
+
+function previewMoveStop(fromBusId, stopId, toBusId){
+  if(fromBusId === toBusId) return false;
+  const from = state.mapWorking.find(b => b.id === fromBusId);
+  const to = state.mapWorking.find(b => b.id === toBusId);
+  if(!from || !to) return false;
+  const idx = from.stops.findIndex(s => String(s.id) === String(stopId));
+  if(idx < 0) return false;
+  const stop = from.stops[idx];
+  from.stops.splice(idx, 1);
+  const maxId = to.stops.reduce((m,s) => Math.max(m, Number(s.id)||0), 0);
+  const moved = { ...stop, id: String(maxId + 1) };
+  to.stops.push(moved);
+  recalcMapPassengers(from);
+  recalcMapPassengers(to);
+  state.mapMoves.unshift({
+    ts: Date.now(),
+    fromLabel: from.label,
+    toLabel: to.label,
+    name: stop.name || `정류장 ${stopId}`,
+    passengers: Number(stop.passengers) || 0
+  });
+  return true;
+}
+
+function findDropBusFromPoint(clientX, clientY){
+  const el = document.elementFromPoint(clientX, clientY);
+  if(!el) return null;
+  const card = el.closest('[data-map-bus-id]');
+  return card ? card.getAttribute('data-map-bus-id') : null;
+}
+
+function findNearestOtherStop(lat, lng, excludeBusId){
+  let best = null;
+  state.mapWorking.forEach(bus => {
+    if(bus.id === excludeBusId) return;
+    (bus.stops || []).forEach(s => {
+      if(s.lat == null || s.lng == null) return;
+      const d = haversineM({lat, lng}, s);
+      if(!best || d < best.meters) best = { busId: bus.id, meters: d, stop: s };
+    });
+  });
+  return best;
+}
+
+function latLngFromMouse(e){
+  if(!lmap) return null;
+  const rect = document.getElementById('kakaoMap').getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  try{
+    return lmap.getProjection().coordsFromContainerPoint(new kakao.maps.Point(x, y));
+  }catch(err){
+    return null;
+  }
+}
+
+function renderMapSide(){
+  ensureMapWorking();
+  const mapBranch = effectiveMapBranch();
+  const banner = document.querySelector('#view-map .map-banner');
+  if(banner){
+    banner.innerHTML = `시뮬레이션 모드 · <b>${esc(mapBranch)}</b> 분원 표시 · 정류장 드래그는 미리보기만 (Firestore 원본 변경 없음)` +
+      (state.branchFilter === '전체' ? `<br><span style="font-weight:600">상단에서 분원을 고르면 해당 지도로 전환됩니다.</span>` : '');
+  }
+  const filterRow = document.getElementById('mapBusFilterRow');
+  const buses = state.mapWorking;
+  filterRow.innerHTML = `<button type="button" class="chip ${state.mapBusFilter==='ALL'?'active':''}" data-map-filter="ALL">전체 호차</button>` +
+    buses.map(b => `<button type="button" class="chip ${state.mapBusFilter===b.id?'active':''}" data-map-filter="${esc(b.id)}">${esc(b.no)}호</button>`).join('');
+  filterRow.querySelectorAll('[data-map-filter]').forEach(btn => {
+    btn.onclick = () => {
+      state.mapBusFilter = btn.getAttribute('data-map-filter');
+      renderMapSide();
+      renderKakaoMap(false);
+    };
+  });
+
+  const list = document.getElementById('mapBusList');
+  if(!buses.length){
+    list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>`;
+  } else {
+    list.innerHTML = buses.map(b => {
+      const col = busColor(b);
+      const spare = (b.seatSlots || b.capacity) - (b.passengers || 0) - state.rules.capacityBufferSeats;
+      return `<div class="map-bus-item" data-map-bus-id="${esc(b.id)}" title="여기에 정류장을 드롭하면 미리보기 이동">
+        <div class="row">
+          <span class="map-swatch" style="background:${col}"></span>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:13px">${esc(b.label)}</div>
+            <div class="meta">정류장 ${(b.stops||[]).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const log = document.getElementById('mapPreviewLog');
+  if(!state.mapMoves.length){
+    log.innerHTML = '아직 미리보기 이동이 없습니다.';
+  } else {
+    log.innerHTML = `<b>미리보기 이동 ${state.mapMoves.length}건</b><br>` +
+      state.mapMoves.slice(0, 12).map(m =>
+        `· ${esc(m.name)} (${m.passengers}명): ${esc(m.fromLabel)} → ${esc(m.toLabel)}`
+      ).join('<br>');
+  }
+
+  const stopList = document.getElementById('mapStopList');
+  const visible = mapVisibleBuses();
+  const rows = [];
+  visible.forEach(bus => {
+    (bus.stops || []).filter(s => (s.passengers || 0) > 0 || (s.lat != null && s.lng != null)).forEach(s => {
+      rows.push({ bus, stop: s });
+    });
+  });
+  rows.sort((a,b) => (b.stop.passengers||0) - (a.stop.passengers||0));
+  if(!rows.length){
+    stopList.innerHTML = `<div class="map-tip">표시할 정류장이 없습니다.</div>`;
+  } else {
+    stopList.innerHTML = rows.slice(0, 40).map(({bus, stop}) => `
+      <div class="stop-list-item" data-from-bus="${esc(bus.id)}" data-stop-id="${esc(stop.id)}" data-stop-name="${esc(stop.name || ('정류장 '+stop.id))}" data-stop-pax="${Number(stop.passengers)||0}" title="호차 카드로 드래그">
+        <span class="dot" style="background:${busColor(bus)}"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(stop.name || ('정류장 '+stop.id))}</div>
+          <div class="meta">${esc(bus.label)} · ${Number(stop.passengers)||0}명</div>
+        </div>
+      </div>`).join('');
+    stopList.querySelectorAll('.stop-list-item').forEach(el => {
+      bindStopDrag(el, el.getAttribute('data-from-bus'), {
+        id: el.getAttribute('data-stop-id'),
+        name: el.getAttribute('data-stop-name') || '',
+        passengers: Number(el.getAttribute('data-stop-pax') || 0)
+      });
+    });
+  }
+}
+
+function clearMapLayers(){
+  lLayers.forEach(l => { try{ l.setMap(null); }catch(e){} });
+  lLayers = [];
+}
+
+function bindStopDrag(el, busId, stop){
+  const onDown = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const pt = ev.touches ? ev.touches[0] : ev;
+    mapDrag = {
+      busId,
+      stopId: String(stop.id),
+      name: stop.name || `정류장 ${stop.id}`,
+      passengers: Number(stop.passengers) || 0,
+      startX: pt.clientX,
+      startY: pt.clientY,
+      moved: false
+    };
+    const ghost = document.createElement('div');
+    ghost.className = 'map-drag-ghost';
+    ghost.textContent = `${mapDrag.name} · ${mapDrag.passengers}명`;
+    ghost.style.left = pt.clientX + 'px';
+    ghost.style.top = pt.clientY + 'px';
+    document.body.appendChild(ghost);
+    mapDrag.ghost = ghost;
+
+    const onMove = (e2) => {
+      if(!mapDrag) return;
+      const p = e2.touches ? e2.touches[0] : e2;
+      if(Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY) > 6) mapDrag.moved = true;
+      mapDrag.ghost.style.left = p.clientX + 'px';
+      mapDrag.ghost.style.top = p.clientY + 'px';
+      document.querySelectorAll('.map-bus-item').forEach(card => {
+        const r = card.getBoundingClientRect();
+        const hot = p.clientX >= r.left && p.clientX <= r.right && p.clientY >= r.top && p.clientY <= r.bottom
+          && card.getAttribute('data-map-bus-id') !== mapDrag.busId;
+        card.classList.toggle('drop-hot', hot);
+      });
+    };
+    const onUp = (e2) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      document.querySelectorAll('.map-bus-item').forEach(c => c.classList.remove('drop-hot'));
+      if(!mapDrag) return;
+      const p = (e2.changedTouches && e2.changedTouches[0]) || e2;
+      const ghostEl = mapDrag.ghost;
+      if(ghostEl && ghostEl.parentNode) ghostEl.parentNode.removeChild(ghostEl);
+
+      if(!mapDrag.moved){
+        mapDrag = null;
+        return;
+      }
+
+      let toBusId = findDropBusFromPoint(p.clientX, p.clientY);
+      if(toBusId === mapDrag.busId) toBusId = null;
+
+      if(!toBusId){
+        const ll = latLngFromMouse(p);
+        if(ll){
+          const near = findNearestOtherStop(ll.getLat(), ll.getLng(), mapDrag.busId);
+          const limit = Math.max(state.rules.walkToleranceMeters || 500, 350);
+          if(near && near.meters <= limit) toBusId = near.busId;
+        }
+      }
+
+      if(toBusId){
+        const ok = previewMoveStop(mapDrag.busId, mapDrag.stopId, toBusId);
+        if(ok){
+          renderMapSide();
+          renderKakaoMap(false);
+        }
+      }
+      mapDrag = null;
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+  el.addEventListener('pointerdown', onDown);
+}
+
+function renderKakaoMap(fitBounds){
+  const empty = document.getElementById('mapEmpty');
+  const buses = mapVisibleBuses();
+  const hasGeo = buses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null));
+  empty.classList.toggle('show', !hasGeo);
+  if(!lmap || !hasGeo){
+    clearMapLayers();
+    return;
+  }
+
+  clearMapLayers();
+  const bounds = new kakao.maps.LatLngBounds();
+  let boundCount = 0;
+
+  buses.forEach(bus => {
+    const col = busColor(bus);
+    const stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+    if(stops.length > 1){
+      const pl = new kakao.maps.Polyline({
+        path: stops.map(s => new kakao.maps.LatLng(s.lat, s.lng)),
+        strokeWeight: 3,
+        strokeColor: col,
+        strokeOpacity: 0.75,
+        strokeStyle: 'shortdash'
+      });
+      pl.setMap(lmap);
+      lLayers.push(pl);
+    }
+
+    const maxPax = Math.max(1, ...stops.map(s => Number(s.passengers)||0));
+    stops.forEach(s => {
+      const n = Number(s.passengers) || 0;
+      const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
+      const id = `ms-${bus.id}-${s.id}`;
+      const html = `<div id="${id}" class="stop-bubble" title="${esc(s.name||'')} · ${n}명 → 드래그하여 이동"
+        style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:${Math.max(9,Math.round(sz*.32))}px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${n > 0 ? n : ''}</div>`;
+      const pos = new kakao.maps.LatLng(s.lat, s.lng);
+      const overlay = new kakao.maps.CustomOverlay({
+        position: pos,
+        content: html,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 10
+      });
+      overlay.setMap(lmap);
+      lLayers.push(overlay);
+      bounds.extend(pos);
+      boundCount++;
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if(el) bindStopDrag(el, bus.id, s);
+      }, 0);
+    });
+  });
+
+  if(fitBounds && boundCount){
+    if(boundCount === 1){
+      lmap.setCenter(bounds.getNorthEast());
+      lmap.setLevel(5);
+    } else {
+      lmap.setBounds(bounds, 40, 40, 40, 40);
+    }
+  } else if(fitBounds){
+    const branch = state.branchFilter !== '전체' ? state.branchFilter : (buses[0] && buses[0].branch);
+    const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+    lmap.setCenter(new kakao.maps.LatLng(c.lat, c.lng));
+    lmap.setLevel(c.level);
+  }
+}
+
+function initKakaoMap(){
+  if(state.mapReady) return;
+  if(typeof kakao === 'undefined' || !kakao.maps){
+    const empty = document.getElementById('mapEmpty');
+    empty.classList.add('show');
+    empty.innerHTML = `<div>
+      <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+      <p><b>카카오맵 SDK를 불러오지 못했습니다.</b></p>
+      <p class="map-tip">네트워크·도메인(카카오 앱키) 설정을 확인한 뒤 새로고침 해주세요.<br>로컬에서는 GitHub Pages에 등록된 도메인과 다를 수 있습니다.</p>
+    </div>`;
+    // SDK가 늦게 로드되면 한 번 더 시도
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      if(typeof kakao !== 'undefined' && kakao.maps){
+        clearInterval(timer);
+        empty.classList.remove('show');
+        empty.innerHTML = `<div>
+          <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+          <p><b>지도에 표시할 좌표가 없습니다.</b></p>
+          <p class="map-tip">장안·남동탄처럼 분원 노선앱 좌표가 있는 분원을 선택해주세요.</p>
+        </div>`;
+        initKakaoMap();
+      } else if(tries > 20){
+        clearInterval(timer);
+      }
+    }, 250);
+    return;
+  }
+  kakao.maps.load(() => {
+    const el = document.getElementById('kakaoMap');
+    if(!el) return;
+    const branch = effectiveMapBranch();
+    const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+    lmap = new kakao.maps.Map(el, {
+      center: new kakao.maps.LatLng(c.lat, c.lng),
+      level: c.level
+    });
+    state.mapReady = true;
+    ensureMapWorking();
+    renderMapSide();
+    renderKakaoMap(true);
+    setTimeout(() => { if(lmap) lmap.relayout(); }, 50);
+  });
+}
+
+function showMapView(){
+  document.querySelector('main').classList.add('map-mode');
+  ensureMapWorking();
+  renderMapSide();
+  if(!state.mapReady){
+    initKakaoMap();
+  } else {
+    setTimeout(() => {
+      if(lmap) lmap.relayout();
+      renderKakaoMap(true);
+    }, 40);
+  }
+}
+
+function hideMapMode(){
+  document.querySelector('main').classList.remove('map-mode');
+}
+function comboKey(branch, no){
+  return `${branch} ${busNo(no)}호`;
+}
+function branchFromRef(ref){
+  if(!ref) return null;
+  const parts = String(ref).trim().split(/\s+/);
+  return BRANCHES.includes(parts[0]) ? parts[0] : null;
+}
+function haversineM(a, b){
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function utilColor(rate){
+  if(rate == null) return '#9CA3AF';
+  if(rate < 0.3) return '#C0392B';
+  if(rate < 0.5) return '#BF8F00';
+  return '#2F9E44';
+}
+function isPlaceholderRow(row){
+  const joined = Object.values(row || {}).join(' ');
+  return /업로드|안내|예시|placeholder|샘플/i.test(joined);
+}
+function realRows(list){
+  return (list || []).filter(r => r && !isPlaceholderRow(r) && Object.values(r).some(v => String(v||'').trim()));
+}
+
+function extractConst(html, name){
+  const marker = 'const ' + name + '=';
+  const i = html.indexOf(marker);
+  if(i < 0) return null;
+  let start = i + marker.length;
+  while(start < html.length && /\s/.test(html[start])) start++;
+  const open = html[start];
+  if(open !== '{' && open !== '[') return null;
+  const close = open === '{' ? '}' : ']';
+  let depth = 0, inStr = false, escCh = false, quote = '';
+  for(let j = start; j < html.length; j++){
+    const c = html[j];
+    if(inStr){
+      if(escCh){ escCh = false; continue; }
+      if(c === '\\'){ escCh = true; continue; }
+      if(c === quote) inStr = false;
+      continue;
+    }
+    if(c === '"' || c === "'"){ inStr = true; quote = c; continue; }
+    if(c === open) depth++;
+    else if(c === close){
+      depth--;
+      if(depth === 0){
+        try{ return (new Function('return (' + html.slice(start, j+1) + ')'))(); }
+        catch(e){ console.warn('extractConst failed', name, e); return null; }
+      }
+    }
+  }
+  return null;
+}
+
+async function hydrateBranchApp(branch){
+  const file = BRANCH_APPS[branch];
+  if(!file) return null;
+  try{
+    const res = await fetch(file, { cache: 'no-store' });
+    if(!res.ok) return null;
+    const html = await res.text();
+    const bubble = extractConst(html, 'BUBBLE_CNT') || {};
+    const capacity = extractConst(html, 'CAPACITY') || {};
+    const dash = extractConst(html, 'DASH_DATA') || {};
+    const stopUnique = extractConst(html, 'STOP_UNIQUE') || {};
+    const ll = extractConst(html, 'LL_DEFAULT') || {};
+    const namesRaw = (() => {
+      const idx = html.indexOf('let NAMES=');
+      if(idx < 0) return {};
+      const s = html.indexOf('JSON.stringify(', idx);
+      if(s < 0) return {};
+      const start = html.indexOf('{', s);
+      if(start < 0) return {};
+      let depth = 0, inStr = false, escCh = false, quote = '';
+      for(let j = start; j < html.length; j++){
+        const c = html[j];
+        if(inStr){
+          if(escCh){ escCh = false; continue; }
+          if(c === '\\'){ escCh = true; continue; }
+          if(c === quote) inStr = false;
+          continue;
+        }
+        if(c === '"' || c === "'"){ inStr = true; quote = c; continue; }
+        if(c === '{') depth++;
+        else if(c === '}'){
+          depth--;
+          if(depth === 0){
+            try{ return (new Function('return (' + html.slice(start, j + 1) + ')'))(); }
+            catch(e){ return {}; }
+          }
+        }
+      }
+      return {};
+    })();
+
+    const busIds = Object.keys(bubble).length ? Object.keys(bubble)
+      : Object.keys(dash).length ? Object.keys(dash)
+      : Object.keys(ll);
+
+    const out = {};
+    busIds.forEach(id => {
+      const dashBus = dash[id] || {};
+      const capFromDash = dashBus.capacity;
+      const groups = dashBus.groups || {};
+      // 장안 앱과 동일: 요일그룹별 정원(부수×인승) 합으로 이용률 분모 계산
+      let seatSlots = 0;
+      Object.values(groups).forEach(g => { seatSlots += Number(g.capacity) || 0; });
+      const stops = (ll[id] || []).map(s => {
+        const sid = String(s.id);
+        const pax = (stopUnique[id] && stopUnique[id][sid] != null)
+          ? Number(stopUnique[id][sid]) || 0
+          : 0;
+        return {
+          id: sid,
+          lat: s.lat,
+          lng: s.lng,
+          name: (namesRaw[id] && namesRaw[id][sid]) || `${branch} 정류장 ${sid}`,
+          passengers: pax
+        };
+      });
+      let passengers = Number(bubble[id]) || 0;
+      if(!passengers && stops.length){
+        passengers = stops.reduce((a,s)=>a+s.passengers,0);
+      }
+      if(passengers && stops.every(s => s.passengers === 0)){
+        if(stops[0]) stops[0].passengers = passengers;
+      }
+      const periodCap = Number(capFromDash || capacity[id] || 25);
+      out[id] = {
+        passengers,
+        capacity: periodCap,
+        seatSlots: seatSlots > 0 ? seatSlots : periodCap,
+        stops
+      };
+    });
+    return out;
+  }catch(err){
+    console.warn('hydrateBranchApp', branch, err);
+    return null;
+  }
+}
+
+async function loadBackupDoc(branch){
+  const docId = BACKUP_DOCS[branch];
+  if(!docId) return null;
+  try{
+    const snap = await db.collection('shuttle_backup').doc(docId).get();
+    if(!snap.exists) return null;
+    const d = snap.data() || {};
+    const ll = d.ll || {};
+    const names = d.names || {};
+    const cnt = d.cnt || {};
+    const out = {};
+    (d.busIds || Object.keys(ll)).forEach(id => {
+      const stops = (ll[id] || []).map(s => {
+        const sid = String(s.id);
+        let pax = 0;
+        if(cnt[id]){
+          if(typeof cnt[id] === 'object' && !Array.isArray(cnt[id])) pax = Number(cnt[id][sid] || cnt[id][s.id] || 0);
+        }
+        return { id: sid, lat:s.lat, lng:s.lng, name:(names[id]&&names[id][sid])||'', passengers:pax };
+      });
+      const passengers = stops.reduce((a,s)=>a+s.passengers,0);
+      out[String(id)] = { passengers, capacity: null, stops };
+    });
+    return out;
+  }catch(err){
+    console.warn('loadBackupDoc', err);
+    return null;
+  }
+}
+
+function findContract(branch, no){
+  const key1 = comboKey(branch, no);
+  const key2 = `${branch} ${busNo(no)}`;
+  return realRows(state.sheets['계약']).find(c => {
+    const h = String(c['호차'] || '').trim();
+    return h === key1 || h === key2 || busNo(h) === busNo(no) && branchFromRef(h) === branch;
+  }) || null;
+}
+
+function findVehicle(branch, no, vehicleNo){
+  const vehicles = realRows(state.sheets['차량']);
+  if(vehicleNo){
+    const v = vehicles.find(x => x['차량번호'] === vehicleNo);
+    if(v) return v;
+  }
+  const combo = comboKey(branch, no);
+  return vehicles.find(x => String(x['현재배정호차']||'').trim() === combo) || null;
+}
+
+function resolveCapacity(branch, no, vehicle, contract, hydrated){
+  const fromContract = contract && Number(contract['차량정원']);
+  if(fromContract > 0) return fromContract;
+  const fromVehicle = vehicle && Number(vehicle['인승']);
+  if(fromVehicle > 0) return fromVehicle;
+  if(hydrated && hydrated.capacity > 0) return hydrated.capacity;
+  return 25;
+}
+
+function buildStopBusMapFromAssignment(){
+  const map = new Map(); // stopName -> bus combo
+  realRows(state.sheets['배정이력_정류장']).forEach(r => {
+    const stop = r['정류장명'] || r['정류장'] || r['stop'];
+    const bus = r['호차'] || r['배정호차'] || r['현재배정호차'];
+    const end = r['종료일'] || r['배정종료일'];
+    if(!stop || !bus) return;
+    if(end && dDay(end) < 0) return;
+    map.set(String(stop).trim(), String(bus).trim());
+  });
+  return map;
+}
+
+function passengersFromStudents(branch, no, stopBusMap){
+  const combo = comboKey(branch, no);
+  const students = realRows(state.sheets['학생_기본정보']).filter(s => (s['소속분원']||'') === branch);
+  if(!students.length) return { count: 0, stops: [] };
+
+  // If assignment history empty, cannot attribute to bus reliably
+  if(!stopBusMap.size){
+    return { count: 0, stops: [], note: '배정이력_정류장 없음' };
+  }
+
+  const stopAgg = new Map();
+  let count = 0;
+  students.forEach(s => {
+    const stopName = String(s['기본등원정류장'] || s['기본하원정류장'] || '').trim();
+    if(!stopName) return;
+    const assigned = stopBusMap.get(stopName);
+    if(!assigned) return;
+    if(String(assigned).replace(/\s+/g,'') !== combo.replace(/\s+/g,'') && busNo(assigned) !== busNo(no)) return;
+    count++;
+    const prev = stopAgg.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
+    prev.passengers++;
+    stopAgg.set(stopName, prev);
+  });
+
+  // attach coords from 정류장 sheet
+  const stopsSheet = realRows(state.sheets['정류장']);
+  stopAgg.forEach((v, name) => {
+    const row = stopsSheet.find(st => String(st['정류장명']||'').trim() === name);
+    if(row){
+      const lat = Number(row['위도']); const lng = Number(row['경도']);
+      if(Number.isFinite(lat) && Number.isFinite(lng) && lat && lng){ v.lat = lat; v.lng = lng; }
+    }
+  });
+
+  return { count, stops: [...stopAgg.values()] };
+}
+
+function buildBuses(hydrations){
+  const stopBusMap = buildStopBusMapFromAssignment();
+  const hocha = realRows(state.sheets['호차']).filter(h => !h['폐지일']);
+  const buses = [];
+
+  hocha.forEach(h => {
+    const branch = h['소속분원'] || '';
+    const no = busNo(h['호차번호']);
+    if(!branch || !no) return;
+    const contract = findContract(branch, no);
+    const vehicle = findVehicle(branch, no, h['현재차량(차량번호)']);
+    const hydrated = hydrations[branch] && hydrations[branch][no];
+
+    let passengers = 0;
+    let stops = [];
+    let source = 'none';
+
+    const fromStudents = passengersFromStudents(branch, no, stopBusMap);
+    if(fromStudents.count > 0){
+      passengers = fromStudents.count;
+      stops = fromStudents.stops;
+      source = 'shuttle_data:학생+배정이력';
+    }else if(hydrated){
+      passengers = hydrated.passengers || 0;
+      stops = (hydrated.stops || []).filter(s => s.passengers > 0 || (s.lat != null && s.lng != null));
+      // keep zero-pax stops with coords for distance graph neighbors
+      if(!stops.length) stops = hydrated.stops || [];
+      source = BRANCH_APPS[branch] ? `branch-app:${BRANCH_APPS[branch]}` : 'shuttle_backup';
+    }
+
+    const capacity = resolveCapacity(branch, no, vehicle, contract, hydrated);
+    // 감차 판정용 이용률: (분원앱 DASH seatSlots) 또는 단일반 정원
+    const seatSlots = (hydrated && hydrated.seatSlots) || capacity;
+    // 탑승 데이터가 없으면 이용률 미집계(null) — 0명=0%로 감차후보 오판 방지
+    const utilization = (source === 'none')
+      ? null
+      : (seatSlots > 0 ? passengers / seatSlots : null);
+    const salary = parseSalary(contract && contract['급여']);
+    const endDays = contract ? dDay(contract['계약종료일']) : null;
+
+    buses.push({
+      id: `${branch}__${no}`,
+      branch,
+      no,
+      label: `${branch} ${no}호`,
+      capacity,
+      seatSlots,
+      passengers,
+      utilization,
+      salary,
+      contractEnd: contract ? contract['계약종료일'] : null,
+      contractEndDays: endDays,
+      expiring: endDays != null && endDays <= CONTRACT_EXPIRY_DAYS,
+      candidate: utilization != null && utilization < state.rules.minUtilizationRate,
+      vehicleNo: h['현재차량(차량번호)'] || (vehicle && vehicle['차량번호']) || '',
+      driver: h['현재기사(이름)'] || '',
+      stops,
+      source,
+      raw: h
+    });
+  });
+
+  buses.sort((a,b) => a.branch.localeCompare(b.branch,'ko') || Number(a.no) - Number(b.no));
+  state.buses = buses;
+}
+
+function filteredBuses(){
+  let list = state.buses;
+  if(state.branchFilter !== '전체') list = list.filter(b => b.branch === state.branchFilter);
+  if(state.dashFilter === 'candidate') list = list.filter(b => b.candidate);
+  if(state.dashFilter === 'expiring') list = list.filter(b => b.expiring);
+  return list;
+}
+
+function renderTabs(){
+  const bar = document.getElementById('tabsBar');
+  bar.innerHTML = '';
+  TABS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (state.activeTab === t.key ? ' active' : '');
+    btn.textContent = t.label;
+    btn.type = 'button';
+    btn.onclick = () => {
+      state.activeTab = t.key;
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(t.view).classList.add('active');
+      renderTabs();
+      if(t.key === 'map') showMapView();
+      else hideMapMode();
+      if(t.key === 'sim'){ renderSimSelect(); renderIncStopSelect(); }
+      if(t.key === 'alerts') renderAlerts();
+      if(t.key === 'settings') fillRulesForm();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+function renderBranches(){
+  const row = document.getElementById('branchRow');
+  row.innerHTML = '';
+  ['전체', ...BRANCHES].forEach(b => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip' + (state.branchFilter === b ? ' active' : '');
+    chip.textContent = b;
+    chip.onclick = () => {
+      state.branchFilter = b;
+      renderBranches();
+      renderDashboard();
+      renderSimSelect();
+      renderIncStopSelect();
+      renderAlertBanner();
+      if(state.activeTab === 'map'){
+        resetMapPreview();
+      }
+      if(state.activeTab === 'alerts') renderAlerts();
+    };
+    row.appendChild(chip);
+  });
+}
+
+function renderDashboard(){
+  const list = filteredBuses();
+  const all = state.branchFilter === '전체' ? state.buses : state.buses.filter(b => b.branch === state.branchFilter);
+  const candidates = all.filter(b => b.candidate).length;
+  const expiring = all.filter(b => b.expiring).length;
+  const withPax = all.filter(b => b.passengers > 0);
+  const avgUtil = withPax.length
+    ? withPax.reduce((s,b)=>s+(b.utilization||0),0) / withPax.length
+    : null;
+
+  document.getElementById('dashStats').innerHTML = `
+    <div class="stat-card"><div class="num">${all.length}</div><div class="label">운행 호차</div></div>
+    <div class="stat-card"><div class="num">${avgUtil==null?'-':fmtPct(avgUtil)}</div><div class="label">평균 이용률</div></div>
+    <div class="stat-card warn"><div class="num">${candidates}</div><div class="label">감차 후보 (&lt;${fmtPct(state.rules.minUtilizationRate)})</div></div>
+    <div class="stat-card danger"><div class="num">${expiring}</div><div class="label">계약 ${CONTRACT_EXPIRY_DAYS}일 이내</div></div>
+  `;
+
+  const grid = document.getElementById('dashGrid');
+  if(!list.length){
+    grid.innerHTML = `<div class="placeholder" style="grid-column:1/-1"><p>표시할 호차가 없습니다.</p></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(b => {
+    const rate = b.utilization;
+    const w = rate == null ? 0 : Math.min(100, Math.round(rate * 100));
+    return `<article class="bus-card ${b.candidate?'candidate':''}" data-id="${esc(b.id)}" title="클릭하면 시뮬레이션 탭으로">
+      <div class="head">
+        <div class="hocha-badge"><div class="num">${esc(b.no)}호</div><div class="branch">${esc(b.branch)}</div></div>
+        <div>
+          <div style="font-weight:800">${esc(b.label)}</div>
+          <div class="meta">${esc(b.driver || '기사 미등록')} · ${esc(b.vehicleNo || '차량 미등록')}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:22px;font-weight:800;color:${utilColor(rate)}">${rate==null?'-':fmtPct(rate)}</span>
+        <span class="meta">${b.passengers}명 / 슬롯 ${b.seatSlots||b.capacity} (정원 ${b.capacity})</span>
+      </div>
+      <div class="util-bar"><span style="width:${w}%;background:${utilColor(rate)}"></span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${b.candidate?`<span class="badge red">감차 후보</span>`:`<span class="badge green">기준 이상</span>`}
+        ${b.expiring?`<span class="badge gold">계약 만료 임박${b.contractEndDays!=null?` D-${b.contractEndDays}`:''}</span>`:''}
+        <span class="badge gray">${esc(b.source==='none'?'탑승데이터 없음':b.source.split(':')[0])}</span>
+      </div>
+    </article>`;
+  }).join('');
+
+  grid.querySelectorAll('.bus-card').forEach(card => {
+    card.addEventListener('click', () => {
+      state.activeTab = 'sim';
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById('view-sim').classList.add('active');
+      renderTabs();
+      renderSimSelect(card.dataset.id);
+    });
+  });
+}
+
+function renderSimSelect(preferId){
+  const sel = document.getElementById('simBusSelect');
+  let list = state.buses;
+  if(state.branchFilter !== '전체') list = list.filter(b => b.branch === state.branchFilter);
+  const prev = preferId || sel.value;
+  sel.innerHTML = list.map(b =>
+    `<option value="${esc(b.id)}">${esc(b.label)} · 이용률 ${b.utilization==null?'-':fmtPct(b.utilization)} (${b.passengers}/${b.capacity})</option>`
+  ).join('');
+  if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+function nearestBusDistance(stop, candidates){
+  let best = null;
+  candidates.forEach(bus => {
+    const withCoords = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+    if(!withCoords.length || stop.lat == null || stop.lng == null) return;
+    withCoords.forEach(s => {
+      const d = haversineM(stop, s);
+      if(!best || d < best.meters){
+        best = { bus, meters: d, viaStop: s };
+      }
+    });
+  });
+  return best;
+}
+
+function simulateReduction(bus){
+  const rules = state.rules;
+  const reasons = [];
+  const peers = state.buses.filter(b => b.branch === bus.branch && b.id !== bus.id);
+
+  if(!peers.length){
+    return {
+      ok: false,
+      title: `${bus.label} 감차 시뮬레이션 결과`,
+      lines: [
+        `이용률: ${bus.utilization==null?'-':fmtPct(bus.utilization)} (기준 ${fmtPct(rules.minUtilizationRate)}${bus.candidate?' 미만':' — 후보 아님'})`,
+        '흡수 가능: 없음',
+        '감차 불가 사유: 같은 분원에 대체 호차가 없습니다.'
+      ]
+    };
+  }
+
+  if(bus.passengers <= 0){
+    return {
+      ok: true,
+      title: `${bus.label} 감차 시뮬레이션 결과`,
+      lines: [
+        `이용률: ${bus.utilization==null?'-':fmtPct(bus.utilization)} (탑승 0명)`,
+        '흡수 대상 학생 없음 — 감차 시 이전 인원 없음',
+        `예상 월 절감액: ${fmtWon(bus.salary)} (계약 급여 기준)`,
+        '근거: 탑승 인원이 없어 정원·우회 제약 없이 폐지 가능으로 판단'
+      ],
+      meta: { absorbed: [], detourMin: 0, moved: 0, retention: 1 }
+    };
+  }
+
+  // Working loads (copy) — 이용률과 동일 기준(고유탑승 vs seatSlots)
+  const load = {};
+  const capOf = (p) => (p.seatSlots || p.capacity || 25);
+  peers.forEach(p => { load[p.id] = p.passengers; });
+
+  const moves = []; // {fromStop, toBus, count, meters, detourMin}
+  const failures = [];
+  const stops = [...(bus.stops || [])]
+    .filter(s => (s.passengers || 0) > 0)
+    .sort((a,b) => (b.passengers||0) - (a.passengers||0));
+
+  const hasGeo = stops.some(s => s.lat != null && s.lng != null)
+    && peers.some(p => (p.stops||[]).some(s => s.lat != null && s.lng != null));
+
+  let mode = hasGeo ? 'distance' : 'capacity-fallback';
+
+  stops.forEach(stop => {
+    let remaining = stop.passengers || 0;
+    const ranked = hasGeo
+      ? peers
+          .map(p => {
+            const n = nearestBusDistance(stop, [p]);
+            return n ? { bus:p, meters:n.meters } : { bus:p, meters: Infinity };
+          })
+          .sort((a,b) => a.meters - b.meters)
+      : peers
+          .map(p => ({
+            bus: p,
+            meters: null,
+            spare: capOf(p) - rules.capacityBufferSeats - (load[p.id] || 0)
+          }))
+          .sort((a,b) => b.spare - a.spare);
+
+    for(const item of ranked){
+      if(remaining <= 0) break;
+      const p = item.bus;
+      const spare = capOf(p) - rules.capacityBufferSeats - (load[p.id] || 0);
+      if(spare <= 0) continue;
+
+      const take = Math.min(remaining, spare);
+      const meters = item.meters == null || !Number.isFinite(item.meters) ? null : item.meters;
+      const detourMin = meters == null ? Math.max(2, Math.round(take * 0.5)) : Math.round((meters / 1000) / AVG_SPEED_KMH * 60 * 2); // round-trip approx
+
+      if(detourMin > rules.maxDetourMinutes){
+        failures.push(`${stop.name || '정류장'}: ${p.label}까지 예상 우회 ${detourMin}분 > 허용 ${rules.maxDetourMinutes}분`);
+        continue;
+      }
+
+      load[p.id] = (load[p.id] || 0) + take;
+      moves.push({ stop, toBus: p, count: take, meters, detourMin });
+      remaining -= take;
+    }
+
+    if(remaining > 0){
+      failures.push(`${stop.name || '정류장'}: ${remaining}명 흡수 실패 (여유석·우회시간 부족)`);
+    }
+  });
+
+  const moved = moves.reduce((s,m)=>s+m.count,0);
+  const ok = moved >= bus.passengers && failures.length === 0;
+  const byBus = {};
+  moves.forEach(m => {
+    byBus[m.toBus.id] = byBus[m.toBus.id] || { label: m.toBus.label, count: 0, detours: [] };
+    byBus[m.toBus.id].count += m.count;
+    byBus[m.toBus.id].detours.push(m.detourMin);
+  });
+  const absorbText = Object.values(byBus).map(x => `${x.label}(+${x.count}명)`).join(', ') || '없음';
+  const detourMin = moves.length ? Math.max(...moves.map(m => m.detourMin)) : 0;
+
+  // stop retention: stops that can merge within walk tolerance to existing peer stop
+  let retained = 0;
+  stops.forEach(stop => {
+    if(stop.lat == null) return;
+    const near = nearestBusDistance(stop, peers);
+    if(near && near.meters <= rules.walkToleranceMeters) retained++;
+  });
+  const retention = stops.length ? retained / stops.length : 1;
+
+  reasons.push(`데이터 출처: ${bus.source}`);
+  reasons.push(`배정 방식: ${mode === 'distance' ? '인근 호차 정류장 거리 우선' : '좌표 없어 여유석 많은 호차 우선(근사)'}`);
+  reasons.push(`여유석 버퍼: 정원 − ${rules.capacityBufferSeats}석`);
+
+  if(!ok){
+    return {
+      ok: false,
+      title: `${bus.label} 감차 시뮬레이션 결과`,
+      lines: [
+        `이용률: ${fmtPct(bus.utilization)} (기준 ${fmtPct(rules.minUtilizationRate)}${bus.candidate?' 미만':' — 기준 이상'})`,
+        `흡수 시도: ${absorbText || '부분 실패'}`,
+        `이동 대상 학생: ${bus.passengers}명 중 ${moved}명만 배치`,
+        `감차 불가 사유:`,
+        ...failures.slice(0, 8).map(f => `· ${f}`),
+        ...reasons.map(r => `근거: ${r}`)
+      ]
+    };
+  }
+
+  return {
+    ok: true,
+    title: `${bus.label} 감차 시뮬레이션 결과`,
+    lines: [
+      `이용률: ${fmtPct(bus.utilization)} (기준 ${fmtPct(rules.minUtilizationRate)}${bus.candidate?' 미만':' — 기준 이상이나 시뮬레이션은 실행됨'})`,
+      `흡수 가능: ${absorbText} — 모두 정원(버퍼 반영) 내`,
+      `예상 운행시간 증가: ${detourMin}분 (재배정 구간 중 최대 우회)`,
+      `이동 대상 학생: ${moved}명`,
+      `정류장 유지율(도보 ${rules.walkToleranceMeters}m 이내 병합 가능): ${fmtPct(retention)}`,
+      `예상 월 절감액: ${fmtWon(bus.salary)} (계약 급여 기준)`,
+      ...reasons.map(r => `근거: ${r}`)
+    ],
+    meta: { absorbed: Object.values(byBus), detourMin, moved, retention }
+  };
+}
+
+function renderSimResult(result){
+  const el = document.getElementById('simResult');
+  if(!result){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="result-card ${result.ok?'ok':'fail'}">
+    <h3>${esc(result.title)}</h3>
+    <ul>${result.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+    <p class="hint" style="margin-top:12px;margin-bottom:0">이 결과는 메모리에서만 계산되었습니다. 호차·학생·계약 원본 문서는 수정되지 않았습니다.</p>
+  </div>`;
+}
+
+function renderIncStopSelect(){
+  const sel = document.getElementById('incStopSelect');
+  if(!sel) return;
+  let buses = state.buses;
+  if(state.branchFilter !== '전체') buses = buses.filter(b => b.branch === state.branchFilter);
+  const opts = [];
+  buses.forEach(b => {
+    (b.stops || []).forEach(s => {
+      if(s.lat == null || s.lng == null) return;
+      opts.push({
+        value: `${b.id}::${s.id}`,
+        label: `${b.label} · ${s.name || ('정류장 '+s.id)} (${Number(s.passengers)||0}명)`
+      });
+    });
+  });
+  if(!opts.length){
+    sel.innerHTML = '<option value="">선택 가능한 정류장 없음 (좌표 있는 분원 필요)</option>';
+    return;
+  }
+  sel.innerHTML = opts.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+}
+
+function simulateIncrease(demand, lat, lng, preferBranch){
+  const rules = state.rules;
+  let peers = state.buses.filter(b => b.passengers != null);
+  const branch = preferBranch || (state.branchFilter !== '전체' ? state.branchFilter : null);
+  if(branch) peers = peers.filter(b => b.branch === branch);
+
+  if(!peers.length){
+    return {
+      ok: false,
+      needNewBus: true,
+      title: '증차 시뮬레이션 결과',
+      lines: ['감차/증차 판단 대상 호차가 없습니다.', '근거: 선택된 분원에 운행 호차 데이터가 없음']
+    };
+  }
+
+  const point = { lat, lng, passengers: demand, name: '신규 수요 지점' };
+  const hasGeo = Number.isFinite(lat) && Number.isFinite(lng)
+    && peers.some(p => (p.stops||[]).some(s => s.lat != null && s.lng != null));
+
+  const ranked = hasGeo
+    ? peers.map(p => {
+        const n = nearestBusDistance(point, [p]);
+        return {
+          bus: p,
+          meters: n ? n.meters : Infinity,
+          spare: (p.seatSlots || p.capacity) - rules.capacityBufferSeats - (p.passengers || 0)
+        };
+      }).sort((a,b) => a.meters - b.meters)
+    : peers.map(p => ({
+        bus: p,
+        meters: null,
+        spare: (p.seatSlots || p.capacity) - rules.capacityBufferSeats - (p.passengers || 0)
+      })).sort((a,b) => b.spare - a.spare);
+
+  let remaining = demand;
+  const absorbs = [];
+  const fails = [];
+
+  for(const item of ranked){
+    if(remaining <= 0) break;
+    if(item.spare <= 0) continue;
+    const detourMin = item.meters == null || !Number.isFinite(item.meters)
+      ? Math.max(2, Math.round(Math.min(remaining, item.spare) * 0.5))
+      : Math.round((item.meters / 1000) / AVG_SPEED_KMH * 60 * 2);
+    if(detourMin > rules.maxDetourMinutes){
+      fails.push(`${item.bus.label}: 예상 우회 ${detourMin}분 > 허용 ${rules.maxDetourMinutes}분`);
+      continue;
+    }
+    if(hasGeo && item.meters > rules.walkToleranceMeters * 3){
+      // too far as primary absorber — still allow if no closer option later, but mark
+      // skip only if extremely far (>3km)
+      if(item.meters > 3000){
+        fails.push(`${item.bus.label}: 거리 ${Math.round(item.meters)}m — 과원거리로 제외`);
+        continue;
+      }
+    }
+    const take = Math.min(remaining, item.spare);
+    absorbs.push({ bus: item.bus, count: take, meters: item.meters, detourMin, spareAfter: item.spare - take });
+    remaining -= take;
+  }
+
+  const absorbText = absorbs.map(a => `${a.bus.label}(+${a.count}명, 여유잔여 ${a.spareAfter})`).join(', ') || '없음';
+  const mode = hasGeo ? '인근 정류장 거리 우선' : '여유석 많은 호차 우선(좌표 없음)';
+
+  if(remaining > 0){
+    return {
+      ok: false,
+      needNewBus: true,
+      title: '증차 시뮬레이션 결과 — 신규 호차 필요',
+      lines: [
+        `신규 수요: ${demand}명`,
+        `기존 호차 흡수: ${absorbText}`,
+        `미흡수: ${remaining}명`,
+        '판단: 기존 호차만으로는 정원(버퍼)·우회시간 제약 내 흡수가 불가 → 신규 호차 검토',
+        ...fails.slice(0, 6).map(f => `· ${f}`),
+        `근거: 배정 방식 ${mode}`,
+        `근거: 여유석 버퍼 ${rules.capacityBufferSeats}석 · 허용 우회 ${rules.maxDetourMinutes}분`
+      ]
+    };
+  }
+
+  const maxDetour = absorbs.length ? Math.max(...absorbs.map(a => a.detourMin)) : 0;
+  return {
+    ok: true,
+    needNewBus: false,
+    title: '증차 시뮬레이션 결과 — 기존 호차 흡수 가능',
+    lines: [
+      `신규 수요: ${demand}명`,
+      `흡수 가능: ${absorbText}`,
+      `예상 운행시간 증가(최대): ${maxDetour}분`,
+      '판단: 신규 호차 없이 기존 노선으로 수용 가능',
+      `근거: 배정 방식 ${mode}`,
+      `근거: 여유석 버퍼 ${rules.capacityBufferSeats}석 · 허용 우회 ${rules.maxDetourMinutes}분`
+    ]
+  };
+}
+
+function renderIncResult(result){
+  const el = document.getElementById('incResult');
+  if(!result){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="result-card ${result.ok?'ok':'fail'}">
+    <h3>${esc(result.title)}</h3>
+    <ul>${result.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+    <p class="hint" style="margin-top:12px;margin-bottom:0">원본 Firestore 데이터는 변경되지 않았습니다.</p>
+  </div>`;
+}
+
+function resolveAlertBranch(row, type){
+  if(type === 'contract') return branchFromRef(row['호차']);
+  if(type === 'doc'){
+    const t = row['소속대상유형'];
+    const target = row['소속대상(ID/이름)'];
+    if(t === '호차') return branchFromRef(target);
+    if(t === '기사' || t === '동승자'){
+      const person = realRows(state.sheets[t]).find(p => p['이름'] === target);
+      return person ? branchFromRef(person['현재배정호차']) : null;
+    }
+    if(t === '차량'){
+      const v = realRows(state.sheets['차량']).find(x => x['차량번호'] === target);
+      return v ? branchFromRef(v['현재배정호차']) : null;
+    }
+    return null;
+  }
+  if(type === 'staff') return branchFromRef(row['현재배정호차']);
+  return null;
+}
+
+function collectAlerts(){
+  const alerts = [];
+
+  // 계약
+  realRows(state.sheets['계약']).forEach(c => {
+    const days = dDay(c['계약종료일']);
+    if(days == null) return;
+    if(days > CONTRACT_EXPIRY_DAYS) return;
+    alerts.push({
+      kind: 'contract',
+      severity: days < 0 ? 'danger' : 'warn',
+      branch: branchFromRef(c['호차']),
+      title: `계약 ${days < 0 ? '만료' : '만료 임박'} — ${c['호차'] || '-'}`,
+      detail: `업체 ${c['업체']||'-'} · 종료일 ${fmtDate(c['계약종료일'])} · ${days < 0 ? 'D+'+Math.abs(days) : 'D-'+days} · 급여 ${c['급여']||'-'}`
+    });
+  });
+
+  // 서류
+  realRows(state.sheets['서류']).forEach(d => {
+    const kind = d['서류종류'] || '';
+    const status = d['상태'] || '';
+    const days = d['만료일'] ? dDay(d['만료일']) : null;
+    const statusHit = ['만료','만료임박','재발급필요'].includes(status);
+    const dayHit = days != null && days <= DOC_ALERT_DAYS;
+    const isTop = TOP_DOCS.includes(kind);
+    if(!statusHit && !dayHit) return;
+    // 최상 등급 우선 노출, 그 외 서류도 상태 이상이면 포함
+    alerts.push({
+      kind: 'doc',
+      severity: status === '만료' || status === '재발급필요' || (days != null && days < 0) ? 'danger' : 'warn',
+      branch: resolveAlertBranch(d, 'doc'),
+      title: `${isTop ? '⭐ ' : ''}${kind || '서류'} — ${d['소속대상유형']||''} ${d['소속대상(ID/이름)']||''}`,
+      detail: `상태 ${status||'-'} · 발급 ${fmtDate(d['발급일'])} · 만료 ${d['만료일']?fmtDate(d['만료일']):'해당없음'}${days!=null?` · ${days<0?'D+'+Math.abs(days):'D-'+days}`:''}`
+    });
+  });
+
+  // 기사·동승자 서류일 미비 / 오래됨
+  [['기사','기사'],['동승자','동승자']].forEach(([sheet, role]) => {
+    realRows(state.sheets[sheet]).forEach(p => {
+      if(p['퇴사일']) return;
+      const branch = branchFromRef(p['현재배정호차']);
+      const crimeDays = p['범죄경력조회일'] ? dDay(p['범죄경력조회일']) : null;
+      const eduDays = p['안전교육이수일'] ? dDay(p['안전교육이수일']) : null;
+      // 발급일 기준 경과일: dDay는 만료까지 남은 일 → 발급일은 과거이므로 음수. 경과일 = -dDay
+      const crimeAge = crimeDays == null ? null : -crimeDays;
+      const eduAge = eduDays == null ? null : -eduDays;
+
+      if(!p['범죄경력조회일']){
+        alerts.push({
+          kind: 'staff', severity: 'danger', branch,
+          title: `${role} 범죄경력조회 미등록 — ${p['이름']||'-'}`,
+          detail: `배정 ${p['현재배정호차']||'-'} · 범죄경력조회일 없음`
+        });
+      } else if(crimeAge != null && crimeAge > STAFF_DOC_STALE_DAYS){
+        alerts.push({
+          kind: 'staff', severity: 'warn', branch,
+          title: `${role} 범죄경력조회 재조회 검토 — ${p['이름']||'-'}`,
+          detail: `조회일 ${fmtDate(p['범죄경력조회일'])} · ${crimeAge}일 경과 (기준 ${STAFF_DOC_STALE_DAYS}일)`
+        });
+      }
+
+      if(!p['안전교육이수일']){
+        alerts.push({
+          kind: 'staff', severity: 'danger', branch,
+          title: `${role} 안전교육 미등록 — ${p['이름']||'-'}`,
+          detail: `배정 ${p['현재배정호차']||'-'} · 안전교육이수일 없음`
+        });
+      } else if(eduAge != null && eduAge > STAFF_DOC_STALE_DAYS){
+        alerts.push({
+          kind: 'staff', severity: 'warn', branch,
+          title: `${role} 안전교육 재이수 검토 — ${p['이름']||'-'}`,
+          detail: `이수일 ${fmtDate(p['안전교육이수일'])} · ${eduAge}일 경과 (기준 ${STAFF_DOC_STALE_DAYS}일)`
+        });
+      }
+    });
+  });
+
+  // 분원 필터
+  let filtered = alerts;
+  if(state.branchFilter !== '전체'){
+    filtered = alerts.filter(a => !a.branch || a.branch === state.branchFilter);
+  }
+
+  filtered.sort((a,b) => (a.severity === 'danger' ? 0 : 1) - (b.severity === 'danger' ? 0 : 1));
+  state.alerts = filtered;
+  return filtered;
+}
+
+function renderAlertBanner(){
+  const banner = document.getElementById('alertBanner');
+  if(!banner) return;
+  const all = collectAlerts();
+  const danger = all.filter(a => a.severity === 'danger').length;
+  const warn = all.filter(a => a.severity === 'warn').length;
+  if(!all.length){
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'block';
+  banner.className = 'alert-banner' + (danger ? '' : ' warn');
+  banner.innerHTML = `알림 ${all.length}건` +
+    (danger ? ` · 긴급 ${danger}건` : '') +
+    (warn ? ` · 검토 ${warn}건` : '') +
+    ` — 클릭하면 알림함으로 이동`;
+  banner.onclick = () => {
+    state.activeTab = 'alerts';
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-alerts').classList.add('active');
+    hideMapMode();
+    renderTabs();
+    renderAlerts();
+  };
+}
+
+function renderAlerts(){
+  collectAlerts();
+  let list = state.alerts;
+  if(state.alertFilter !== 'all') list = list.filter(a => a.kind === state.alertFilter);
+
+  const docs = state.alerts.filter(a => a.kind === 'doc').length;
+  const contracts = state.alerts.filter(a => a.kind === 'contract').length;
+  const staff = state.alerts.filter(a => a.kind === 'staff').length;
+  document.getElementById('alertStats').innerHTML = `
+    <div class="stat-card danger"><div class="num">${state.alerts.length}</div><div class="label">전체 알림</div></div>
+    <div class="stat-card"><div class="num">${docs}</div><div class="label">서류</div></div>
+    <div class="stat-card warn"><div class="num">${contracts}</div><div class="label">계약</div></div>
+    <div class="stat-card"><div class="num">${staff}</div><div class="label">기사·동승자</div></div>
+  `;
+
+  const box = document.getElementById('alertList');
+  if(!list.length){
+    box.innerHTML = `<div class="panel placeholder"><p>표시할 알림이 없습니다.</p></div>`;
+    return;
+  }
+  const kindLabel = { doc:'서류', contract:'계약', staff:'인원' };
+  box.innerHTML = list.map(a => `
+    <div class="alert-item">
+      <span class="kind ${a.kind}">${kindLabel[a.kind]||a.kind}</span>
+      <div>
+        <h4>${esc(a.title)}${a.branch?` <span class="badge gray">${esc(a.branch)}</span>`:''}
+          ${a.severity==='danger'?`<span class="badge red">긴급</span>`:`<span class="badge gold">검토</span>`}
+        </h4>
+        <p>${esc(a.detail)}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function ensureRules(){
+  const ref = db.collection('shuttle_data').doc('rules');
+  const snap = await ref.get();
+  if(!snap.exists){
+    await ref.set({ ...DEFAULT_RULES, updatedAt: new Date().toISOString() });
+    state.rules = { ...DEFAULT_RULES };
+    return;
+  }
+  const data = snap.data() || {};
+  state.rules = {
+    minUtilizationRate: Number(data.minUtilizationRate ?? DEFAULT_RULES.minUtilizationRate),
+    maxDetourMinutes: Number(data.maxDetourMinutes ?? DEFAULT_RULES.maxDetourMinutes),
+    walkToleranceMeters: Number(data.walkToleranceMeters ?? DEFAULT_RULES.walkToleranceMeters),
+    capacityBufferSeats: Number(data.capacityBufferSeats ?? DEFAULT_RULES.capacityBufferSeats)
+  };
+}
+
+function fillRulesForm(){
+  document.getElementById('ruleMinUtil').value = state.rules.minUtilizationRate;
+  document.getElementById('ruleMaxDetour').value = state.rules.maxDetourMinutes;
+  document.getElementById('ruleWalk').value = state.rules.walkToleranceMeters;
+  document.getElementById('ruleBuffer').value = state.rules.capacityBufferSeats;
+  document.getElementById('settingsLocked').style.display = state.adminUnlocked ? 'none' : 'block';
+  document.getElementById('settingsForm').style.display = state.adminUnlocked ? 'block' : 'none';
+}
+
+async function saveRules(){
+  const next = {
+    minUtilizationRate: Number(document.getElementById('ruleMinUtil').value),
+    maxDetourMinutes: Number(document.getElementById('ruleMaxDetour').value),
+    walkToleranceMeters: Number(document.getElementById('ruleWalk').value),
+    capacityBufferSeats: Number(document.getElementById('ruleBuffer').value),
+    updatedAt: new Date().toISOString()
+  };
+  if(!(next.minUtilizationRate >= 0 && next.minUtilizationRate <= 1)){
+    alert('이용률 기준은 0~1 사이 숫자여야 합니다. (예: 0.5)');
+    return;
+  }
+  await db.collection('shuttle_data').doc('rules').set(next, { merge: true });
+  state.rules = {
+    minUtilizationRate: next.minUtilizationRate,
+    maxDetourMinutes: next.maxDetourMinutes,
+    walkToleranceMeters: next.walkToleranceMeters,
+    capacityBufferSeats: next.capacityBufferSeats
+  };
+  // recompute candidate flags only (read-only sheets untouched)
+  state.buses.forEach(b => {
+    b.candidate = b.utilization != null && b.utilization < state.rules.minUtilizationRate;
+  });
+  renderDashboard();
+  renderSimSelect();
+  renderIncStopSelect();
+  renderAlertBanner();
+  alert('규칙을 저장했습니다.');
+}
+
+async function loadAll(){
+  const status = document.getElementById('loadStatus');
+  status.textContent = 'Firestore 불러오는 중…';
+  state.dataSources = [];
+
+  await ensureRules();
+
+  const snaps = await Promise.all(SHEETS.map(name => db.collection('shuttle_data').doc(name).get()));
+  SHEETS.forEach((name, i) => {
+    state.sheets[name] = snaps[i].exists ? (snaps[i].data().rows || []) : [];
+  });
+  state.dataSources.push('shuttle_data');
+
+  // Hydrate ridership/geo for branches that have map apps / backup
+  const hydrations = {};
+  for(const branch of BRANCHES){
+    let data = await loadBackupDoc(branch);
+    if(!data || !Object.keys(data).length){
+      data = await hydrateBranchApp(branch);
+    }
+    if(data && Object.keys(data).length){
+      hydrations[branch] = data;
+      state.dataSources.push(branch + ' ridership');
+    }
+  }
+
+  buildBuses(hydrations);
+  state.mapWorking = [];
+  state.mapMoves = [];
+  renderBranches();
+  renderDashboard();
+  renderSimSelect();
+  renderIncStopSelect();
+  renderAlertBanner();
+  fillRulesForm();
+  if(state.activeTab === 'map') showMapView();
+  if(state.activeTab === 'alerts') renderAlerts();
+
+  const paxBuses = state.buses.filter(b => b.passengers > 0).length;
+  const alertN = state.alerts.length;
+  status.textContent = `호차 ${state.buses.length}대 · 탑승집계 ${paxBuses}대 · 알림 ${alertN}건 · 규칙 기준 ${fmtPct(state.rules.minUtilizationRate)}`;
+}
+
+function unlockAdmin(pw){
+  if(pw === ADMIN_PASSWORD){
+    state.adminUnlocked = true;
+    fillRulesForm();
+    return true;
+  }
+  alert('비밀번호가 올바르지 않습니다.');
+  return false;
+}
+
+// events
+document.getElementById('reloadBtn').onclick = () => loadAll().catch(err => {
+  console.error(err);
+  document.getElementById('loadStatus').textContent = '불러오기 실패';
+});
+document.querySelectorAll('[data-dash-filter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-dash-filter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.dashFilter = btn.dataset.dashFilter;
+    renderDashboard();
+  });
+});
+document.getElementById('runSimBtn').onclick = () => {
+  const id = document.getElementById('simBusSelect').value;
+  const bus = state.buses.find(b => b.id === id);
+  if(!bus){ alert('호차를 선택해주세요.'); return; }
+  renderSimResult(simulateReduction(bus));
+};
+document.getElementById('runIncBtn').onclick = () => {
+  const demand = Number(document.getElementById('incDemand').value);
+  if(!demand || demand < 1){ alert('신규 수요 인원을 입력해주세요.'); return; }
+  let lat = Number(document.getElementById('incLat').value);
+  let lng = Number(document.getElementById('incLng').value);
+  let preferBranch = state.branchFilter !== '전체' ? state.branchFilter : null;
+  const stopVal = document.getElementById('incStopSelect').value;
+  if((!Number.isFinite(lat) || !Number.isFinite(lng) || !document.getElementById('incLat').value) && stopVal){
+    const [busId, stopId] = stopVal.split('::');
+    const bus = state.buses.find(b => b.id === busId);
+    const stop = bus && (bus.stops || []).find(s => String(s.id) === String(stopId));
+    if(stop){ lat = Number(stop.lat); lng = Number(stop.lng); }
+    if(bus) preferBranch = bus.branch;
+  }
+  renderIncResult(simulateIncrease(demand, lat, lng, preferBranch));
+};
+document.querySelectorAll('[data-alert-filter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-alert-filter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.alertFilter = btn.dataset.alertFilter;
+    renderAlerts();
+  });
+});
+document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
+document.getElementById('unlockSettingsBtn').onclick = () => {
+  unlockAdmin(document.getElementById('adminPw').value);
+};
+document.getElementById('saveRulesBtn').onclick = () => saveRules().catch(err => {
+  console.error(err);
+  alert('규칙 저장 실패: ' + err.message);
+});
+document.getElementById('resetRulesBtn').onclick = () => {
+  document.getElementById('ruleMinUtil').value = DEFAULT_RULES.minUtilizationRate;
+  document.getElementById('ruleMaxDetour').value = DEFAULT_RULES.maxDetourMinutes;
+  document.getElementById('ruleWalk').value = DEFAULT_RULES.walkToleranceMeters;
+  document.getElementById('ruleBuffer').value = DEFAULT_RULES.capacityBufferSeats;
+};
+
+renderTabs();
+loadAll().catch(err => {
+  console.error(err);
+  document.getElementById('loadStatus').textContent = '서버 연결 실패';
+});
+</script>
+</body>
+</html>

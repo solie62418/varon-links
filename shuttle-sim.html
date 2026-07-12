@@ -182,7 +182,7 @@ main.map-mode{max-width:none}
           <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
         </div>
         <div class="reassign-panel" id="reassignPanel" style="display:none">
-          <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션</div>
+          <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션<br>탑승 <b>0명 정류장</b>은 편성에서 제외됩니다.</div>
           <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
@@ -636,6 +636,21 @@ function isAcademyStop(stop){
   return /정상어학원|학원\s*\(|학원$/.test(n);
 }
 
+/** 탑승 0명 정류장(학원 제외) — 재배정·감차 편성 대상에서 제외 */
+function isActiveBoardingStop(stop){
+  return !!stop && !isAcademyStop(stop) && (Number(stop.passengers) || 0) > 0;
+}
+
+/** 미리보기 맵에서 탑승 없는 정류장을 노선에서 제거(학원은 유지) */
+function pruneEmptyStopsFromBus(busId){
+  const bus = state.mapWorking.find(b => b.id === busId);
+  if(!bus) return 0;
+  const before = (bus.stops || []).length;
+  bus.stops = (bus.stops || []).filter(s => isAcademyStop(s) || (Number(s.passengers) || 0) > 0);
+  recalcMapPassengers(bus);
+  return before - bus.stops.length;
+}
+
 function academyPointForBus(bus){
   const stops = (bus && bus.stops) || [];
   const academy = stops.find(s => isAcademyStop(s) && s.lat != null && s.lng != null);
@@ -815,9 +830,11 @@ function buildAutoReassignDraft(){
   });
 
   const stops = (removeBus.stops || [])
-    .filter(s => !isAcademyStop(s) && ((Number(s.passengers)||0) > 0 || (s.lat != null && s.lng != null)))
+    .filter(s => isActiveBoardingStop(s))
     .slice()
     .sort((a,b) => (Number(b.passengers)||0) - (Number(a.passengers)||0));
+
+  const skippedEmpty = (removeBus.stops || []).filter(s => !isAcademyStop(s) && (Number(s.passengers)||0) <= 0).length;
 
   const draft = [];
   stops.forEach(stop => {
@@ -871,6 +888,15 @@ function buildAutoReassignDraft(){
   state.reassignDraft = draft;
   state.reassignResultHtml = '';
   applyReassignDraftToMap();
+  const pruned = pruneEmptyStopsFromBus(removeId);
+  if(pruned || skippedEmpty){
+    renderMapSide();
+    renderKakaoMap(false);
+  }
+  const summary = document.getElementById('reassignSelectionSummary');
+  if(summary && (skippedEmpty || pruned)){
+    summary.innerHTML += `<br><span style="color:var(--muted)">탑승 0명 정류장 ${skippedEmpty || pruned}곳은 편성에서 제외했습니다.</span>`;
+  }
 }
 
 function validateDraftItem(item, loads){
@@ -2598,6 +2624,8 @@ function applyReductionPreviewToMap(bus, result){
   Object.values(byStop).forEach(item => {
     previewMoveStop(bus.id, item.stopId, item.toBusId);
   });
+  // 탑승 없는 정류장은 없앤 노선 편성에서 제거
+  pruneEmptyStopsFromBus(bus.id);
 
   state.activeTab = 'map';
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));

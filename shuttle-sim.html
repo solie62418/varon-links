@@ -436,6 +436,8 @@ const state = {
   orderTab: '등원',
   orderDraft: [],
   routeOrders: {},
+  routeOrdersOriginal: {},
+  mapLineOrder: '등원', // 지도 점선에 쓸 순서: 등원 | 하원
   routeCache: {}
 };
 
@@ -528,6 +530,10 @@ function resetMapPreview(){
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
   state.mapBusFilter = 'ALL';
+  // 재배정 미리보기 중 임시로 바꾼 routeOrders를 원본으로 되돌림
+  if(state.routeOrdersOriginal){
+    state.routeOrders = JSON.parse(JSON.stringify(state.routeOrdersOriginal));
+  }
   if(state.reassignMode){
     state.reassignDraft = [];
     state.reassignResultHtml = '';
@@ -572,6 +578,25 @@ function previewMoveStop(fromBusId, stopId, toBusId){
   to.stops.push(moved);
   recalcMapPassengers(from);
   recalcMapPassengers(to);
+
+  // 저장된 순서에서도 이동 반영 → 지도 점선이 "순서 정하기"와 어긋나지 않게 유지
+  const fromOrder = state.routeOrders[fromBusId];
+  if(fromOrder){
+    ['등원순서','하원순서'].forEach(key => {
+      if(Array.isArray(fromOrder[key])){
+        fromOrder[key] = fromOrder[key].filter(id => String(id) !== String(stopId));
+      }
+    });
+  }
+  const toOrder = state.routeOrders[toBusId];
+  if(toOrder){
+    ['등원순서','하원순서'].forEach(key => {
+      if(Array.isArray(toOrder[key])){
+        toOrder[key].push(moved.id);
+      }
+    });
+  }
+
   state.mapMoves.unshift({
     ts: Date.now(),
     fromLabel: from.label,
@@ -658,6 +683,8 @@ async function loadRouteOrders(){
     console.warn('route_orders', e);
     state.routeOrders = {};
   }
+  // 재배정 미리보기 중 routeOrders를 임시로 건드리므로, 미리보기 초기화 때 되돌릴 원본 보관
+  state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
 }
 
 async function loadRouteCache(){
@@ -1186,10 +1213,12 @@ async function saveRouteOrder(){
       orders: state.routeOrders,
       updatedAt: entry.updatedAt
     }, { merge: true });
+    state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
     await persistRouteCache();
     alert('순서를 저장했습니다. (route_orders 문서 · 원본 호차/정류장 시트 미변경)');
     document.getElementById('orderOverlay').classList.remove('active');
     renderMapSide();
+    renderKakaoMap(false);
   }catch(e){
     console.error(e);
     alert('순서 저장 실패: ' + e.message);
@@ -1218,15 +1247,34 @@ function renderMapSide(){
   }
   const filterRow = document.getElementById('mapBusFilterRow');
   const buses = state.mapWorking;
-  filterRow.innerHTML = `<button type="button" class="chip ${state.mapBusFilter==='ALL'?'active':''}" data-map-filter="ALL">전체 호차</button>` +
-    buses.map(b => `<button type="button" class="chip ${state.mapBusFilter===b.id?'active':''}" data-map-filter="${esc(b.id)}">${esc(b.no)}호</button>`).join('');
-  filterRow.querySelectorAll('[data-map-filter]').forEach(btn => {
-    btn.onclick = () => {
-      state.mapBusFilter = btn.getAttribute('data-map-filter');
-      renderMapSide();
-      renderKakaoMap(false);
-    };
-  });
+  // 호차 칩: 지도·정류장 목록을 특정 호차로 좁혀 보는 필터 (재배정 없앨/흡수 선택과 별개)
+  // 재배정 모드 ON이면 혼동을 줄이기 위해 숨김
+  if(state.reassignMode){
+    filterRow.style.display = 'none';
+    filterRow.innerHTML = '';
+  } else {
+    filterRow.style.display = 'flex';
+    filterRow.innerHTML =
+      `<span class="meta" style="font-weight:800;color:var(--navy)">호차별 지도·정류장 보기</span>` +
+      `<button type="button" class="chip ${state.mapLineOrder==='등원'?'active':''}" data-map-line-order="등원">등원 선순서</button>` +
+      `<button type="button" class="chip ${state.mapLineOrder==='하원'?'active':''}" data-map-line-order="하원">하원 선순서</button>` +
+      `<button type="button" class="chip ${state.mapBusFilter==='ALL'?'active':''}" data-map-filter="ALL">전체 호차</button>` +
+      buses.map(b => `<button type="button" class="chip ${state.mapBusFilter===b.id?'active':''}" data-map-filter="${esc(b.id)}">${esc(b.no)}호</button>`).join('');
+    filterRow.querySelectorAll('[data-map-filter]').forEach(btn => {
+      btn.onclick = () => {
+        state.mapBusFilter = btn.getAttribute('data-map-filter');
+        renderMapSide();
+        renderKakaoMap(false);
+      };
+    });
+    filterRow.querySelectorAll('[data-map-line-order]').forEach(btn => {
+      btn.onclick = () => {
+        state.mapLineOrder = btn.getAttribute('data-map-line-order');
+        renderMapSide();
+        renderKakaoMap(false);
+      };
+    });
+  }
 
   const list = document.getElementById('mapBusList');
   if(!buses.length){
@@ -1512,7 +1560,29 @@ function renderKakaoMap(fitBounds){
     const col = busColor(bus);
     const dim = state.reassignMode && reSel.size && !reSel.has(bus.id);
     const op = dim ? 0.25 : 0.75;
-    const stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+    let stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+
+    // 저장된 노선 순서대로 점선 연결. 없으면 원본 배열 순서(fallback).
+    const savedOrder = state.routeOrders[bus.id];
+    const preferKey = state.mapLineOrder === '하원' ? '하원순서' : '등원순서';
+    const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
+    const orderIds = savedOrder && ((savedOrder[preferKey] && savedOrder[preferKey].length)
+      ? savedOrder[preferKey]
+      : savedOrder[altKey]);
+    if(orderIds && orderIds.length){
+      const byId = new Map(stops.map(s => [String(s.id), s]));
+      const ordered = [];
+      orderIds.forEach(id => {
+        const s = byId.get(String(id));
+        if(s){ ordered.push(s); byId.delete(String(id)); }
+      });
+      byId.forEach(s => ordered.push(s)); // 순서에 없는(재배정 신규) 정류장은 뒤에
+      stops = ordered;
+    } else {
+      // fallback: 원본 stops 배열 순서 사용
+      console.debug('[map line] no saved order for', bus.id, '— using raw stop array order');
+    }
+
     if(stops.length > 1){
       const pl = new kakao.maps.Polyline({
         path: stops.map(s => new kakao.maps.LatLng(s.lat, s.lng)),

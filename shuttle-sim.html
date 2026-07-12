@@ -131,14 +131,24 @@ main.map-mode{max-width:none}
 .reassign-draft-item.fail{border-color:#E8A0A0;background:#FDF6F6}
 .reassign-draft-item.warn{border-color:#F0D78C;background:#FFFDF5}
 .reassign-draft-item select{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit}
-.order-modal .modal-card{max-width:520px;max-height:90vh;overflow:auto}
+.order-modal.modal-overlay{background:transparent;pointer-events:none;align-items:flex-start;justify-content:flex-end;padding:72px 16px 16px}
+.order-modal .modal-card{
+  pointer-events:auto;max-width:400px;width:min(400px,calc(100vw - 32px));max-height:calc(100vh - 100px);overflow:auto;
+  position:fixed;right:16px;top:88px;margin:0;z-index:10000;box-shadow:0 16px 40px rgba(0,0,0,.28)
+}
+.order-modal .order-drag-handle{cursor:move;user-select:none;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.order-modal .order-drag-handle h3{margin:0;flex:1}
+.order-modal .order-drag-hint{font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap;padding-top:4px}
 .order-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .order-item{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:#fff;display:flex;align-items:center;gap:10px;cursor:grab;font-size:13px}
 .order-item:active{cursor:grabbing}
 .order-item.academy{background:#F4F7FC;cursor:default;font-weight:700;color:var(--navy)}
 .order-item .ord{font-weight:800;color:var(--navy);min-width:22px}
 .order-item.drag-over{border-color:var(--slate);background:#EEF3FA}
+.stop-bubble.order-picked{outline:2px solid #FFC72C;outline-offset:2px}
+.stop-bubble.order-target{box-shadow:0 0 0 3px rgba(26,58,107,.35)}
 .btn-sm{padding:6px 10px;font-size:11px;border-radius:999px}
+.map-order-banner{background:#E8F0FE;border:1px solid #A8C5F0;color:var(--navy);font-size:12px;font-weight:700;padding:8px 10px;border-radius:10px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -204,6 +214,7 @@ main.map-mode{max-width:none}
         <div id="mapStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
         <div class="map-preview-log" id="mapPreviewLog">아직 미리보기 이동이 없습니다.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" type="button" id="mapUndoBtn" disabled>한 단계 되돌리기</button>
           <button class="btn btn-outline" type="button" id="mapResetBtn">미리보기 초기화</button>
         </div>
       </aside>
@@ -334,9 +345,13 @@ main.map-mode{max-width:none}
 </div>
 
 <div class="modal-overlay order-modal" id="orderOverlay">
-  <div class="modal-card">
-    <h3 id="orderModalTitle">노선 순서 정하기</h3>
-    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px">등원·하원 순서를 따로 저장합니다. 리스트를 위아래로 드래그해 순서를 바꾸세요. (지도 클릭 방식 아님)</p>
+  <div class="modal-card" id="orderModalCard">
+    <div class="order-drag-handle" id="orderDragHandle" title="드래그하여 창 이동">
+      <h3 id="orderModalTitle">노선 순서 정하기</h3>
+      <span class="order-drag-hint">↕ 창 이동</span>
+    </div>
+    <div id="orderMapPickBanner" class="map-order-banner" style="display:none;margin-bottom:10px">지도에서 정류장을 <b>클릭한 순서</b>대로 편성됩니다.</div>
+    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px">등원·하원 순서를 따로 저장합니다. 지도 클릭 또는 리스트 드래그로 순서를 바꿀 수 있습니다.</p>
     <div class="filter-row" style="margin:0 0 8px">
       <button class="chip active" type="button" data-order-tab="등원">등원 순서</button>
       <button class="chip" type="button" data-order-tab="하원">하원 순서</button>
@@ -344,6 +359,8 @@ main.map-mode{max-width:none}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-navy btn-sm" type="button" id="orderAutoBtn">순서 자동추천</button>
       <button class="btn btn-outline btn-sm" type="button" id="orderReverseBtn">순서 뒤집기</button>
+      <button class="btn btn-outline btn-sm" type="button" id="orderUndoClickBtn">마지막 클릭 취소</button>
+      <button class="btn btn-outline btn-sm" type="button" id="orderClearClickBtn">지도 순서 다시 찍기</button>
     </div>
     <div class="map-tip" id="orderTravelHint">예상 총 운행시간: -</div>
     <div class="order-list" id="orderList"></div>
@@ -440,6 +457,8 @@ const state = {
   orderBusId: null,
   orderTab: '등원',
   orderDraft: [],
+  mapOrderPicking: false, // 지도 클릭으로 순서 지정 중
+  mapUndoStack: [],
   routeOrders: {},
   routeOrdersOriginal: {},
   mapLineOrder: '등원', // 지도 점선에 쓸 순서: 등원 | 하원
@@ -534,6 +553,7 @@ function busesForMap(){
 function resetMapPreview(){
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
+  state.mapUndoStack = [];
   state.mapBusFilter = 'ALL';
   // 재배정 미리보기 중 임시로 바꾼 routeOrders를 원본으로 되돌림
   if(state.routeOrdersOriginal){
@@ -546,6 +566,34 @@ function resetMapPreview(){
   renderMapSide();
   renderKakaoMap(true);
   renderReassignDraft();
+  updateMapUndoBtn();
+}
+
+function pushMapUndoSnapshot(){
+  state.mapUndoStack.push({
+    mapWorking: cloneMapBuses(state.mapWorking),
+    routeOrders: JSON.parse(JSON.stringify(state.routeOrders)),
+    mapMoves: state.mapMoves.slice()
+  });
+  if(state.mapUndoStack.length > 40) state.mapUndoStack.shift();
+  updateMapUndoBtn();
+}
+
+function undoLastMapMove(){
+  const snap = state.mapUndoStack.pop();
+  if(!snap) return;
+  state.mapWorking = snap.mapWorking;
+  state.routeOrders = snap.routeOrders;
+  state.mapMoves = snap.mapMoves;
+  updateMapUndoBtn();
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function updateMapUndoBtn(){
+  const btn = document.getElementById('mapUndoBtn');
+  if(btn) btn.disabled = !state.mapUndoStack.length;
 }
 
 function ensureMapWorking(){
@@ -569,6 +617,8 @@ function recalcMapPassengers(bus){
   bus.passengers = (bus.stops || []).reduce((a,s) => a + (Number(s.passengers)||0), 0);
 }
 
+let _skipMapUndoPush = false;
+
 function previewMoveStop(fromBusId, stopId, toBusId){
   if(fromBusId === toBusId) return false;
   const from = state.mapWorking.find(b => b.id === fromBusId);
@@ -576,6 +626,7 @@ function previewMoveStop(fromBusId, stopId, toBusId){
   if(!from || !to) return false;
   const idx = from.stops.findIndex(s => String(s.id) === String(stopId));
   if(idx < 0) return false;
+  if(!_skipMapUndoPush) pushMapUndoSnapshot();
   const stop = from.stops[idx];
   from.stops.splice(idx, 1);
   const maxId = to.stops.reduce((m,s) => Math.max(m, Number(s.id)||0), 0);
@@ -609,6 +660,7 @@ function previewMoveStop(fromBusId, stopId, toBusId){
     name: stop.name || `정류장 ${stopId}`,
     passengers: Number(stop.passengers) || 0
   });
+  updateMapUndoBtn();
   return true;
 }
 
@@ -991,19 +1043,26 @@ function recomputeDraftWarnings(){
 }
 
 function applyReassignDraftToMap(){
-  state.mapWorking = cloneMapBuses(busesForMap());
-  state.mapMoves = [];
-  if(state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
-  recomputeDraftWarnings();
-  const removeId = state.reassignRemoveId;
-  state.reassignDraft.forEach(item => {
-    if(!item.toBusId || item.fail) return;
-    if(item.warn && item.warn.indexOf('좌석 초과') === 0){
-      // 경고만 있어도 미리보기는 반영 (담당자 판단용). 원하면 여기서 return 가능.
-    }
-    previewMoveStop(removeId, item.stopId, item.toBusId);
-  });
-  if(state.reassignSkipEmpty && removeId) pruneEmptyStopsFromBus(removeId);
+  pushMapUndoSnapshot();
+  _skipMapUndoPush = true;
+  try{
+    state.mapWorking = cloneMapBuses(busesForMap());
+    state.mapMoves = [];
+    if(state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
+    recomputeDraftWarnings();
+    const removeId = state.reassignRemoveId;
+    state.reassignDraft.forEach(item => {
+      if(!item.toBusId || item.fail) return;
+      if(item.warn && item.warn.indexOf('좌석 초과') === 0){
+        // 경고만 있어도 미리보기는 반영 (담당자 판단용). 원하면 여기서 return 가능.
+      }
+      previewMoveStop(removeId, item.stopId, item.toBusId);
+    });
+    if(state.reassignSkipEmpty && removeId) pruneEmptyStopsFromBus(removeId);
+  } finally {
+    _skipMapUndoPush = false;
+  }
+  updateMapUndoBtn();
   renderMapSide();
   renderKakaoMap(false);
   renderReassignDraft();
@@ -1123,15 +1182,20 @@ function nearestNeighborOrder(stops, start, preferFarthest){
   return ordered;
 }
 
-function openOrderPanel(busId){
+function openOrderPanel(busId, opts){
   const bus = state.mapWorking.find(b => b.id === busId) || state.buses.find(b => b.id === busId);
   if(!bus) return;
+  const mapPick = !!(opts && opts.mapPick);
   state.orderBusId = busId;
   state.orderTab = '등원';
+  state.mapOrderPicking = mapPick;
   const saved = state.routeOrders[busId] || {};
   const key = state.orderTab === '등원' ? '등원순서' : '하원순서';
   const stops = (bus.stops || []).filter(s => !isAcademyStop(s));
-  if(saved[key] && saved[key].length){
+  if(mapPick){
+    // 지도 클릭으로 처음부터 순서 지정
+    state.orderDraft = [];
+  } else if(saved[key] && saved[key].length){
     const byId = Object.fromEntries(stops.map(s => [String(s.id), s]));
     state.orderDraft = saved[key].map(id => byId[String(id)]).filter(Boolean);
     stops.forEach(s => {
@@ -1140,12 +1204,106 @@ function openOrderPanel(busId){
   } else {
     state.orderDraft = stops.slice();
   }
-  document.getElementById('orderModalTitle').textContent = bus.label + ' · 순서 정하기';
+  document.getElementById('orderModalTitle').textContent = bus.label + (mapPick ? ' · 지도에서 순서 지정' : ' · 순서 정하기');
+  const banner = document.getElementById('orderMapPickBanner');
+  if(banner){
+    banner.style.display = mapPick ? 'block' : 'none';
+    if(mapPick){
+      banner.innerHTML = `<b>${esc(bus.label)}</b> 정류장을 지도에서 <b>클릭한 순서</b>대로 편성합니다. (${state.orderDraft.length}/${stops.length})`;
+    }
+  }
   document.querySelectorAll('[data-order-tab]').forEach(b => {
     b.classList.toggle('active', b.getAttribute('data-order-tab') === state.orderTab);
   });
+  resetOrderPanelPosition();
   document.getElementById('orderOverlay').classList.add('active');
   renderOrderList();
+  renderKakaoMap(false);
+}
+
+function closeOrderPanel(){
+  state.mapOrderPicking = false;
+  document.getElementById('orderOverlay').classList.remove('active');
+  renderKakaoMap(false);
+}
+
+function resetOrderPanelPosition(){
+  const card = document.getElementById('orderModalCard');
+  if(!card) return;
+  card.style.left = '';
+  card.style.top = '';
+  card.style.right = '16px';
+}
+
+function bindOrderPanelDrag(){
+  const handle = document.getElementById('orderDragHandle');
+  const card = document.getElementById('orderModalCard');
+  if(!handle || !card || handle._dragBound) return;
+  handle._dragBound = true;
+  handle.addEventListener('pointerdown', (ev) => {
+    if(ev.button != null && ev.button !== 0) return;
+    if(ev.target.closest('button')) return;
+    ev.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const ox = ev.clientX - rect.left;
+    const oy = ev.clientY - rect.top;
+    card.style.right = 'auto';
+    card.style.left = rect.left + 'px';
+    card.style.top = rect.top + 'px';
+    const onMove = (e2) => {
+      const x = Math.max(8, Math.min(window.innerWidth - card.offsetWidth - 8, e2.clientX - ox));
+      const y = Math.max(8, Math.min(window.innerHeight - 48, e2.clientY - oy));
+      card.style.left = x + 'px';
+      card.style.top = y + 'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+}
+
+function updateOrderPickBanner(){
+  const banner = document.getElementById('orderMapPickBanner');
+  if(!banner || !state.mapOrderPicking || !state.orderBusId) return;
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  if(!bus) return;
+  const total = (bus.stops || []).filter(s => !isAcademyStop(s)).length;
+  const left = total - state.orderDraft.length;
+  banner.style.display = 'block';
+  banner.innerHTML = left > 0
+    ? `<b>${esc(bus.label)}</b> 정류장을 지도에서 클릭 · 선택 ${state.orderDraft.length}/${total} · 남은 ${left}개`
+    : `<b>${esc(bus.label)}</b> 모든 정류장 선택 완료 · 필요하면 저장하세요`;
+}
+
+function pickStopForOrder(busId, stop){
+  if(!state.mapOrderPicking || busId !== state.orderBusId) return false;
+  if(isAcademyStop(stop)) return true;
+  if(state.orderDraft.some(d => String(d.id) === String(stop.id))) return true;
+  state.orderDraft.push(stop);
+  updateOrderPickBanner();
+  renderOrderList();
+  renderKakaoMap(false);
+  return true;
+}
+
+function undoLastOrderClick(){
+  if(!state.orderDraft.length) return;
+  state.orderDraft.pop();
+  updateOrderPickBanner();
+  renderOrderList();
+  renderKakaoMap(false);
+}
+
+function clearMapOrderClicks(){
+  if(!state.orderBusId) return;
+  state.orderDraft = [];
+  state.mapOrderPicking = true;
+  updateOrderPickBanner();
+  renderOrderList();
+  renderKakaoMap(false);
 }
 
 function switchOrderTab(tab){
@@ -1161,7 +1319,9 @@ function switchOrderTab(tab){
   const memKey = tab === '등원' ? '_draft등원' : '_draft하원';
   const key = tab === '등원' ? '등원순서' : '하원순서';
   const stops = (bus.stops || []).filter(s => !isAcademyStop(s));
-  if(saved[memKey]){
+  if(state.mapOrderPicking){
+    state.orderDraft = [];
+  } else if(saved[memKey]){
     state.orderDraft = saved[memKey];
   } else if(saved[key] && saved[key].length){
     const byId = Object.fromEntries(stops.map(s => [String(s.id), s]));
@@ -1172,7 +1332,9 @@ function switchOrderTab(tab){
   } else {
     state.orderDraft = stops.slice();
   }
+  updateOrderPickBanner();
   renderOrderList();
+  renderKakaoMap(false);
 }
 
 function saveOrderDraftToStateMemory(){
@@ -1193,12 +1355,16 @@ function autoRecommendOrder(){
   (bus.stops || []).filter(s => !isAcademyStop(s) && (s.lat == null || s.lng == null)).forEach(s => {
     if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
   });
+  updateOrderPickBanner();
   renderOrderList();
+  renderKakaoMap(false);
 }
 
 function reverseOrderDraft(){
   state.orderDraft = state.orderDraft.slice().reverse();
+  updateOrderPickBanner();
   renderOrderList();
+  renderKakaoMap(false);
 }
 
 async function renderOrderList(){
@@ -1274,6 +1440,13 @@ function bindOrderItemDrag(el){
 
 async function saveRouteOrder(){
   if(!state.orderBusId) return;
+  // 지도 클릭으로 일부만 찍은 경우 나머지 정류장은 뒤에 붙임
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  if(bus){
+    (bus.stops || []).filter(s => !isAcademyStop(s)).forEach(s => {
+      if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
+    });
+  }
   saveOrderDraftToStateMemory();
   const entry = state.routeOrders[state.orderBusId] || {};
   const curKey = state.orderTab === '등원' ? '등원순서' : '하원순서';
@@ -1295,7 +1468,7 @@ async function saveRouteOrder(){
     state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
     await persistRouteCache();
     alert('순서를 저장했습니다. (route_orders 문서 · 원본 호차/정류장 시트 미변경)');
-    document.getElementById('orderOverlay').classList.remove('active');
+    closeOrderPanel();
     renderMapSide();
     renderKakaoMap(false);
   }catch(e){
@@ -1393,8 +1566,9 @@ function renderMapSide(){
           </div>
         </div>
         ${reassignCtrls}
-        <div style="margin-top:8px">
-          <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">순서 정하기</button>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-navy btn-sm" data-order-map-btn="${esc(b.id)}">순서편집 시작</button>
+          <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">리스트로 순서</button>
         </div>
       </div>`;
     }).join('');
@@ -1421,7 +1595,13 @@ function renderMapSide(){
     list.querySelectorAll('[data-order-btn]').forEach(btn => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        openOrderPanel(btn.getAttribute('data-order-btn'));
+        openOrderPanel(btn.getAttribute('data-order-btn'), { mapPick: false });
+      });
+    });
+    list.querySelectorAll('[data-order-map-btn]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        openOrderPanel(btn.getAttribute('data-order-map-btn'), { mapPick: true });
       });
     });
   }
@@ -1474,6 +1654,13 @@ function clearMapLayers(){
 
 function bindStopDrag(el, busId, stop){
   const onDown = (ev) => {
+    // 지도 클릭 순서 지정 중이면 드래그 이동 비활성 · 해당 노선만 클릭 편성
+    if(state.mapOrderPicking){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(busId === state.orderBusId) pickStopForOrder(busId, stop);
+      return;
+    }
     ev.preventDefault();
     ev.stopPropagation();
     const pt = ev.touches ? ev.touches[0] : ev;
@@ -1497,7 +1684,7 @@ function bindStopDrag(el, busId, stop){
     const onMove = (e2) => {
       if(!mapDrag) return;
       const p = e2.touches ? e2.touches[0] : e2;
-      if(Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY) > 6) mapDrag.moved = true;
+      if(Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY) > 14) mapDrag.moved = true;
       mapDrag.ghost.style.left = p.clientX + 'px';
       mapDrag.ghost.style.top = p.clientY + 'px';
       document.querySelectorAll('.map-bus-item').forEach(card => {
@@ -1526,7 +1713,9 @@ function bindStopDrag(el, busId, stop){
       let toBusId = findDropBusFromPoint(p.clientX, p.clientY);
       if(toBusId === mapDrag.busId) toBusId = null;
 
-      if(!toBusId){
+      // 지도 패닝처럼 크게 움직인 뒤 빈 곳에 놓으면 근처 정류장 자동 흡수하지 않음
+      const travel = Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY);
+      if(!toBusId && travel <= 160){
         const ll = latLngFromMouse(p);
         if(ll){
           const near = findNearestOtherStop(ll.getLat(), ll.getLng(), mapDrag.busId);
@@ -1675,19 +1864,27 @@ function renderKakaoMap(fitBounds){
     }
 
     const maxPax = Math.max(1, ...stops.map(s => Number(s.passengers)||0));
+    const pickingThis = state.mapOrderPicking && state.orderBusId === bus.id;
     stops.forEach(s => {
       const n = Number(s.passengers) || 0;
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
       const id = 'ms-' + bus.id.replace(/__/g,'-') + '-' + s.id;
-      const html = '<div id="'+id+'" class="stop-bubble" title="'+esc(s.name||'')+' · '+n+'명 → 드래그하여 이동"'
-        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+'">'+(n > 0 ? n : '')+'</div>';
+      const ordIdx = pickingThis ? state.orderDraft.findIndex(d => String(d.id) === String(s.id)) : -1;
+      const picked = ordIdx >= 0;
+      const label = picked ? String(ordIdx + 1) : (n > 0 ? n : '');
+      const cls = 'stop-bubble' + (picked ? ' order-picked' : (pickingThis ? ' order-target' : ''));
+      const tip = pickingThis
+        ? (picked ? ((s.name||'') + ' · 순서 ' + (ordIdx+1)) : ((s.name||'') + ' · 클릭하여 다음 순서로'))
+        : ((s.name||'') + ' · ' + n + '명 → 드래그하여 이동');
+      const html = '<div id="'+id+'" class="'+cls+'" title="'+esc(tip)+'"'
+        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+';cursor:'+(pickingThis?'pointer':'grab')+'">'+label+'</div>';
       const pos = new kakao.maps.LatLng(s.lat, s.lng);
       const overlay = new kakao.maps.CustomOverlay({
         position: pos,
         content: html,
         xAnchor: 0.5,
         yAnchor: 0.5,
-        zIndex: 10
+        zIndex: picked ? 20 : 10
       });
       overlay.setMap(lmap);
       lLayers.push(overlay);
@@ -2662,25 +2859,32 @@ function applyReductionPreviewToMap(bus, result){
     state.reassignRemoveId = bus.id;
   }
 
-  state.mapWorking = cloneMapBuses(busesForMap());
-  state.mapMoves = [];
-  state.mapBusFilter = 'ALL';
-  if(state.reassignMode && state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
+  pushMapUndoSnapshot();
+  _skipMapUndoPush = true;
+  try{
+    state.mapWorking = cloneMapBuses(busesForMap());
+    state.mapMoves = [];
+    state.mapBusFilter = 'ALL';
+    if(state.reassignMode && state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
 
-  // 정류장별로 가장 많은 인원을 받은 흡수 호차로 전체 정류장 이동 (지도는 정류장 단위)
-  const byStop = {};
-  moves.forEach(m => {
-    if(state.reassignSkipEmpty && (Number(m.stop.passengers)||0) <= 0) return;
-    const sid = String(m.stop.id);
-    if(!byStop[sid] || m.count > byStop[sid].count){
-      byStop[sid] = { stopId: m.stop.id, toBusId: m.toBus.id, count: m.count };
-    }
-  });
-  Object.values(byStop).forEach(item => {
-    previewMoveStop(bus.id, item.stopId, item.toBusId);
-  });
-  // 탑승 없는 정류장은 없앤 노선 편성에서 제거
-  if(state.reassignSkipEmpty) pruneEmptyStopsFromBus(bus.id);
+    // 정류장별로 가장 많은 인원을 받은 흡수 호차로 전체 정류장 이동 (지도는 정류장 단위)
+    const byStop = {};
+    moves.forEach(m => {
+      if(state.reassignSkipEmpty && (Number(m.stop.passengers)||0) <= 0) return;
+      const sid = String(m.stop.id);
+      if(!byStop[sid] || m.count > byStop[sid].count){
+        byStop[sid] = { stopId: m.stop.id, toBusId: m.toBus.id, count: m.count };
+      }
+    });
+    Object.values(byStop).forEach(item => {
+      previewMoveStop(bus.id, item.stopId, item.toBusId);
+    });
+    // 탑승 없는 정류장은 없앤 노선 편성에서 제거
+    if(state.reassignSkipEmpty) pruneEmptyStopsFromBus(bus.id);
+  } finally {
+    _skipMapUndoPush = false;
+  }
+  updateMapUndoBtn();
 
   state.activeTab = 'map';
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -3183,6 +3387,7 @@ document.querySelectorAll('[data-alert-filter]').forEach(btn => {
   });
 });
 document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
+document.getElementById('mapUndoBtn').onclick = () => undoLastMapMove();
 document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
 document.getElementById('reassignSkipEmptyChk').onchange = (e) => setReassignSkipEmpty(e.target.checked);
 document.getElementById('reassignAutoBtn').onclick = () => buildAutoReassignDraft();
@@ -3194,8 +3399,12 @@ document.querySelectorAll('[data-order-tab]').forEach(btn => {
 });
 document.getElementById('orderAutoBtn').onclick = () => autoRecommendOrder();
 document.getElementById('orderReverseBtn').onclick = () => reverseOrderDraft();
-document.getElementById('orderCancelBtn').onclick = () => document.getElementById('orderOverlay').classList.remove('active');
+document.getElementById('orderUndoClickBtn').onclick = () => undoLastOrderClick();
+document.getElementById('orderClearClickBtn').onclick = () => clearMapOrderClicks();
+document.getElementById('orderCancelBtn').onclick = () => closeOrderPanel();
 document.getElementById('orderSaveBtn').onclick = () => saveRouteOrder().catch(err => alert(err.message));
+bindOrderPanelDrag();
+updateMapUndoBtn();
 document.getElementById('unlockSettingsBtn').onclick = () => {
   unlockAdmin(document.getElementById('adminPw').value);
 };

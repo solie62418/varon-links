@@ -120,6 +120,25 @@ main.map-mode{max-width:none}
 @media (max-width:640px){
   .topbar, .tabs, main{padding-left:16px;padding-right:16px}
 }
+.map-bus-item.reassign-dim{opacity:.28}
+.map-bus-item.reassign-remove{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
+.map-bus-item.reassign-absorb{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
+.map-bus-item .reassign-tag{font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px}
+.map-bus-item .reassign-tag.remove{background:#FDEDEC;color:var(--red)}
+.map-bus-item .reassign-tag.absorb{background:#E7F6EC;color:var(--green)}
+.reassign-panel{background:#F8FAFD;border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.reassign-draft-item{border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff;font-size:12px}
+.reassign-draft-item.fail{border-color:#E8A0A0;background:#FDF6F6}
+.reassign-draft-item.warn{border-color:#F0D78C;background:#FFFDF5}
+.reassign-draft-item select{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit}
+.order-modal .modal-card{max-width:520px;max-height:90vh;overflow:auto}
+.order-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.order-item{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:#fff;display:flex;align-items:center;gap:10px;cursor:grab;font-size:13px}
+.order-item:active{cursor:grabbing}
+.order-item.academy{background:#F4F7FC;cursor:default;font-weight:700;color:var(--navy)}
+.order-item .ord{font-weight:800;color:var(--navy);min-width:22px}
+.order-item.drag-over{border-color:var(--slate);background:#EEF3FA}
+.btn-sm{padding:6px 10px;font-size:11px;border-radius:999px}
 </style>
 </head>
 <body>
@@ -158,6 +177,21 @@ main.map-mode{max-width:none}
       <aside class="map-side">
         <div class="map-banner">시뮬레이션 모드 · 정류장 드래그는 미리보기만 반영합니다 (Firestore 원본 변경 없음)</div>
         <p class="map-tip">정류장 원을 <b>다른 호차 카드</b>로 드래그하거나, 다른 호차 정류장 근처에 놓으면 해당 호차로 학생 이동이 미리보기로 표시됩니다.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
+        </div>
+        <div class="reassign-panel" id="reassignPanel" style="display:none">
+          <div class="map-tip" style="margin:0"><b>1.</b> 없앨 노선 1개 선택 → <b>2.</b> 흡수 노선 여러 개 선택 → <b>3.</b> 자동분배 초안</div>
+          <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
+            <button class="btn btn-outline btn-sm" type="button" id="reassignClearSelBtn">선택 초기화</button>
+          </div>
+          <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">이번 재배정 초안</div>
+          <div id="reassignDraftList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
+          <button class="btn btn-yellow btn-sm" type="button" id="reassignConfirmBtn" disabled>이 배정안 확정 (미리보기 요약)</button>
+          <div id="reassignResult"></div>
+        </div>
         <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
         <div id="mapBusList"></div>
         <div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 목록 (드래그 → 왼쪽 호차 카드)</div>
@@ -293,6 +327,28 @@ main.map-mode{max-width:none}
   </div>
 </div>
 
+<div class="modal-overlay order-modal" id="orderOverlay">
+  <div class="modal-card">
+    <h3 id="orderModalTitle">노선 순서 정하기</h3>
+    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px">등원·하원 순서를 따로 저장합니다. 리스트를 위아래로 드래그해 순서를 바꾸세요. (지도 클릭 방식 아님)</p>
+    <div class="filter-row" style="margin:0 0 8px">
+      <button class="chip active" type="button" data-order-tab="등원">등원 순서</button>
+      <button class="chip" type="button" data-order-tab="하원">하원 순서</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-navy btn-sm" type="button" id="orderAutoBtn">순서 자동추천</button>
+      <button class="btn btn-outline btn-sm" type="button" id="orderReverseBtn">순서 뒤집기</button>
+    </div>
+    <div class="map-tip" id="orderTravelHint">예상 총 운행시간: -</div>
+    <div class="order-list" id="orderList"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" type="button" id="orderCancelBtn">닫기</button>
+      <button class="btn btn-navy" type="button" id="orderSaveBtn">순서 저장</button>
+    </div>
+    <p class="hint" style="margin-bottom:0">저장 위치: <code>shuttle_data/route_orders</code> (호차·정류장 원본 시트는 수정하지 않음)</p>
+  </div>
+</div>
+
 <script>
 const BRANCHES = ['장안','서수원','수원','운정1','운정2','남동탄'];
 const SHEETS = ['호차','차량','계약','정류장','학생_기본정보','배정이력_정류장','서류','기사','동승자'];
@@ -363,7 +419,17 @@ const state = {
   mapBusFilter: 'ALL',
   mapReady: false,
   alertFilter: 'all',
-  alerts: []
+  alerts: [],
+  reassignMode: false,
+  reassignRemoveId: null,
+  reassignAbsorbIds: [],
+  reassignDraft: [],
+  reassignResultHtml: '',
+  orderBusId: null,
+  orderTab: '등원',
+  orderDraft: [],
+  routeOrders: {},
+  routeCache: {}
 };
 
 let lmap = null;
@@ -455,8 +521,13 @@ function resetMapPreview(){
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
   state.mapBusFilter = 'ALL';
+  if(state.reassignMode){
+    state.reassignDraft = [];
+    state.reassignResultHtml = '';
+  }
   renderMapSide();
   renderKakaoMap(true);
+  renderReassignDraft();
 }
 
 function ensureMapWorking(){
@@ -524,6 +595,571 @@ function findNearestOtherStop(lat, lng, excludeBusId){
   return best;
 }
 
+function seatCapOf(bus){
+  return (bus.seatSlots || bus.capacity || 25) - (state.rules.capacityBufferSeats || 0);
+}
+
+function isAcademyStop(stop){
+  const n = String(stop && stop.name || '');
+  return /정상어학원|학원\s*\(|학원$/.test(n);
+}
+
+function academyPointForBus(bus){
+  const stops = (bus && bus.stops) || [];
+  const academy = stops.find(s => isAcademyStop(s) && s.lat != null && s.lng != null);
+  if(academy) return { lat: academy.lat, lng: academy.lng, name: academy.name, id: academy.id, isAcademy: true };
+  const c = BRANCH_MAP_CENTER[bus.branch] || BRANCH_MAP_CENTER['장안'];
+  return { lat: c.lat, lng: c.lng, name: '학원 도착', id: '__academy__', isAcademy: true };
+}
+
+function routeCacheKey(from, to){
+  const f = (n) => Number(n).toFixed(5);
+  return f(from.lat)+','+f(from.lng)+'_'+f(to.lat)+','+f(to.lng);
+}
+
+/** 카카오모빌리티 Directions 연동 자리. 지금은 직선거리 추정치. */
+async function fetchTravelTime(from, to){
+  if(!from || !to || from.lat == null || to.lat == null){
+    return { minutes: 0, meters: 0, source: 'invalid' };
+  }
+  const key = routeCacheKey(from, to);
+  if(state.routeCache[key]) return state.routeCache[key];
+  // TODO: REST 키 + Cloud Functions 프록시로 카카오모빌리티 길찾기 API 호출
+  // 예: await fetch('/api/directions?origin=...&destination=...')
+  const meters = haversineM(from, to);
+  const minutes = (meters / 1000) / AVG_SPEED_KMH * 60;
+  const result = { minutes, meters, source: 'haversine-estimate' };
+  state.routeCache[key] = result;
+  return result;
+}
+
+async function estimateOrderedRouteMinutes(stops){
+  const pts = (stops || []).filter(s => s && s.lat != null && s.lng != null);
+  let total = 0;
+  for(let i = 0; i < pts.length - 1; i++){
+    const t = await fetchTravelTime(pts[i], pts[i + 1]);
+    total += t.minutes || 0;
+  }
+  return total;
+}
+
+async function loadRouteOrders(){
+  try{
+    const snap = await db.collection('shuttle_data').doc('route_orders').get();
+    state.routeOrders = snap.exists ? (snap.data().orders || {}) : {};
+  }catch(e){
+    console.warn('route_orders', e);
+    state.routeOrders = {};
+  }
+}
+
+async function loadRouteCache(){
+  try{
+    const snap = await db.collection('shuttle_data').doc('route_cache').get();
+    state.routeCache = snap.exists ? (snap.data().cache || {}) : {};
+  }catch(e){
+    console.warn('route_cache', e);
+    state.routeCache = {};
+  }
+}
+
+async function persistRouteCache(){
+  try{
+    await db.collection('shuttle_data').doc('route_cache').set({
+      cache: state.routeCache,
+      updatedAt: new Date().toISOString(),
+      note: 'key=lat1,lng1_lat2,lng2 · fetchTravelTime 결과 캐시 (현재는 직선거리 추정)'
+    }, { merge: true });
+  }catch(e){
+    console.warn('persistRouteCache', e);
+  }
+}
+
+function toggleReassignMode(force){
+  state.reassignMode = force != null ? !!force : !state.reassignMode;
+  if(!state.reassignMode){
+    state.reassignRemoveId = null;
+    state.reassignAbsorbIds = [];
+    state.reassignDraft = [];
+    state.reassignResultHtml = '';
+  }
+  const btn = document.getElementById('reassignModeBtn');
+  if(btn){
+    btn.className = 'btn ' + (state.reassignMode ? 'btn-navy' : 'btn-outline');
+    btn.textContent = state.reassignMode ? '노선 재배정 모드 ON' : '노선 재배정 모드';
+  }
+  const panel = document.getElementById('reassignPanel');
+  if(panel) panel.style.display = state.reassignMode ? 'flex' : 'none';
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function clearReassignSelection(){
+  state.reassignRemoveId = null;
+  state.reassignAbsorbIds = [];
+  state.reassignDraft = [];
+  state.reassignResultHtml = '';
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function onReassignBusClick(busId){
+  if(!state.reassignMode) return;
+  if(state.reassignRemoveId === busId){
+    state.reassignRemoveId = null;
+  } else if(state.reassignAbsorbIds.includes(busId)){
+    state.reassignAbsorbIds = state.reassignAbsorbIds.filter(id => id !== busId);
+  } else if(!state.reassignRemoveId){
+    state.reassignRemoveId = busId;
+  } else {
+    state.reassignAbsorbIds = [...state.reassignAbsorbIds, busId];
+  }
+  state.reassignDraft = [];
+  state.reassignResultHtml = '';
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function reassignSelectionSummary(){
+  const el = document.getElementById('reassignSelectionSummary');
+  if(!el) return;
+  const rem = state.mapWorking.find(b => b.id === state.reassignRemoveId);
+  const abs = state.reassignAbsorbIds.map(id => state.mapWorking.find(b => b.id === id)).filter(Boolean);
+  el.innerHTML = '없앨 노선: <b>' + (rem ? esc(rem.label) : '미선택') + '</b><br>흡수 노선: <b>' +
+    (abs.length ? abs.map(b => esc(b.label)).join(', ') : '미선택') + '</b>';
+}
+
+function buildAutoReassignDraft(){
+  const removeId = state.reassignRemoveId;
+  const absorbIds = state.reassignAbsorbIds.slice();
+  if(!removeId || !absorbIds.length){
+    alert('없앨 노선 1개와 흡수 노선 1개 이상을 선택해주세요.');
+    return;
+  }
+  // 원본 좌표 기준에서 초안 계산
+  state.mapWorking = cloneMapBuses(busesForMap());
+  state.mapMoves = [];
+  const removeBus = state.mapWorking.find(b => b.id === removeId);
+  if(!removeBus){ alert('없앨 노선을 찾을 수 없습니다.'); return; }
+
+  const loads = {};
+  absorbIds.forEach(id => {
+    const b = state.mapWorking.find(x => x.id === id);
+    loads[id] = b ? (b.passengers || 0) : 0;
+  });
+
+  const stops = (removeBus.stops || [])
+    .filter(s => !isAcademyStop(s) && ((Number(s.passengers)||0) > 0 || (s.lat != null && s.lng != null)))
+    .slice()
+    .sort((a,b) => (Number(b.passengers)||0) - (Number(a.passengers)||0));
+
+  const draft = [];
+  stops.forEach(stop => {
+    const pax = Number(stop.passengers) || 0;
+    const ranked = absorbIds.map(id => {
+      const bus = state.mapWorking.find(b => b.id === id);
+      let meters = Infinity;
+      if(stop.lat != null && stop.lng != null && bus){
+        const near = nearestBusDistance(stop, [bus]);
+        if(near) meters = near.meters;
+        else if((bus.stops||[]).length === 0) meters = 0;
+      }
+      return { busId: id, meters };
+    }).sort((a,b) => a.meters - b.meters);
+
+    let assigned = null;
+    let warn = '';
+    for(const item of ranked){
+      const bus = state.mapWorking.find(b => b.id === item.busId);
+      if(!bus) continue;
+      const spare = seatCapOf(bus) - (loads[item.busId] || 0);
+      if(spare >= pax){
+        assigned = item.busId;
+        loads[item.busId] = (loads[item.busId] || 0) + pax;
+        break;
+      }
+    }
+    if(!assigned){
+      draft.push({
+        stopId: String(stop.id),
+        name: stop.name || ('정류장 '+stop.id),
+        passengers: pax,
+        fromBusId: removeId,
+        toBusId: '',
+        fail: true,
+        warn: '배정 실패 — 흡수 노선 여유석 부족'
+      });
+    } else {
+      draft.push({
+        stopId: String(stop.id),
+        name: stop.name || ('정류장 '+stop.id),
+        passengers: pax,
+        fromBusId: removeId,
+        toBusId: assigned,
+        fail: false,
+        warn
+      });
+    }
+  });
+
+  state.reassignDraft = draft;
+  state.reassignResultHtml = '';
+  applyReassignDraftToMap();
+}
+
+function validateDraftItem(item, loads){
+  if(!item.toBusId){
+    item.fail = true;
+    item.warn = '배정 실패 — 흡수 노선 미선택';
+    return;
+  }
+  if(!state.reassignAbsorbIds.includes(item.toBusId)){
+    item.fail = true;
+    item.warn = '선택한 흡수 노선만 지정할 수 있습니다';
+    return;
+  }
+  const bus = state.mapWorking.find(b => b.id === item.toBusId) || busesForMap().find(b => b.id === item.toBusId);
+  if(!bus){
+    item.fail = true;
+    item.warn = '흡수 노선을 찾을 수 없습니다';
+    return;
+  }
+  const baseLoad = loads[item.toBusId] != null ? loads[item.toBusId] : (bus.passengers || 0);
+  const spare = seatCapOf(bus) - baseLoad;
+  const pax = Number(item.passengers) || 0;
+  if(spare < pax){
+    item.fail = false;
+    item.warn = '좌석 초과 경고 — 여유 ' + spare + '석 / 필요 ' + pax + '명';
+  } else {
+    item.fail = false;
+    item.warn = '';
+  }
+  loads[item.toBusId] = baseLoad + pax;
+}
+
+function recomputeDraftWarnings(){
+  const base = cloneMapBuses(busesForMap());
+  const loads = {};
+  state.reassignAbsorbIds.forEach(id => {
+    const b = base.find(x => x.id === id);
+    loads[id] = b ? (b.passengers || 0) : 0;
+  });
+  state.reassignDraft.forEach(item => validateDraftItem(item, loads));
+}
+
+function applyReassignDraftToMap(){
+  state.mapWorking = cloneMapBuses(busesForMap());
+  state.mapMoves = [];
+  recomputeDraftWarnings();
+  const removeId = state.reassignRemoveId;
+  state.reassignDraft.forEach(item => {
+    if(!item.toBusId || item.fail) return;
+    if(item.warn && item.warn.indexOf('좌석 초과') === 0){
+      // 경고만 있어도 미리보기는 반영 (담당자 판단용). 원하면 여기서 return 가능.
+    }
+    previewMoveStop(removeId, item.stopId, item.toBusId);
+  });
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function renderReassignDraft(){
+  reassignSelectionSummary();
+  const list = document.getElementById('reassignDraftList');
+  const confirmBtn = document.getElementById('reassignConfirmBtn');
+  const result = document.getElementById('reassignResult');
+  if(result) result.innerHTML = state.reassignResultHtml || '';
+  if(!list) return;
+  if(!state.reassignMode){
+    list.innerHTML = '';
+    if(confirmBtn) confirmBtn.disabled = true;
+    return;
+  }
+  if(!state.reassignDraft.length){
+    list.innerHTML = '<div class="map-tip">자동분배 초안을 생성하면 여기에 표시됩니다.</div>';
+    if(confirmBtn) confirmBtn.disabled = true;
+    return;
+  }
+  const absorbBuses = state.reassignAbsorbIds.map(id => state.mapWorking.find(b => b.id === id) || state.buses.find(b => b.id === id)).filter(Boolean);
+  list.innerHTML = state.reassignDraft.map((item, idx) => {
+    const cls = item.fail ? 'fail' : (item.warn ? 'warn' : '');
+    const opts = '<option value="">— 선택 —</option>' + absorbBuses.map(b =>
+      '<option value="'+esc(b.id)+'"'+(item.toBusId===b.id?' selected':'')+'>'+esc(b.label)+'</option>'
+    ).join('');
+    return '<div class="reassign-draft-item '+cls+'" data-draft-idx="'+idx+'">'
+      + '<div style="font-weight:700">'+esc(item.name)+' · '+item.passengers+'명</div>'
+      + '<div class="meta">'+(item.fail ? '배정 실패' : ('→ ' + esc((absorbBuses.find(b=>b.id===item.toBusId)||{}).label || item.toBusId)))+'</div>'
+      + (item.warn ? '<div class="meta" style="color:var(--gold);font-weight:700">'+esc(item.warn)+'</div>' : '')
+      + '<select data-draft-select="'+idx+'">'+opts+'</select>'
+      + '</div>';
+  }).join('');
+  list.querySelectorAll('[data-draft-select]').forEach(sel => {
+    sel.onchange = () => {
+      const idx = Number(sel.getAttribute('data-draft-select'));
+      const item = state.reassignDraft[idx];
+      if(!item) return;
+      item.toBusId = sel.value;
+      item.fail = !sel.value;
+      item.warn = '';
+      applyReassignDraftToMap();
+    };
+  });
+  if(confirmBtn) confirmBtn.disabled = !state.reassignDraft.some(d => d.toBusId && !d.fail);
+}
+
+function confirmReassignPlan(){
+  const removeBus = state.buses.find(b => b.id === state.reassignRemoveId);
+  if(!removeBus){ alert('없앨 노선이 없습니다.'); return; }
+  recomputeDraftWarnings();
+  const okItems = state.reassignDraft.filter(d => d.toBusId && !d.fail);
+  const failItems = state.reassignDraft.filter(d => d.fail || !d.toBusId);
+  const warnItems = state.reassignDraft.filter(d => d.warn);
+  const byBus = {};
+  let moved = 0;
+  let detourMax = 0;
+  okItems.forEach(item => {
+    const to = state.buses.find(b => b.id === item.toBusId);
+    byBus[item.toBusId] = byBus[item.toBusId] || { label: to ? to.label : item.toBusId, count: 0 };
+    byBus[item.toBusId].count += item.passengers;
+    moved += item.passengers;
+    const fromStop = (removeBus.stops || []).find(s => String(s.id) === String(item.stopId));
+    if(fromStop && fromStop.lat != null && to){
+      const near = nearestBusDistance(fromStop, [to]);
+      if(near){
+        const detourMin = Math.round((near.meters / 1000) / AVG_SPEED_KMH * 60 * 2);
+        detourMax = Math.max(detourMax, detourMin);
+      }
+    }
+  });
+  const absorbText = Object.values(byBus).map(x => x.label + '(+' + x.count + '명)').join(', ') || '없음';
+  const ok = failItems.length === 0 && moved >= (okItems.reduce((s,i)=>s+i.passengers,0));
+  const lines = [
+    '이용률: ' + (removeBus.utilization==null?'-':fmtPct(removeBus.utilization)) + ' (기준 ' + fmtPct(state.rules.minUtilizationRate) + (removeBus.candidate?' 미만':'') + ')',
+    '흡수 배정: ' + absorbText,
+    '이동 대상 학생: ' + moved + '명' + (failItems.length ? ' (실패 ' + failItems.length + '정류장)' : ''),
+    '예상 운행시간 증가: ' + detourMax + '분 (직선거리 추정 · 추후 Directions API로 교체)',
+    '예상 월 절감액: ' + fmtWon(removeBus.salary) + ' (계약 급여 기준)',
+    '근거: 노선 재배정 모드 초안 확정 (Firestore 원본 미변경)'
+  ];
+  if(warnItems.length) lines.push('좌석 경고 ' + warnItems.length + '건 — 담당자 확인 필요');
+  if(failItems.length){
+    lines.push('배정 실패 정류장:');
+    failItems.slice(0, 8).forEach(f => lines.push('· ' + f.name + ' (' + f.passengers + '명)'));
+  }
+  state.reassignResultHtml = '<div class="result-card '+(failItems.length?'fail':'ok')+'"><h3>'+esc(removeBus.label)+' 재배정 초안 확정</h3><ul>'
+    + lines.map(l => '<li>'+esc(l)+'</li>').join('')
+    + '</ul><p class="hint" style="margin:12px 0 0">미리보기만 반영되었습니다. 호차·학생 원본 문서는 수정되지 않았습니다.</p></div>';
+  renderReassignDraft();
+}
+
+function nearestNeighborOrder(stops, start, preferFarthest){
+  const remaining = stops.filter(s => s.lat != null && s.lng != null).map(s => ({...s}));
+  if(!remaining.length) return [];
+  let current = start;
+  let firstIdx = 0;
+  let best = preferFarthest ? -1 : Infinity;
+  remaining.forEach((s, i) => {
+    const d = haversineM(current, s);
+    if(preferFarthest ? d > best : d < best){ best = d; firstIdx = i; }
+  });
+  const ordered = [];
+  ordered.push(remaining.splice(firstIdx, 1)[0]);
+  current = ordered[0];
+  while(remaining.length){
+    let ni = 0; let nd = Infinity;
+    remaining.forEach((s, i) => {
+      const d = haversineM(current, s);
+      if(d < nd){ nd = d; ni = i; }
+    });
+    current = remaining.splice(ni, 1)[0];
+    ordered.push(current);
+  }
+  return ordered;
+}
+
+function openOrderPanel(busId){
+  const bus = state.mapWorking.find(b => b.id === busId) || state.buses.find(b => b.id === busId);
+  if(!bus) return;
+  state.orderBusId = busId;
+  state.orderTab = '등원';
+  const saved = state.routeOrders[busId] || {};
+  const key = state.orderTab === '등원' ? '등원순서' : '하원순서';
+  const stops = (bus.stops || []).filter(s => !isAcademyStop(s));
+  if(saved[key] && saved[key].length){
+    const byId = Object.fromEntries(stops.map(s => [String(s.id), s]));
+    state.orderDraft = saved[key].map(id => byId[String(id)]).filter(Boolean);
+    stops.forEach(s => {
+      if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
+    });
+  } else {
+    state.orderDraft = stops.slice();
+  }
+  document.getElementById('orderModalTitle').textContent = bus.label + ' · 순서 정하기';
+  document.querySelectorAll('[data-order-tab]').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-order-tab') === state.orderTab);
+  });
+  document.getElementById('orderOverlay').classList.add('active');
+  renderOrderList();
+}
+
+function switchOrderTab(tab){
+  // stash current
+  saveOrderDraftToStateMemory();
+  state.orderTab = tab;
+  document.querySelectorAll('[data-order-tab]').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-order-tab') === tab);
+  });
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  if(!bus) return;
+  const saved = state.routeOrders[state.orderBusId] || {};
+  const memKey = tab === '등원' ? '_draft등원' : '_draft하원';
+  const key = tab === '등원' ? '등원순서' : '하원순서';
+  const stops = (bus.stops || []).filter(s => !isAcademyStop(s));
+  if(saved[memKey]){
+    state.orderDraft = saved[memKey];
+  } else if(saved[key] && saved[key].length){
+    const byId = Object.fromEntries(stops.map(s => [String(s.id), s]));
+    state.orderDraft = saved[key].map(id => byId[String(id)]).filter(Boolean);
+    stops.forEach(s => {
+      if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
+    });
+  } else {
+    state.orderDraft = stops.slice();
+  }
+  renderOrderList();
+}
+
+function saveOrderDraftToStateMemory(){
+  if(!state.orderBusId) return;
+  if(!state.routeOrders[state.orderBusId]) state.routeOrders[state.orderBusId] = {};
+  const memKey = state.orderTab === '등원' ? '_draft등원' : '_draft하원';
+  state.routeOrders[state.orderBusId][memKey] = state.orderDraft.slice();
+}
+
+function autoRecommendOrder(){
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  if(!bus) return;
+  const academy = academyPointForBus(bus);
+  const stops = (bus.stops || []).filter(s => !isAcademyStop(s) && s.lat != null && s.lng != null);
+  const preferFarthest = state.orderTab === '등원';
+  state.orderDraft = nearestNeighborOrder(stops, academy, preferFarthest);
+  // include stops without coords at end
+  (bus.stops || []).filter(s => !isAcademyStop(s) && (s.lat == null || s.lng == null)).forEach(s => {
+    if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
+  });
+  renderOrderList();
+}
+
+function reverseOrderDraft(){
+  state.orderDraft = state.orderDraft.slice().reverse();
+  renderOrderList();
+}
+
+async function renderOrderList(){
+  const list = document.getElementById('orderList');
+  const hint = document.getElementById('orderTravelHint');
+  if(!list) return;
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  const academy = bus ? academyPointForBus(bus) : { name: '학원 도착' };
+  list.innerHTML = state.orderDraft.map((s, i) =>
+    '<div class="order-item" draggable="false" data-order-idx="'+i+'">'
+    + '<span class="ord">'+(i+1)+'</span>'
+    + '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.name || ('정류장 '+s.id))+'</div>'
+    + '<div class="meta">'+(Number(s.passengers)||0)+'명</div></div></div>'
+  ).join('') + '<div class="order-item academy"><span class="ord">'+(state.orderDraft.length+1)+'</span><div>학원 도착 · '+esc(academy.name)+'</div></div>';
+
+  list.querySelectorAll('.order-item[data-order-idx]').forEach(el => bindOrderItemDrag(el));
+
+  if(hint && bus){
+    hint.textContent = '예상 총 운행시간 계산 중…';
+    const pts = [...state.orderDraft, academy];
+    const mins = await estimateOrderedRouteMinutes(pts);
+    hint.textContent = '예상 총 운행시간: 약 ' + Math.round(mins) + '분 (' + (state.routeCache && Object.keys(state.routeCache).length ? '캐시/추정' : '직선거리 추정') + ' · Directions API 연동 예정)';
+  }
+}
+
+function bindOrderItemDrag(el){
+  const onDown = (ev) => {
+    if(ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    const fromIdx = Number(el.getAttribute('data-order-idx'));
+    const pt = ev.touches ? ev.touches[0] : ev;
+    const ghost = document.createElement('div');
+    ghost.className = 'map-drag-ghost';
+    ghost.textContent = el.textContent.trim().slice(0, 40);
+    ghost.style.left = pt.clientX + 'px';
+    ghost.style.top = pt.clientY + 'px';
+    document.body.appendChild(ghost);
+    let overIdx = fromIdx;
+    const onMove = (e2) => {
+      const p = e2.touches ? e2.touches[0] : e2;
+      ghost.style.left = p.clientX + 'px';
+      ghost.style.top = p.clientY + 'px';
+      const hit = document.elementFromPoint(p.clientX, p.clientY);
+      const item = hit && hit.closest('[data-order-idx]');
+      document.querySelectorAll('.order-item').forEach(n => n.classList.remove('drag-over'));
+      if(item){
+        overIdx = Number(item.getAttribute('data-order-idx'));
+        item.classList.add('drag-over');
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      document.querySelectorAll('.order-item').forEach(n => n.classList.remove('drag-over'));
+      if(ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      if(overIdx !== fromIdx && overIdx >= 0 && overIdx < state.orderDraft.length){
+        const arr = state.orderDraft.slice();
+        const [moved] = arr.splice(fromIdx, 1);
+        arr.splice(overIdx, 0, moved);
+        state.orderDraft = arr;
+        renderOrderList();
+      }
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+  el.addEventListener('pointerdown', onDown);
+}
+
+async function saveRouteOrder(){
+  if(!state.orderBusId) return;
+  saveOrderDraftToStateMemory();
+  const entry = state.routeOrders[state.orderBusId] || {};
+  const curKey = state.orderTab === '등원' ? '등원순서' : '하원순서';
+  entry[curKey] = state.orderDraft.map(s => String(s.id));
+  // also flush other tab draft if present
+  if(entry._draft등원) entry['등원순서'] = entry._draft등원.map(s => String(s.id));
+  if(entry._draft하원) entry['하원순서'] = entry._draft하원.map(s => String(s.id));
+  // ensure current tab saved from orderDraft
+  entry[curKey] = state.orderDraft.map(s => String(s.id));
+  entry.updatedAt = new Date().toISOString();
+  delete entry._draft등원;
+  delete entry._draft하원;
+  state.routeOrders[state.orderBusId] = entry;
+  try{
+    await db.collection('shuttle_data').doc('route_orders').set({
+      orders: state.routeOrders,
+      updatedAt: entry.updatedAt
+    }, { merge: true });
+    await persistRouteCache();
+    alert('순서를 저장했습니다. (route_orders 문서 · 원본 호차/정류장 시트 미변경)');
+    document.getElementById('orderOverlay').classList.remove('active');
+    renderMapSide();
+  }catch(e){
+    console.error(e);
+    alert('순서 저장 실패: ' + e.message);
+  }
+}
+
 function latLngFromMouse(e){
   if(!lmap) return null;
   const rect = document.getElementById('kakaoMap').getBoundingClientRect();
@@ -560,20 +1196,48 @@ function renderMapSide(){
   if(!buses.length){
     list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>`;
   } else {
+    const selected = new Set([state.reassignRemoveId, ...state.reassignAbsorbIds].filter(Boolean));
     list.innerHTML = buses.map(b => {
       const col = busColor(b);
       const spare = (b.seatSlots || b.capacity) - (b.passengers || 0) - state.rules.capacityBufferSeats;
-      return `<div class="map-bus-item" data-map-bus-id="${esc(b.id)}" title="여기에 정류장을 드롭하면 미리보기 이동">
+      const isRem = state.reassignMode && state.reassignRemoveId === b.id;
+      const isAbs = state.reassignMode && state.reassignAbsorbIds.includes(b.id);
+      const dim = state.reassignMode && selected.size && !selected.has(b.id);
+      const ordered = !!(state.routeOrders[b.id] && (state.routeOrders[b.id]['등원순서'] || state.routeOrders[b.id]['하원순서']));
+      let cls = 'map-bus-item';
+      if(dim) cls += ' reassign-dim';
+      if(isRem) cls += ' reassign-remove';
+      if(isAbs) cls += ' reassign-absorb';
+      const tags = (isRem ? '<span class="reassign-tag remove">없앨 노선</span>' : '')
+        + (isAbs ? '<span class="reassign-tag absorb">흡수</span>' : '')
+        + (ordered ? '<span class="badge gray">순서 설정됨</span>' : '');
+      return `<div class="${cls}" data-map-bus-id="${esc(b.id)}" title="여기에 정류장을 드롭하면 미리보기 이동">
         <div class="row">
           <span class="map-swatch" style="background:${col}"></span>
           <div style="flex:1">
-            <div style="font-weight:800;font-size:13px">${esc(b.label)}</div>
+            <div style="font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${esc(b.label)} ${tags}</div>
             <div class="meta">정류장 ${(b.stops||[]).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
           </div>
         </div>
+        <div style="margin-top:8px">
+          <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">순서 정하기</button>
+        </div>
       </div>`;
     }).join('');
+    list.querySelectorAll('[data-map-bus-id]').forEach(card => {
+      card.addEventListener('click', (ev) => {
+        if(ev.target.closest('[data-order-btn]')) return;
+        if(state.reassignMode) onReassignBusClick(card.getAttribute('data-map-bus-id'));
+      });
+    });
+    list.querySelectorAll('[data-order-btn]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        openOrderPanel(btn.getAttribute('data-order-btn'));
+      });
+    });
   }
+  reassignSelectionSummary();
 
   const log = document.getElementById('mapPreviewLog');
   if(!state.mapMoves.length){
@@ -700,6 +1364,45 @@ function bindStopDrag(el, busId, stop){
   el.addEventListener('pointerdown', onDown);
 }
 
+async function probeKakaoSdk(){
+  const url = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=8a3a366186ca2e7f70a53a60e624b719&autoload=false';
+  try{
+    const res = await fetch(url, { cache: 'no-store' });
+    const text = await res.text();
+    if(res.ok && /kakao/.test(text) && !/errorType/.test(text.slice(0, 200))){
+      return { ok: true, status: res.status };
+    }
+    let err = null;
+    try{ err = JSON.parse(text); }catch(e){}
+    return {
+      ok: false,
+      status: res.status,
+      errorType: err && err.errorType,
+      message: (err && err.message) || text.slice(0, 180)
+    };
+  }catch(e){
+    return { ok: false, status: 0, message: String(e && e.message || e) };
+  }
+}
+
+function kakaoFixHtml(probe){
+  const msg = probe && probe.message ? esc(probe.message) : '알 수 없는 오류';
+  const typ = probe && probe.errorType ? esc(probe.errorType) : '';
+  return '<div style="max-width:420px;text-align:left">'
+    + '<div style="font-size:32px;margin-bottom:8px;text-align:center">🗺️</div>'
+    + '<p style="text-align:center"><b>카카오맵 연결 실패</b></p>'
+    + '<p class="map-tip">코드 문제가 아니라 <b>카카오 개발자 콘솔 설정</b> 문제입니다. 앱 「노선」에서 아래 2가지를 해주세요.</p>'
+    + '<ol class="map-tip" style="margin:10px 0 10px 18px;padding:0">'
+    + '<li><b>카카오맵 활성화 ON</b><br>내 애플리케이션 → 카카오맵 → 활성화 설정 → ON</li>'
+    + '<li><b>JavaScript SDK 도메인 등록</b><br>플랫폼 키 → JavaScript 키 → JavaScript SDK 도메인에<br><code>https://solie62418.github.io</code> 추가<br>(로컬이면 <code>http://localhost</code> 도 추가)</li>'
+    + '</ol>'
+    + '<p class="map-tip" style="background:#FDEDEC;border-radius:8px;padding:8px;color:#922B21">서버 응답'
+    + (typ ? ' ('+typ+')' : '') + ': '+msg+'</p>'
+    + '<p class="map-tip" style="text-align:center"><a href="https://developers.kakao.com/console/app" target="_blank" rel="noopener" style="color:var(--navy);font-weight:800">카카오 개발자 콘솔 열기 ↗</a></p>'
+    + '<p class="map-tip" style="text-align:center"><button type="button" class="btn btn-navy" id="retryKakaoMapBtn">설정 후 다시 시도</button></p>'
+    + '</div>';
+}
+
 function setMapEmptyMessage(html, show){
   const empty = document.getElementById('mapEmpty');
   if(!empty) return;
@@ -743,15 +1446,18 @@ function renderKakaoMap(fitBounds){
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
 
+  const reSel = new Set([state.reassignRemoveId, ...state.reassignAbsorbIds].filter(Boolean));
   buses.forEach(bus => {
     const col = busColor(bus);
+    const dim = state.reassignMode && reSel.size && !reSel.has(bus.id);
+    const op = dim ? 0.25 : 0.75;
     const stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
     if(stops.length > 1){
       const pl = new kakao.maps.Polyline({
         path: stops.map(s => new kakao.maps.LatLng(s.lat, s.lng)),
         strokeWeight: 3,
         strokeColor: col,
-        strokeOpacity: 0.75,
+        strokeOpacity: op,
         strokeStyle: 'shortdash'
       });
       pl.setMap(lmap);
@@ -764,7 +1470,7 @@ function renderKakaoMap(fitBounds){
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
       const id = 'ms-' + bus.id.replace(/__/g,'-') + '-' + s.id;
       const html = '<div id="'+id+'" class="stop-bubble" title="'+esc(s.name||'')+' · '+n+'명 → 드래그하여 이동"'
-        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(n > 0 ? n : '')+'</div>';
+        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+'">'+(n > 0 ? n : '')+'</div>';
       const pos = new kakao.maps.LatLng(s.lat, s.lng);
       const overlay = new kakao.maps.CustomOverlay({
         position: pos,
@@ -835,22 +1541,37 @@ function initKakaoMap(){
       console.error(err);
       state.mapReady = false;
       lmap = null;
-      setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 초기화에 실패했습니다.</b></p><p class="map-tip">'+esc(err && err.message ? err.message : String(err))+'<br>카카오 개발자 콘솔 → 플랫폼 키 → JavaScript 키 → <b>JavaScript SDK 도메인</b>에<br><code>https://solie62418.github.io</code> 가 있는지 확인하세요.<br>(장안 셔틀앱 지도가 같은 주소에서 되는지도 같이 확인해 주세요)</p></div>', true);
+      probeKakaoSdk().then(probe => {
+        setMapEmptyMessage(kakaoFixHtml(probe.ok ? { message: esc(err && err.message ? err.message : String(err)) } : probe), true);
+        const btn = document.getElementById('retryKakaoMapBtn');
+        if(btn) btn.onclick = () => { state.mapReady = false; lmap = null; initKakaoMap(); };
+      });
     }
   };
 
   if(typeof kakao === 'undefined' || !kakao.maps){
-    setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 SDK를 불러오지 못했습니다.</b></p><p class="map-tip">네트워크를 확인하거나, 카카오 콘솔에<br><code>https://solie62418.github.io</code> 도메인을 등록한 뒤 새로고침 해주세요.</p></div>', true);
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries++;
-      if(typeof kakao !== 'undefined' && kakao.maps){
-        clearInterval(timer);
-        kakao.maps.load(start);
-      } else if(tries > 40){
-        clearInterval(timer);
+    setMapEmptyMessage('<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 SDK 확인 중…</b></p></div>', true);
+    probeKakaoSdk().then(probe => {
+      if(probe.ok){
+        let tries = 0;
+        const timer = setInterval(() => {
+          tries++;
+          if(typeof kakao !== 'undefined' && kakao.maps){
+            clearInterval(timer);
+            kakao.maps.load(start);
+          } else if(tries > 40){
+            clearInterval(timer);
+            setMapEmptyMessage(kakaoFixHtml({ message: 'SDK 스크립트는 받았지만 kakao 객체가 없습니다. 새로고침 해주세요.' }), true);
+            const btn = document.getElementById('retryKakaoMapBtn');
+            if(btn) btn.onclick = () => initKakaoMap();
+          }
+        }, 250);
+        return;
       }
-    }, 250);
+      setMapEmptyMessage(kakaoFixHtml(probe), true);
+      const btn = document.getElementById('retryKakaoMapBtn');
+      if(btn) btn.onclick = () => { state.mapReady = false; lmap = null; initKakaoMap(); };
+    });
     return;
   }
 
@@ -1851,6 +2572,8 @@ async function loadAll(){
   state.dataSources = [];
 
   await ensureRules();
+  await loadRouteOrders();
+  await loadRouteCache();
 
   const snaps = await Promise.all(SHEETS.map(name => db.collection('shuttle_data').doc(name).get()));
   SHEETS.forEach((name, i) => {
@@ -1942,6 +2665,17 @@ document.querySelectorAll('[data-alert-filter]').forEach(btn => {
   });
 });
 document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
+document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
+document.getElementById('reassignAutoBtn').onclick = () => buildAutoReassignDraft();
+document.getElementById('reassignClearSelBtn').onclick = () => clearReassignSelection();
+document.getElementById('reassignConfirmBtn').onclick = () => confirmReassignPlan();
+document.querySelectorAll('[data-order-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchOrderTab(btn.getAttribute('data-order-tab')));
+});
+document.getElementById('orderAutoBtn').onclick = () => autoRecommendOrder();
+document.getElementById('orderReverseBtn').onclick = () => reverseOrderDraft();
+document.getElementById('orderCancelBtn').onclick = () => document.getElementById('orderOverlay').classList.remove('active');
+document.getElementById('orderSaveBtn').onclick = () => saveRouteOrder().catch(err => alert(err.message));
 document.getElementById('unlockSettingsBtn').onclick = () => {
   unlockAdmin(document.getElementById('adminPw').value);
 };

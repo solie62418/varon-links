@@ -293,6 +293,11 @@
 <div class="tabs" id="tabsBar"></div>
 
 <!-- 화면 관리(관리자) 모달 -->
+<!-- 기사/동승자 이름 클릭 시 뜨는 상세 팝업 -->
+<div class="modal-overlay" id="personOverlay">
+  <div class="modal-card" id="personModalBody" style="max-width:460px;"></div>
+</div>
+
 <div class="modal-overlay" id="settingsOverlay">
   <div class="modal-card">
     <div id="settingsAuthView">
@@ -378,6 +383,7 @@
     </div>
     <div id="contract-content" style="display:none;">
       <div class="stat-row" id="contract-stats"></div>
+      <div class="filter-row" id="contract-branch-filter"></div>
       <div class="filter-row" style="justify-content:flex-end;">
         <button class="export-btn" id="contract-export">⬇ 현재 목록 엑셀로 내보내기</button>
       </div>
@@ -425,6 +431,7 @@
       <p>등록된 서류가 아직 없습니다. 위에서 첫 서류를 등록해보세요.</p>
     </div>
     <div id="doc-content" style="display:none;">
+      <div class="filter-row" id="doc-branch-filter"></div>
       <div class="stat-row" id="doc-stats"></div>
       <div class="filter-row" style="justify-content:flex-end;">
         <button class="export-btn" id="doc-all-export">⬇ 전체 서류 엑셀로 내보내기</button>
@@ -470,6 +477,7 @@
           <option value="정규">정규</option>
           <option value="대체">대체</option>
         </select>
+        <input class="search-input" id="staffFormPay" placeholder="급여 (예: 2,200,000)" style="max-width:150px;">
         <button class="upload-btn" id="staffFormSubmit" style="background:var(--navy);color:#fff;">등록</button>
       </div>
     </div>
@@ -480,6 +488,7 @@
     </div>
     <div id="staff-content" style="display:none;">
       <div class="stat-row" id="staff-stats"></div>
+      <div class="filter-row" id="staff-branch-filter"></div>
       <div class="filter-row">
         <button class="chip active" data-role="전체">전체</button>
         <button class="chip" data-role="기사">기사</button>
@@ -494,7 +503,7 @@
       </div>
       <table><thead><tr>
         <th>이름</th><th>역할</th><th>연락처</th><th>소속업체</th><th>배정호차/부</th>
-        <th>채용일</th><th>재직상태</th><th>범죄조회일</th><th>안전교육이수일</th>
+        <th>채용일</th><th>재직상태</th><th>범죄조회일</th><th>안전교육이수일</th><th>급여</th>
       </tr></thead><tbody id="staff-body"></tbody></table>
     </div>
   </section>
@@ -535,6 +544,7 @@
     </div>
     <div id="vehicle-content" style="display:none;">
       <div class="stat-row" id="vehicle-stats"></div>
+      <div class="filter-row" id="vehicle-branch-filter"></div>
 
       <div class="section-title" style="justify-content:space-between;">
         <span>차량 목록</span>
@@ -581,6 +591,7 @@
     </div>
     <div id="issue-content" style="display:none;">
       <div class="stat-row" id="issue-stats"></div>
+      <div class="filter-row" id="issue-branch-filter"></div>
       <div class="filter-row" style="justify-content:flex-end;">
         <button class="export-btn" id="issue-export">⬇ 현재 목록 엑셀로 내보내기</button>
       </div>
@@ -598,6 +609,7 @@
     </div>
     <div id="stop-content" style="display:none;">
       <div class="stat-row" id="stop-stats"></div>
+      <div class="filter-row" id="stop-branch-filter"></div>
 
       <div class="section-title" style="justify-content:space-between;">
         <span>정류장 목록</span>
@@ -618,6 +630,30 @@
       <table><thead><tr>
         <th>학생명</th><th>소속분원</th><th>왕복/편도</th><th>요일그룹</th><th>기본등원정류장</th><th>기본하원정류장</th>
       </tr></thead><tbody id="student-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- 변경이력 -->
+  <section class="view" id="view-log">
+    <div id="log-empty" class="empty">
+      <div class="icon">🕘</div>
+      <p>아직 수정 이력이 없습니다.<br>기사/동승자/차량 팝업에서 정보를 수정하면 여기에 기록됩니다.</p>
+    </div>
+    <div id="log-content" style="display:none;">
+      <div class="stat-row" id="log-stats"></div>
+      <div class="filter-row">
+        <button class="chip active" data-logtype="전체">전체</button>
+        <button class="chip" data-logtype="기사">기사</button>
+        <button class="chip" data-logtype="동승자">동승자</button>
+        <button class="chip" data-logtype="차량">차량</button>
+      </div>
+      <div class="filter-row" style="justify-content:space-between;">
+        <input class="search-input" id="log-search" placeholder="대상(이름/차량번호) 검색">
+        <button class="export-btn" id="log-export">⬇ 현재 목록 엑셀로 내보내기</button>
+      </div>
+      <table><thead><tr>
+        <th>시각</th><th>구분</th><th>대상</th><th>항목</th><th>변경전</th><th>변경후</th>
+      </tr></thead><tbody id="log-body"></tbody></table>
     </div>
   </section>
 
@@ -668,6 +704,34 @@ function sanitize(rows){
   });
 }
 
+// 정보 수정 시 "무엇이 언제 A→B로 바뀌었는지"만 가볍게 남기는 변경이력
+function recordChanges(entityType, entityLabel, oldRec, newRec, fieldLabels){
+  const now = new Date().toISOString();
+  const entries = [];
+  Object.keys(fieldLabels).forEach(key => {
+    const before = (oldRec[key] || '').toString().trim();
+    const after = (newRec[key] || '').toString().trim();
+    if(before !== after){
+      entries.push({
+        시각: now,
+        구분: entityType,
+        대상: entityLabel,
+        항목: fieldLabels[key],
+        변경전: before || '(없음)',
+        변경후: after || '(없음)',
+      });
+    }
+  });
+  if(entries.length){
+    state.changeLog = state.changeLog || [];
+    state.changeLog.unshift(...entries); // 최신이 위로
+  }
+  return entries.length;
+}
+async function saveChangeLog(){
+  await db.collection('shuttle_data').doc('change_log').set({ rows: sanitize(state.changeLog || []) });
+}
+
 async function saveToServer(){
   const btn = document.getElementById('saveBtn');
   const original = btn.textContent;
@@ -694,6 +758,9 @@ async function loadFromServer(){
     tabVisibility = visDoc.exists ? visDoc.data() : defaultVisibility();
     renderTabs();
 
+    const logDoc = await db.collection('shuttle_data').doc('change_log').get();
+    state.changeLog = logDoc.exists ? (logDoc.data().rows || []) : [];
+
     const results = await Promise.all(
       SHEET_NAMES.map(name => db.collection('shuttle_data').doc(name).get())
     );
@@ -716,7 +783,7 @@ async function loadFromServer(){
 
 function renderAll(){
   renderHocha(); renderContract(); renderDoc();
-  renderStaff(); renderVehicleCompany(); renderIssue(); renderStopStudent();
+  renderStaff(); renderVehicleCompany(); renderIssue(); renderStopStudent(); renderChangeLog();
 }
 
 document.getElementById('saveBtn').addEventListener('click', saveToServer);
@@ -749,6 +816,7 @@ const TABS = [
   { key:'vehicle',  label:'차량·업체현황',   view:'view-vehicle' },
   { key:'issue',    label:'이슈관리',     view:'view-issue' },
   { key:'stop',     label:'정류장·학생현황', view:'view-stop' },
+  { key:'log',      label:'변경이력',     view:'view-log' },
 ];
 let tabVisibility = {};
 let activeTabKey = 'hocha';
@@ -910,9 +978,369 @@ function fmtDate(v){
   return d.toISOString().slice(0,10);
 }
 
+/* ---------------- 이름 클릭 → 기사/동승자 상세 팝업 (어느 탭에서든 공통 사용) ---------------- */
+function findPerson(name){
+  if(!name) return null;
+  const drivers = (state['기사']||[]).map(r => ({...r, __role:'기사'}));
+  const attendants = (state['동승자']||[]).map(r => ({...r, __role:'동승자'}));
+  return [...drivers, ...attendants].find(p => p['이름'] === name) || null;
+}
+// 이름이 있으면 클릭 가능한 링크 형태로, 없으면 '-' 로 표시
+function personLink(name){
+  if(!name) return '-';
+  const p = findPerson(name);
+  if(!p) return escapeHtmlLite(name); // 기사/동승자 탭에 아직 등록 안 된 이름이면 그냥 텍스트로
+  return `<a href="#" onclick="event.preventDefault();openPersonDetail('${name.replace(/'/g,"\\'")}')" style="color:var(--slate);text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${escapeHtmlLite(name)}</a>`;
+}
+function escapeHtmlLite(s){
+  return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function openPersonDetail(name){
+  const p = findPerson(name);
+  const overlay = document.getElementById('personOverlay');
+  if(!p){
+    document.getElementById('personModalBody').innerHTML = `
+      <h3>${escapeHtmlLite(name)}</h3>
+      <p class="modal-desc">기사·동승자현황 탭에 아직 등록되지 않은 이름입니다.</p>
+      <div class="modal-actions"><button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button></div>
+    `;
+    overlay.classList.add('active');
+    return;
+  }
+  renderPersonView(p);
+  overlay.classList.add('active');
+}
+const PERSON_EDIT_FIELDS = {
+  '연락처':'연락처', '소속업체':'소속업체', '현재배정호차':'배정호차', '인력구분':'인력구분',
+  '채용일':'채용일', '퇴사일':'퇴사일', '급여':'급여',
+  '범죄경력조회일':'범죄경력조회일', '안전교육이수일':'안전교육이수일',
+};
+function renderPersonView(p){
+  const docWarn = (!p['범죄경력조회일'] || !p['안전교육이수일']);
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>${escapeHtmlLite(p['이름'])} <span class="badge ${p.__role==='기사'?'top':'gray'}" style="margin-left:6px;vertical-align:middle;">${p.__role}</span></h3>
+    <div style="font-size:13px;line-height:1.9;margin-top:10px;">
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">연락처</b>${p['연락처']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">소속업체</b>${p['소속업체']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">배정호차</b>${p['현재배정호차']||'-'} ${p['배정부(시간대)']?('· '+p['배정부(시간대)']):''}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">인력구분</b>${p['인력구분']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">채용일</b>${fmtDate(p['채용일'])} ${p['퇴사일']?('· 퇴사 '+fmtDate(p['퇴사일'])):''}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">급여</b>${p['급여']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">범죄경력조회</b>${fmtDate(p['범죄경력조회일'])}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">안전교육이수</b>${fmtDate(p['안전교육이수일'])}</div>
+      ${docWarn ? `<div style="margin-top:8px;"><span class="badge red">⚠ 서류 일부 미비</span></div>` : ''}
+    </div>
+    <div class="modal-actions">
+      <button class="chip" onclick="goToStaffTab('${p['이름'].replace(/'/g,"\\'")}')">기사·동승자현황에서 보기</button>
+      <button class="chip" onclick="renderPersonEditForm('${p.__role}','${p['이름'].replace(/'/g,"\\'")}')">✏️ 수정</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button>
+    </div>
+  `;
+}
+function renderPersonEditForm(role, name){
+  const list = state[role] || [];
+  const idx = list.findIndex(x => x['이름'] === name);
+  if(idx < 0) return;
+  const p = list[idx];
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>${escapeHtmlLite(p['이름'])} 정보 수정</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      ${Object.keys(PERSON_EDIT_FIELDS).map(key => `
+        <label style="font-size:11px;color:var(--muted);font-weight:700;display:flex;flex-direction:column;gap:4px;">
+          ${PERSON_EDIT_FIELDS[key]}
+          <input type="${key.includes('일')?'date':'text'}" class="search-input" id="pedit_${key}" value="${(p[key]||'').toString().replace(/"/g,'&quot;')}">
+        </label>`).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="chip" onclick="renderPersonView(findPerson('${name.replace(/'/g,"\\'")}'))">취소</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" id="personSaveBtn" onclick="savePersonEdit('${role}','${name.replace(/'/g,"\\'")}')">저장</button>
+    </div>
+  `;
+}
+async function savePersonEdit(role, name){
+  const list = state[role] || [];
+  const idx = list.findIndex(x => x['이름'] === name);
+  if(idx < 0) return;
+  const oldRec = { ...list[idx] };
+  const newRec = { ...list[idx] };
+  Object.keys(PERSON_EDIT_FIELDS).forEach(key => {
+    newRec[key] = document.getElementById('pedit_'+key).value.trim();
+  });
+  const btn = document.getElementById('personSaveBtn');
+  btn.textContent = '저장 중...'; btn.disabled = true;
+  try{
+    list[idx] = newRec;
+    state[role] = list;
+    syncAliases();
+    const changed = recordChanges(role, name, oldRec, newRec, PERSON_EDIT_FIELDS);
+    await saveToServer();
+    if(changed) await saveChangeLog();
+    renderStaff();
+    renderChangeLog();
+    renderPersonView(newRec.__role ? newRec : {...newRec, __role: role});
+  }catch(err){
+    console.error(err);
+    alert('저장에 실패했습니다.');
+    btn.textContent = '저장'; btn.disabled = false;
+  }
+}
+document.getElementById('personOverlay').addEventListener('click', (e)=>{ if(e.target.id==='personOverlay') e.currentTarget.classList.remove('active'); });
+
+function goToStaffTab(name){
+  document.getElementById('personOverlay').classList.remove('active');
+  activeTabKey = 'staff';
+  renderTabs();
+  staffSearchTerm = name;
+  document.getElementById('staff-search').value = name;
+  staffActiveOnly = false;
+  document.getElementById('staff-active-only').checked = false;
+  renderStaff();
+}
+
+/* ---------------- 차량번호 클릭 → 상세 팝업 ---------------- */
+function findVehicle(no){
+  if(!no) return null;
+  return (state['차량']||[]).find(v => v['차량번호'] === no) || null;
+}
+function vehicleLink(no){
+  if(!no) return '-';
+  const v = findVehicle(no);
+  if(!v) return escapeHtmlLite(no);
+  return `<a href="#" onclick="event.preventDefault();openVehicleDetail('${no.replace(/'/g,"\\'")}')" style="color:var(--slate);text-decoration:underline;text-underline-offset:2px;cursor:pointer;">${escapeHtmlLite(no)}</a>`;
+}
+function openVehicleDetail(no){
+  const v = findVehicle(no);
+  const overlay = document.getElementById('personOverlay');
+  if(!v){
+    document.getElementById('personModalBody').innerHTML = `
+      <h3>${escapeHtmlLite(no)}</h3>
+      <p class="modal-desc">차량·업체현황 탭에 아직 등록되지 않은 차량번호입니다.</p>
+      <div class="modal-actions"><button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button></div>
+    `;
+    overlay.classList.add('active');
+    return;
+  }
+  renderVehicleView(v);
+  overlay.classList.add('active');
+}
+const VEHICLE_EDIT_FIELDS = {
+  '차종':'차종', '인승':'인승', '연식':'연식', '소유형태':'소유형태',
+  '현재배정호차':'배정호차', '등록일':'등록일', '폐차일':'폐차일', '비고':'비고',
+};
+function renderVehicleView(v){
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>🚐 ${escapeHtmlLite(v['차량번호'])} ${v['폐차일']?`<span class="badge red" style="margin-left:6px;">폐차</span>`:''}</h3>
+    <div style="font-size:13px;line-height:1.9;margin-top:10px;">
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">차종</b>${v['차종']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">인승</b>${v['인승']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">연식</b>${v['연식']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">소유형태</b>${v['소유형태']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">배정호차</b>${v['현재배정호차']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">등록일</b>${fmtDate(v['등록일'])} ${v['폐차일']?('· 폐차 '+fmtDate(v['폐차일'])):''}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">비고</b>${v['비고']||'-'}</div>
+    </div>
+    <div class="modal-actions">
+      <button class="chip" onclick="renderVehicleEditForm('${v['차량번호'].replace(/'/g,"\\'")}')">✏️ 수정</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button>
+    </div>
+  `;
+}
+function renderVehicleEditForm(no){
+  const list = state['차량'] || [];
+  const idx = list.findIndex(x => x['차량번호'] === no);
+  if(idx < 0) return;
+  const v = list[idx];
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>${escapeHtmlLite(v['차량번호'])} 정보 수정</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      ${Object.keys(VEHICLE_EDIT_FIELDS).map(key => `
+        <label style="font-size:11px;color:var(--muted);font-weight:700;display:flex;flex-direction:column;gap:4px;">
+          ${VEHICLE_EDIT_FIELDS[key]}
+          <input type="${key.includes('일')?'date':'text'}" class="search-input" id="vedit_${key}" value="${(v[key]||'').toString().replace(/"/g,'&quot;')}">
+        </label>`).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="chip" onclick="renderVehicleView(findVehicle('${no.replace(/'/g,"\\'")}'))">취소</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" id="vehicleSaveBtn" onclick="saveVehicleEdit('${no.replace(/'/g,"\\'")}')">저장</button>
+    </div>
+  `;
+}
+async function saveVehicleEdit(no){
+  const list = state['차량'] || [];
+  const idx = list.findIndex(x => x['차량번호'] === no);
+  if(idx < 0) return;
+  const oldRec = { ...list[idx] };
+  const newRec = { ...list[idx] };
+  Object.keys(VEHICLE_EDIT_FIELDS).forEach(key => {
+    newRec[key] = document.getElementById('vedit_'+key).value.trim();
+  });
+  const btn = document.getElementById('vehicleSaveBtn');
+  btn.textContent = '저장 중...'; btn.disabled = true;
+  try{
+    list[idx] = newRec;
+    state['차량'] = list;
+    syncAliases();
+    const changed = recordChanges('차량', no, oldRec, newRec, VEHICLE_EDIT_FIELDS);
+    await saveToServer();
+    if(changed) await saveChangeLog();
+    renderVehicleCompany();
+    renderChangeLog();
+    renderVehicleView(newRec);
+  }catch(err){
+    console.error(err);
+    alert('저장에 실패했습니다.');
+    btn.textContent = '저장'; btn.disabled = false;
+  }
+}
+
+/* ---------------- 호차 배지 클릭 → 관련 정보 전부 모아 보여주는 팝업 ---------------- */
+function findHocha(branch, hochaNo){
+  return (state['호차']||[]).find(h => h['소속분원']===branch && h['호차번호']===hochaNo) || null;
+}
+// 계약탭 등에서 "장안 11호"처럼 분원+호차번호가 합쳐진 문자열을 파싱해서 배지 링크로 변환
+function hochaComboLink(combo){
+  if(!combo) return `<span class="hocha-badge" style="min-width:auto;padding:4px 10px;"><span class="num" style="font-size:13px;">-</span></span>`;
+  const parts = String(combo).trim().split(/\s+/);
+  const branch = BRANCHES.includes(parts[0]) ? parts[0] : '';
+  const hochaNo = branch ? parts.slice(1).join(' ') : combo;
+  const clickable = branch && findHocha(branch, hochaNo);
+  return `<span class="hocha-badge" style="min-width:auto;padding:4px 10px;${clickable?'cursor:pointer;':''}" ${clickable?`onclick="openHochaDetail('${branch.replace(/'/g,"\\'")}','${hochaNo.replace(/'/g,"\\'")}')"`:''} title="${clickable?'클릭하면 이 호차의 전체 정보를 볼 수 있습니다':''}">
+    <span class="num" style="font-size:13px;">${escapeHtmlLite(combo)}</span>
+  </span>`;
+}
+
+function openHochaDetail(branch, hochaNo){
+  const h = findHocha(branch, hochaNo);
+  const overlay = document.getElementById('personOverlay');
+  if(!h){
+    document.getElementById('personModalBody').innerHTML = `
+      <h3>${escapeHtmlLite(branch)} ${escapeHtmlLite(hochaNo)}</h3>
+      <p class="modal-desc">호차현황판 탭에 아직 등록되지 않은 호차입니다.</p>
+      <div class="modal-actions"><button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button></div>
+    `;
+    overlay.classList.add('active');
+    return;
+  }
+  renderHochaView(h);
+  overlay.classList.add('active');
+}
+const HOCHA_EDIT_FIELDS = {
+  '현재차량(차량번호)':'차량번호', '현재기사(이름)':'기사이름', '현재동승자(이름)':'동승자이름',
+  '현재업체':'업체', '개설일':'개설일', '폐지일':'폐지일', '폐지사유':'폐지사유', '비고':'비고',
+};
+function renderHochaView(h){
+  const combo = `${h['소속분원']} ${h['호차번호']}`;
+  const contract = (state['계약']||[]).find(c => c['호차'] === combo);
+  const relatedDocs = (state['서류']||[]).filter(d => d['소속대상유형']==='호차' && d['소속대상(ID/이름)']===combo);
+
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>🚌 ${escapeHtmlLite(h['소속분원'])} ${escapeHtmlLite(h['호차번호'])} ${h['폐지일']?`<span class="badge red" style="margin-left:6px;">폐지됨</span>`:''}</h3>
+    <div style="font-size:13px;line-height:1.9;margin-top:10px;">
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">개설일</b>${fmtDate(h['개설일'])} ${h['폐지일']?('· 폐지 '+fmtDate(h['폐지일'])+(h['폐지사유']?(' ('+h['폐지사유']+')'):'')):''}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">차량</b>${vehicleLink(h['현재차량(차량번호)'])}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">기사</b>${personLink(h['현재기사(이름)'])}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">동승자</b>${personLink(h['현재동승자(이름)'])}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">업체</b>${h['현재업체']||'-'}</div>
+      <div><b style="color:var(--muted);display:inline-block;width:90px;">비고</b>${h['비고']||'-'}</div>
+    </div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+      <h4 style="font-size:12px;color:var(--navy);margin:0 0 6px;">계약 정보</h4>
+      ${contract ? `
+        <div style="font-size:13px;line-height:1.8;">
+          <div>업체 <b>${contract['업체']||'-'}</b> · 계약기간 ${fmtDate(contract['계약시작일'])} ~ ${fmtDate(contract['계약종료일'])}</div>
+          <div>급여 ${contract['급여']||'-'} · 운행 ${contract['운행횟수']||'-'} · 지역 ${contract['운행지역']||'-'}</div>
+        </div>` : `<div style="font-size:12.5px;color:var(--muted);">등록된 계약 정보가 없습니다.</div>`}
+    </div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+      <h4 style="font-size:12px;color:var(--navy);margin:0 0 6px;">호차 앞으로 등록된 서류</h4>
+      ${relatedDocs.length ? relatedDocs.map(d => `
+        <div style="font-size:12.5px;padding:3px 0;">
+          <span class="badge gray">${d['서류종류']}</span> ${fmtDate(d['발급일'])}${d['만료일']?(' ~ '+fmtDate(d['만료일'])):''} · ${statusBadge(d['상태'])}
+        </div>`).join('') : `<div style="font-size:12.5px;color:var(--muted);">등록된 서류가 없습니다.</div>`}
+    </div>
+
+    <div class="modal-actions">
+      <button class="chip" onclick="renderHochaEditForm('${h['소속분원'].replace(/'/g,"\\'")}','${h['호차번호'].replace(/'/g,"\\'")}')">✏️ 수정</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" onclick="document.getElementById('personOverlay').classList.remove('active')">닫기</button>
+    </div>
+  `;
+}
+function renderHochaEditForm(branch, hochaNo){
+  const list = state['호차'] || [];
+  const idx = list.findIndex(x => x['소속분원']===branch && x['호차번호']===hochaNo);
+  if(idx < 0) return;
+  const h = list[idx];
+  document.getElementById('personModalBody').innerHTML = `
+    <h3>${escapeHtmlLite(branch)} ${escapeHtmlLite(hochaNo)} 정보 수정</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      ${Object.keys(HOCHA_EDIT_FIELDS).map(key => `
+        <label style="font-size:11px;color:var(--muted);font-weight:700;display:flex;flex-direction:column;gap:4px;">
+          ${HOCHA_EDIT_FIELDS[key]}
+          <input type="${key.includes('일')?'date':'text'}" class="search-input" id="hedit_${key}" value="${(h[key]||'').toString().replace(/"/g,'&quot;')}">
+        </label>`).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="chip" onclick="renderHochaView(findHocha('${branch.replace(/'/g,"\\'")}','${hochaNo.replace(/'/g,"\\'")}'))">취소</button>
+      <button class="upload-btn" style="background:var(--navy);color:#fff;" id="hochaSaveBtn" onclick="saveHochaEdit('${branch.replace(/'/g,"\\'")}','${hochaNo.replace(/'/g,"\\'")}')">저장</button>
+    </div>
+  `;
+}
+async function saveHochaEdit(branch, hochaNo){
+  const list = state['호차'] || [];
+  const idx = list.findIndex(x => x['소속분원']===branch && x['호차번호']===hochaNo);
+  if(idx < 0) return;
+  const oldRec = { ...list[idx] };
+  const newRec = { ...list[idx] };
+  Object.keys(HOCHA_EDIT_FIELDS).forEach(key => {
+    newRec[key] = document.getElementById('hedit_'+key).value.trim();
+  });
+  const btn = document.getElementById('hochaSaveBtn');
+  btn.textContent = '저장 중...'; btn.disabled = true;
+  try{
+    list[idx] = newRec;
+    state['호차'] = list;
+    syncAliases();
+    const changed = recordChanges('호차', `${branch} ${hochaNo}`, oldRec, newRec, HOCHA_EDIT_FIELDS);
+    await saveToServer();
+    if(changed) await saveChangeLog();
+    renderHocha();
+    renderChangeLog();
+    renderHochaView(newRec);
+  }catch(err){
+    console.error(err);
+    alert('저장에 실패했습니다.');
+    btn.textContent = '저장'; btn.disabled = false;
+  }
+}
+
 /* ---------------- 호차현황판 ---------------- */
 let activeBranch = "전체";
 let hochaSearchTerm = "";
+let contractBranchFilter = "전체";
+let vehicleBranchFilter = "전체";
+let issueBranchFilter = "전체";
+let stopBranchFilter = "전체";
+
+// 계약/기사/차량/이슈 데이터는 '호차' 또는 '현재배정호차' 필드에 "장안 11호"처럼
+// 분원명이 맨 앞에 붙은 문자열로 저장되므로, 첫 단어를 분원명으로 추출한다.
+function branchFromRef(refStr){
+  if(!refStr) return null;
+  const first = String(refStr).trim().split(/\s+/)[0];
+  return BRANCHES.includes(first) ? first : null;
+}
+function renderGenericBranchFilter(containerId, current, onChange){
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = "";
+  ["전체", ...BRANCHES].forEach(b => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (b === current ? ' active' : '');
+    chip.textContent = b;
+    chip.addEventListener('click', onChange.bind(null, b));
+    wrap.appendChild(chip);
+  });
+}
 
 function renderBranchFilter(){
   const wrap = document.getElementById('branch-filter');
@@ -961,16 +1389,16 @@ function renderHocha(){
     card.className = 'hocha-card';
     card.innerHTML = `
       <div class="head">
-        <div class="hocha-badge ${retired?'retired':''}">
+        <div class="hocha-badge ${retired?'retired':''}" onclick="openHochaDetail('${(r['소속분원']||'').replace(/'/g,"\\'")}','${(r['호차번호']||'').replace(/'/g,"\\'")}')" style="cursor:pointer;" title="클릭하면 이 호차의 전체 정보를 볼 수 있습니다">
           <div class="num">${r['호차번호']||'-'}</div>
           <div class="branch">${r['소속분원']||''}</div>
         </div>
         <div class="meta">${retired ? '폐지됨 · '+fmtDate(r['폐지일']) : '개설 '+fmtDate(r['개설일'])}</div>
       </div>
       <dl>
-        <dt>기사</dt><dd>${r['현재기사(이름)']||'-'}</dd>
-        <dt>동승자</dt><dd>${r['현재동승자(이름)']||'-'}</dd>
-        <dt>차량</dt><dd>${r['현재차량(차량번호)']||'-'}</dd>
+        <dt>기사</dt><dd>${personLink(r['현재기사(이름)'])}</dd>
+        <dt>동승자</dt><dd>${personLink(r['현재동승자(이름)'])}</dd>
+        <dt>차량</dt><dd>${vehicleLink(r['현재차량(차량번호)'])}</dd>
         <dt>업체</dt><dd>${r['현재업체']||'-'}</dd>
       </dl>
       ${r['비고'] ? `<div style="font-size:12px;color:var(--muted);">${r['비고']}</div>` : ''}
@@ -986,7 +1414,10 @@ function renderContract(){
   document.getElementById('contract-content').style.display = has ? 'block' : 'none';
   if(!has) return;
 
-  const rows = [...state.contract].sort((a,b)=> toDate(a['계약종료일']) - toDate(b['계약종료일']));
+  renderGenericBranchFilter('contract-branch-filter', contractBranchFilter, (b) => { contractBranchFilter = b; renderContract(); });
+
+  let rows = [...state.contract].sort((a,b)=> toDate(a['계약종료일']) - toDate(b['계약종료일']));
+  if(contractBranchFilter !== '전체') rows = rows.filter(r => branchFromRef(r['호차']) === contractBranchFilter);
   current.contract = rows;
   const soon = rows.filter(r => { const d = dDay(r['계약종료일']); return d!==null && d<=60; }).length;
   const expired = rows.filter(r => { const d = dDay(r['계약종료일']); return d!==null && d<0; }).length;
@@ -1001,7 +1432,7 @@ function renderContract(){
   body.innerHTML = rows.map(r=>{
     const days = dDay(r['계약종료일']);
     return `<tr>
-      <td data-label="호차"><span class="hocha-badge" style="min-width:auto;padding:4px 10px;"><span class="num" style="font-size:13px;">${r['호차']||'-'}</span></span></td>
+      <td data-label="호차">${hochaComboLink(r['호차'])}</td>
       <td data-label="업체">${r['업체']||'-'}</td>
       <td data-label="계약기간">${fmtDate(r['계약시작일'])} ~ ${fmtDate(r['계약종료일'])}</td>
       <td data-label="남은기간">${ddayBadge(days)}</td>
@@ -1017,22 +1448,46 @@ function statusBadge(status){
   return `<span class="badge ${map[status]||'gray'}">${status||'-'}</span>`;
 }
 
+let docBranchFilter = "전체";
+
+// 서류는 분원이 직접 적혀있지 않고 "대상"(기사/동승자/차량/호차 이름 또는 번호)으로만
+// 연결되어 있어서, 그 대상이 속한 분원을 다른 탭 데이터에서 찾아서 알아낸다.
+function resolveDocBranch(row){
+  const type = row['소속대상유형'];
+  const target = row['소속대상(ID/이름)'];
+  if(!target) return null;
+  if(type === '호차') return branchFromRef(target);
+  if(type === '기사' || type === '동승자'){
+    const list = state[type] || [];
+    const person = list.find(p => p['이름'] === target);
+    return person ? branchFromRef(person['현재배정호차']) : null;
+  }
+  if(type === '차량'){
+    const v = (state['차량']||[]).find(v => v['차량번호'] === target);
+    return v ? branchFromRef(v['현재배정호차']) : null;
+  }
+  return null; // 업체 등은 특정 분원 소속이 아님
+}
+
 function renderDoc(){
   const has = state.doc.length > 0;
   document.getElementById('doc-empty').style.display = has ? 'none' : 'block';
   document.getElementById('doc-content').style.display = has ? 'block' : 'none';
   if(!has) return;
 
-  const topRows = state.doc.filter(r => TOP_DOCS.includes(r['서류종류']));
-  const normalRows = state.doc.filter(r => !TOP_DOCS.includes(r['서류종류']));
+  renderGenericBranchFilter('doc-branch-filter', docBranchFilter, (b) => { docBranchFilter = b; renderDoc(); });
+  const filteredDoc = docBranchFilter === '전체' ? state.doc : state.doc.filter(r => resolveDocBranch(r) === docBranchFilter);
+
+  const topRows = filteredDoc.filter(r => TOP_DOCS.includes(r['서류종류']));
+  const normalRows = filteredDoc.filter(r => !TOP_DOCS.includes(r['서류종류']));
   current.docTop = topRows;
   current.docNormal = normalRows;
 
-  const needsAction = state.doc.filter(r => ['만료','재발급필요','만료임박'].includes(r['상태'])).length;
+  const needsAction = filteredDoc.filter(r => ['만료','재발급필요','만료임박'].includes(r['상태'])).length;
   const topNeedsAction = topRows.filter(r => ['만료','재발급필요','만료임박'].includes(r['상태'])).length;
 
   document.getElementById('doc-stats').innerHTML = `
-    <div class="stat-card"><div class="num">${state.doc.length}</div><div class="label">전체 서류</div></div>
+    <div class="stat-card"><div class="num">${filteredDoc.length}</div><div class="label">전체 서류</div></div>
     <div class="stat-card danger"><div class="num">${topNeedsAction}</div><div class="label">⭐최상 등급 중 조치 필요</div></div>
     <div class="stat-card warn"><div class="num">${needsAction}</div><div class="label">전체 조치 필요 건수</div></div>
   `;
@@ -1041,7 +1496,7 @@ function renderDoc(){
     const days = r['만료일'] ? dDay(r['만료일']) : null;
     return `<tr>
       <td data-label="서류종류"><span class="badge top">${r['서류종류']||'-'}</span></td>
-      <td data-label="대상">${r['소속대상유형']||''} · ${r['소속대상(ID/이름)']||'-'}</td>
+      <td data-label="대상">${r['소속대상유형']||''} · ${(r['소속대상유형']==='기사'||r['소속대상유형']==='동승자') ? personLink(r['소속대상(ID/이름)']) : (r['소속대상(ID/이름)']||'-')}</td>
       <td data-label="발급일">${fmtDate(r['발급일'])}</td>
       <td data-label="만료일">${r['만료일'] ? fmtDate(r['만료일']) : '만료개념 없음'}</td>
       <td data-label="남은기간">${r['만료일'] ? ddayBadge(days) : '-'}</td>
@@ -1062,6 +1517,7 @@ function renderDoc(){
 let staffRoleFilter = "전체";
 let staffSearchTerm = "";
 let staffActiveOnly = true;
+let staffBranchFilter = "전체";
 
 function renderStaff(){
   const drivers = (state['기사']||[]).map(r => ({...r, __role:'기사'}));
@@ -1072,7 +1528,10 @@ function renderStaff(){
   document.getElementById('staff-content').style.display = has ? 'block' : 'none';
   if(!has) return;
 
+  renderGenericBranchFilter('staff-branch-filter', staffBranchFilter, (b) => { staffBranchFilter = b; renderStaff(); });
+
   let rows = all;
+  if(staffBranchFilter !== '전체') rows = rows.filter(r => branchFromRef(r['현재배정호차']) === staffBranchFilter);
   if(staffRoleFilter !== "전체") rows = rows.filter(r => r.__role === staffRoleFilter);
   if(staffActiveOnly) rows = rows.filter(r => !r['퇴사일']);
   if(staffSearchTerm){
@@ -1090,7 +1549,7 @@ function renderStaff(){
 
   document.getElementById('staff-body').innerHTML = rows.length ? rows.map(r => `
     <tr>
-      <td data-label="이름">${r['이름']||'-'}</td>
+      <td data-label="이름">${personLink(r['이름'])}</td>
       <td data-label="역할"><span class="badge ${r.__role==='기사'?'top':'gray'}">${r.__role}</span></td>
       <td data-label="연락처">${r['연락처']||'-'}</td>
       <td data-label="소속업체">${r['소속업체']||'-'}</td>
@@ -1099,8 +1558,9 @@ function renderStaff(){
       <td data-label="재직상태">${r['퇴사일'] ? `<span class="badge gray">퇴사(${fmtDate(r['퇴사일'])})</span>` : `<span class="badge green">재직중</span>`}</td>
       <td data-label="범죄조회일">${fmtDate(r['범죄경력조회일'])}</td>
       <td data-label="안전교육이수일">${fmtDate(r['안전교육이수일'])}</td>
+      <td data-label="급여">${r['급여']||'-'}</td>
     </tr>`).join('')
-    : `<tr><td colspan="9" style="text-align:center;color:var(--muted);">조건에 맞는 인원이 없습니다.</td></tr>`;
+    : `<tr><td colspan="10" style="text-align:center;color:var(--muted);">조건에 맞는 인원이 없습니다.</td></tr>`;
 }
 
 document.querySelectorAll('#view-staff [data-role]').forEach(btn => {
@@ -1116,12 +1576,15 @@ document.getElementById('staff-active-only').addEventListener('change', (e) => {
 
 /* ---------------- 차량·업체현황 ---------------- */
 function renderVehicleCompany(){
-  const vehicles = state['차량']||[];
+  const allVehicles = state['차량']||[];
   const companies = state['업체']||[];
-  const has = vehicles.length > 0 || companies.length > 0;
+  const has = allVehicles.length > 0 || companies.length > 0;
   document.getElementById('vehicle-empty').style.display = has ? 'none' : 'block';
   document.getElementById('vehicle-content').style.display = has ? 'block' : 'none';
   if(!has) return;
+
+  renderGenericBranchFilter('vehicle-branch-filter', vehicleBranchFilter, (b) => { vehicleBranchFilter = b; renderVehicleCompany(); });
+  const vehicles = vehicleBranchFilter === '전체' ? allVehicles : allVehicles.filter(v => branchFromRef(v['현재배정호차']) === vehicleBranchFilter);
 
   current.vehicle = vehicles;
   current.company = companies;
@@ -1135,7 +1598,7 @@ function renderVehicleCompany(){
 
   document.getElementById('vehicle-body').innerHTML = vehicles.length ? vehicles.map(v => `
     <tr>
-      <td data-label="차량번호">${v['차량번호']||'-'}</td>
+      <td data-label="차량번호">${vehicleLink(v['차량번호'])}</td>
       <td data-label="차종">${v['차종']||'-'}</td>
       <td data-label="인승">${v['인승']||'-'}</td>
       <td data-label="연식">${v['연식']||'-'}</td>
@@ -1157,11 +1620,14 @@ function renderVehicleCompany(){
 
 /* ---------------- 이슈(운행예외) 관리 ---------------- */
 function renderIssue(){
-  const rows = [...(state['이슈']||[])].sort((a,b)=> (toDate(b['발생일'])||0) - (toDate(a['발생일'])||0));
+  let rows = [...(state['이슈']||[])].sort((a,b)=> (toDate(b['발생일'])||0) - (toDate(a['발생일'])||0));
   const has = rows.length > 0;
   document.getElementById('issue-empty').style.display = has ? 'none' : 'block';
   document.getElementById('issue-content').style.display = has ? 'block' : 'none';
   if(!has) return;
+
+  renderGenericBranchFilter('issue-branch-filter', issueBranchFilter, (b) => { issueBranchFilter = b; renderIssue(); });
+  if(issueBranchFilter !== '전체') rows = rows.filter(r => branchFromRef(r['호차']) === issueBranchFilter);
   current.issue = rows;
 
   const ongoing = rows.filter(r => !r['종료일']).length;
@@ -1212,16 +1678,23 @@ function renderStopStudent(){
   document.getElementById('stop-content').style.display = has ? 'block' : 'none';
   if(!has) return;
 
+  renderGenericBranchFilter('stop-branch-filter', stopBranchFilter, (b) => { stopBranchFilter = b; renderStopStudent(); });
+
   let rows = stops;
   if(stopUsageFilter === "사용중") rows = rows.filter(s => s['사용상태'] === '사용중');
+  let studentRows = students;
+  if(stopBranchFilter !== '전체'){
+    rows = rows.filter(s => s['소속분원'] === stopBranchFilter);
+    studentRows = studentRows.filter(s => s['소속분원'] === stopBranchFilter);
+  }
   current.stop = rows;
-  current.student = students;
+  current.student = studentRows;
 
   const inUse = stops.filter(s => s['사용상태'] === '사용중').length;
   document.getElementById('stop-stats').innerHTML = `
-    <div class="stat-card"><div class="num">${stops.length}</div><div class="label">전체 정류장</div></div>
+    <div class="stat-card"><div class="num">${rows.length}</div><div class="label">전체 정류장</div></div>
     <div class="stat-card"><div class="num">${inUse}</div><div class="label">사용중 정류장</div></div>
-    <div class="stat-card"><div class="num">${students.length}</div><div class="label">전체 학생</div></div>
+    <div class="stat-card"><div class="num">${studentRows.length}</div><div class="label">전체 학생</div></div>
   `;
 
   document.getElementById('stop-body').innerHTML = rows.length ? rows.map(s => `
@@ -1235,7 +1708,7 @@ function renderStopStudent(){
     </tr>`).join('')
     : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">조건에 맞는 정류장이 없습니다.</td></tr>`;
 
-  document.getElementById('student-body').innerHTML = students.length ? students.map(s => `
+  document.getElementById('student-body').innerHTML = studentRows.length ? studentRows.map(s => `
     <tr>
       <td data-label="학생명">${s['학생명']||'-'}</td>
       <td data-label="소속분원">${s['소속분원']||'-'}</td>
@@ -1254,6 +1727,55 @@ document.querySelectorAll('#view-stop [data-usage]').forEach(btn => {
     stopUsageFilter = btn.dataset.usage;
     renderStopStudent();
   });
+});
+
+/* ---------------- 변경이력 ---------------- */
+let logTypeFilter = "전체";
+let logSearchTerm = "";
+function renderChangeLog(){
+  const all = state.changeLog || [];
+  const has = all.length > 0;
+  document.getElementById('log-empty').style.display = has ? 'none' : 'block';
+  document.getElementById('log-content').style.display = has ? 'block' : 'none';
+  if(!has) return;
+
+  let rows = all;
+  if(logTypeFilter !== "전체") rows = rows.filter(r => r['구분'] === logTypeFilter);
+  if(logSearchTerm){
+    const t = logSearchTerm.toLowerCase();
+    rows = rows.filter(r => String(r['대상']||'').toLowerCase().includes(t));
+  }
+  current.log = rows;
+
+  const today = new Date().toISOString().slice(0,10);
+  const todayCount = all.filter(r => (r['시각']||'').slice(0,10) === today).length;
+  document.getElementById('log-stats').innerHTML = `
+    <div class="stat-card"><div class="num">${all.length}</div><div class="label">전체 수정 건수</div></div>
+    <div class="stat-card"><div class="num">${todayCount}</div><div class="label">오늘 수정 건수</div></div>
+  `;
+
+  document.getElementById('log-body').innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td data-label="시각">${(r['시각']||'').replace('T',' ').slice(0,16)}</td>
+      <td data-label="구분"><span class="badge ${r['구분']==='기사'?'top':'gray'}">${r['구분']||'-'}</span></td>
+      <td data-label="대상">${r['대상']||'-'}</td>
+      <td data-label="항목">${r['항목']||'-'}</td>
+      <td data-label="변경전" style="color:var(--muted);text-decoration:line-through;">${r['변경전']||'-'}</td>
+      <td data-label="변경후" style="font-weight:700;">${r['변경후']||'-'}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--muted);">조건에 맞는 기록이 없습니다.</td></tr>`;
+}
+document.querySelectorAll('#view-log [data-logtype]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#view-log [data-logtype]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    logTypeFilter = btn.dataset.logtype;
+    renderChangeLog();
+  });
+});
+document.getElementById('log-search').addEventListener('input', (e) => { logSearchTerm = e.target.value.trim(); renderChangeLog(); });
+document.getElementById('log-export').addEventListener('click', ()=>{
+  exportExcel(current.log, '변경이력', '변경이력');
 });
 
 /* ---------------- 엑셀 내보내기 ---------------- */
@@ -1440,6 +1962,7 @@ document.getElementById('staffFormSubmit').addEventListener('click', async () =>
     '범죄경력조회일': document.getElementById('staffFormCrimeCheck').value,
     '안전교육이수일': document.getElementById('staffFormEduDate').value,
     '인력구분': document.getElementById('staffFormType').value,
+    '급여': document.getElementById('staffFormPay').value.trim(),
     '비고': '',
   };
   const btn = document.getElementById('staffFormSubmit');
@@ -1449,7 +1972,7 @@ document.getElementById('staffFormSubmit').addEventListener('click', async () =>
     state[key].push(record);
     syncAliases();
   });
-  ['staffFormName','staffFormPhone','staffFormCompany','staffFormHocha','staffFormHireDate','staffFormCrimeCheck','staffFormEduDate']
+  ['staffFormName','staffFormPhone','staffFormCompany','staffFormHocha','staffFormHireDate','staffFormCrimeCheck','staffFormEduDate','staffFormPay']
     .forEach(id => document.getElementById(id).value = '');
   renderStaff();
 });

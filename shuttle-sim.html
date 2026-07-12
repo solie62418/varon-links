@@ -185,6 +185,7 @@ main.map-mode{max-width:none}
           <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
+            <button class="btn btn-outline btn-sm" type="button" id="reassignRunSimBtn">감차 시뮬레이션 실행</button>
             <button class="btn btn-outline btn-sm" type="button" id="reassignClearSelBtn">선택 초기화</button>
           </div>
           <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">이번 재배정 초안</div>
@@ -705,22 +706,51 @@ function clearReassignSelection(){
   renderReassignDraft();
 }
 
-function onReassignBusClick(busId){
+function setReassignRemove(busId){
   if(!state.reassignMode) return;
   if(state.reassignRemoveId === busId){
     state.reassignRemoveId = null;
-  } else if(state.reassignAbsorbIds.includes(busId)){
-    state.reassignAbsorbIds = state.reassignAbsorbIds.filter(id => id !== busId);
-  } else if(!state.reassignRemoveId){
-    state.reassignRemoveId = busId;
   } else {
-    state.reassignAbsorbIds = [...state.reassignAbsorbIds, busId];
+    // 없앨 노선은 1개만 — 바꾸면 이전 선택은 해제. 흡수 목록에서 해당 id 제거
+    state.reassignAbsorbIds = state.reassignAbsorbIds.filter(id => id !== busId);
+    state.reassignRemoveId = busId;
   }
   state.reassignDraft = [];
   state.reassignResultHtml = '';
   renderMapSide();
   renderKakaoMap(false);
   renderReassignDraft();
+}
+
+function setReassignAbsorb(busId, on){
+  if(!state.reassignMode) return;
+  if(state.reassignRemoveId === busId) return;
+  const has = state.reassignAbsorbIds.includes(busId);
+  if(on && !has) state.reassignAbsorbIds = [...state.reassignAbsorbIds, busId];
+  if(!on && has) state.reassignAbsorbIds = state.reassignAbsorbIds.filter(id => id !== busId);
+  state.reassignDraft = [];
+  state.reassignResultHtml = '';
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function toggleReassignAbsorb(busId){
+  setReassignAbsorb(busId, !state.reassignAbsorbIds.includes(busId));
+}
+
+/** @deprecated 카드 전체 클릭 대신 없앨/흡수 버튼 사용. 하위 호환용 */
+function onReassignBusClick(busId){
+  if(!state.reassignMode) return;
+  if(state.reassignRemoveId === busId){
+    setReassignRemove(busId); // toggle off
+  } else if(state.reassignAbsorbIds.includes(busId)){
+    toggleReassignAbsorb(busId);
+  } else if(!state.reassignRemoveId){
+    setReassignRemove(busId);
+  } else {
+    toggleReassignAbsorb(busId);
+  }
 }
 
 function reassignSelectionSummary(){
@@ -1211,6 +1241,16 @@ function renderMapSide(){
       const tags = (isRem ? '<span class="reassign-tag remove">없앨 노선</span>' : '')
         + (isAbs ? '<span class="reassign-tag absorb">흡수</span>' : '')
         + (ordered ? '<span class="badge gray">순서 설정됨</span>' : '');
+      const reassignCtrls = state.reassignMode
+        ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;cursor:pointer">
+              <input type="radio" name="reassign-remove" data-reassign-remove="${esc(b.id)}" ${isRem?'checked':''}> 없앨 노선
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;cursor:pointer;${isRem?'opacity:.45;pointer-events:none':''}">
+              <input type="checkbox" data-reassign-absorb="${esc(b.id)}" ${isAbs?'checked':''} ${isRem?'disabled':''}> 흡수
+            </label>
+          </div>`
+        : '';
       return `<div class="${cls}" data-map-bus-id="${esc(b.id)}" title="여기에 정류장을 드롭하면 미리보기 이동">
         <div class="row">
           <span class="map-swatch" style="background:${col}"></span>
@@ -1219,15 +1259,30 @@ function renderMapSide(){
             <div class="meta">정류장 ${(b.stops||[]).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
           </div>
         </div>
+        ${reassignCtrls}
         <div style="margin-top:8px">
           <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">순서 정하기</button>
         </div>
       </div>`;
     }).join('');
-    list.querySelectorAll('[data-map-bus-id]').forEach(card => {
-      card.addEventListener('click', (ev) => {
-        if(ev.target.closest('[data-order-btn]')) return;
-        if(state.reassignMode) onReassignBusClick(card.getAttribute('data-map-bus-id'));
+    list.querySelectorAll('[data-reassign-remove]').forEach(inp => {
+      inp.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const id = inp.getAttribute('data-reassign-remove');
+        // 이미 선택된 없앨 노선을 다시 누르면 해제
+        if(state.reassignRemoveId === id){
+          ev.preventDefault();
+          setReassignRemove(id);
+        } else {
+          setReassignRemove(id);
+        }
+      });
+    });
+    list.querySelectorAll('[data-reassign-absorb]').forEach(inp => {
+      inp.addEventListener('click', (ev) => ev.stopPropagation());
+      inp.addEventListener('change', (ev) => {
+        ev.stopPropagation();
+        setReassignAbsorb(inp.getAttribute('data-reassign-absorb'), inp.checked);
       });
     });
     list.querySelectorAll('[data-order-btn]').forEach(btn => {
@@ -2059,10 +2114,15 @@ function nearestBusDistance(stop, candidates){
   return best;
 }
 
-function simulateReduction(bus){
+function simulateReduction(bus, peerIds){
   const rules = state.rules;
   const reasons = [];
-  const peers = state.buses.filter(b => b.branch === bus.branch && b.id !== bus.id);
+  let peers = state.buses.filter(b => b.branch === bus.branch && b.id !== bus.id);
+  if(peerIds && peerIds.length){
+    const allow = new Set(peerIds.map(String));
+    peers = peers.filter(b => allow.has(b.id));
+    reasons.push(`흡수 후보 제한: 재배정 모드에서 선택한 ${peers.length}개 호차만 사용`);
+  }
 
   if(!peers.length){
     return {
@@ -2071,8 +2131,11 @@ function simulateReduction(bus){
       lines: [
         `이용률: ${bus.utilization==null?'-':fmtPct(bus.utilization)} (기준 ${fmtPct(rules.minUtilizationRate)}${bus.candidate?' 미만':' — 후보 아님'})`,
         '흡수 가능: 없음',
-        '감차 불가 사유: 같은 분원에 대체 호차가 없습니다.'
-      ]
+        '감차 불가 사유: ' + (peerIds && peerIds.length
+          ? '선택한 흡수 노선이 없거나 유효하지 않습니다.'
+          : '같은 분원에 대체 호차가 없습니다.')
+      ],
+      meta: { absorbed: [], detourMin: 0, moved: 0, retention: 0, moves: [] }
     };
   }
 
@@ -2086,7 +2149,7 @@ function simulateReduction(bus){
         `예상 월 절감액: ${fmtWon(bus.salary)} (계약 급여 기준)`,
         '근거: 탑승 인원이 없어 정원·우회 제약 없이 폐지 가능으로 판단'
       ],
-      meta: { absorbed: [], detourMin: 0, moved: 0, retention: 1 }
+      meta: { absorbed: [], detourMin: 0, moved: 0, retention: 1, moves: [] }
     };
   }
 
@@ -2095,7 +2158,7 @@ function simulateReduction(bus){
   const capOf = (p) => (p.seatSlots || p.capacity || 25);
   peers.forEach(p => { load[p.id] = p.passengers; });
 
-  const moves = []; // {fromStop, toBus, count, meters, detourMin}
+  const moves = []; // {stop, toBus, count, meters, detourMin}
   const failures = [];
   const stops = [...(bus.stops || [])]
     .filter(s => (s.passengers || 0) > 0)
@@ -2172,6 +2235,8 @@ function simulateReduction(bus){
   reasons.push(`배정 방식: ${mode === 'distance' ? '인근 호차 정류장 거리 우선' : '좌표 없어 여유석 많은 호차 우선(근사)'}`);
   reasons.push(`여유석 버퍼: 정원 − ${rules.capacityBufferSeats}석`);
 
+  const meta = { absorbed: Object.values(byBus), detourMin, moved, retention, moves };
+
   if(!ok){
     return {
       ok: false,
@@ -2183,7 +2248,8 @@ function simulateReduction(bus){
         `감차 불가 사유:`,
         ...failures.slice(0, 8).map(f => `· ${f}`),
         ...reasons.map(r => `근거: ${r}`)
-      ]
+      ],
+      meta
     };
   }
 
@@ -2199,8 +2265,80 @@ function simulateReduction(bus){
       `예상 월 절감액: ${fmtWon(bus.salary)} (계약 급여 기준)`,
       ...reasons.map(r => `근거: ${r}`)
     ],
-    meta: { absorbed: Object.values(byBus), detourMin, moved, retention }
+    meta
   };
+}
+
+/** 감차 시뮬레이션 moves를 지도 미리보기로 반영 (원본 Firestore 미변경) */
+function applyReductionPreviewToMap(bus, result){
+  const moves = result && result.meta && result.meta.moves;
+  if(!bus || !moves || !moves.length) return false;
+
+  if(state.branchFilter !== bus.branch){
+    state.branchFilter = bus.branch;
+    renderBranches();
+  }
+
+  // 재배정 모드면 시뮬 대상과 없앨 노선을 맞춤 (흡수 선택은 유지)
+  if(state.reassignMode && state.reassignRemoveId !== bus.id){
+    state.reassignAbsorbIds = state.reassignAbsorbIds.filter(id => id !== bus.id);
+    state.reassignRemoveId = bus.id;
+  }
+
+  state.mapWorking = cloneMapBuses(busesForMap());
+  state.mapMoves = [];
+  state.mapBusFilter = 'ALL';
+
+  // 정류장별로 가장 많은 인원을 받은 흡수 호차로 전체 정류장 이동 (지도는 정류장 단위)
+  const byStop = {};
+  moves.forEach(m => {
+    const sid = String(m.stop.id);
+    if(!byStop[sid] || m.count > byStop[sid].count){
+      byStop[sid] = { stopId: m.stop.id, toBusId: m.toBus.id, count: m.count };
+    }
+  });
+  Object.values(byStop).forEach(item => {
+    previewMoveStop(bus.id, item.stopId, item.toBusId);
+  });
+
+  state.activeTab = 'map';
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-map').classList.add('active');
+  renderTabs();
+  showMapView();
+  renderMapSide();
+  renderKakaoMap(true);
+  return true;
+}
+
+function runReductionSimulation(){
+  let id = document.getElementById('simBusSelect').value;
+  let peerIds = null;
+
+  if(state.reassignMode && state.reassignRemoveId && state.reassignAbsorbIds.length){
+    id = state.reassignRemoveId;
+    peerIds = state.reassignAbsorbIds.slice();
+    const sel = document.getElementById('simBusSelect');
+    if(sel && [...sel.options].some(o => o.value === id)) sel.value = id;
+  }
+
+  const bus = state.buses.find(b => b.id === id);
+  if(!bus){ alert('호차를 선택해주세요.'); return; }
+  if(state.reassignMode && state.reassignRemoveId && !state.reassignAbsorbIds.length){
+    alert('재배정 모드에서는 흡수 노선을 1개 이상 선택해주세요.');
+    return;
+  }
+
+  const result = simulateReduction(bus, peerIds);
+  renderSimResult(result);
+  const mapped = applyReductionPreviewToMap(bus, result);
+  if(mapped){
+    const el = document.getElementById('simResult');
+    if(el){
+      el.insertAdjacentHTML('beforeend',
+        '<p class="hint" style="margin-top:10px">지도 탭에 재배정 미리보기를 반영했습니다. 정류장 색은 흡수 노선 색입니다. <b>미리보기 초기화</b>로 원상복구할 수 있습니다.</p>');
+    }
+  }
 }
 
 function renderSimResult(result){
@@ -2634,12 +2772,7 @@ document.querySelectorAll('[data-dash-filter]').forEach(btn => {
     renderDashboard();
   });
 });
-document.getElementById('runSimBtn').onclick = () => {
-  const id = document.getElementById('simBusSelect').value;
-  const bus = state.buses.find(b => b.id === id);
-  if(!bus){ alert('호차를 선택해주세요.'); return; }
-  renderSimResult(simulateReduction(bus));
-};
+document.getElementById('runSimBtn').onclick = () => runReductionSimulation();
 document.getElementById('runIncBtn').onclick = () => {
   const demand = Number(document.getElementById('incDemand').value);
   if(!demand || demand < 1){ alert('신규 수요 인원을 입력해주세요.'); return; }
@@ -2667,6 +2800,7 @@ document.querySelectorAll('[data-alert-filter]').forEach(btn => {
 document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
 document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
 document.getElementById('reassignAutoBtn').onclick = () => buildAutoReassignDraft();
+document.getElementById('reassignRunSimBtn').onclick = () => runReductionSimulation();
 document.getElementById('reassignClearSelBtn').onclick = () => clearReassignSelection();
 document.getElementById('reassignConfirmBtn').onclick = () => confirmReassignPlan();
 document.querySelectorAll('[data-order-tab]').forEach(btn => {

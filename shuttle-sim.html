@@ -182,7 +182,11 @@ main.map-mode{max-width:none}
           <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
         </div>
         <div class="reassign-panel" id="reassignPanel" style="display:none">
-          <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션<br>탑승 <b>0명 정류장</b>은 편성에서 제외됩니다.</div>
+          <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer">
+            <input type="checkbox" id="reassignSkipEmptyChk" checked>
+            탑승자 없는 정류장은 빼고 편성
+          </label>
           <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
@@ -428,6 +432,7 @@ const state = {
   dayMode: 'sum', // sum | group | conservative
   timeSlotCol: null,
   reassignMode: false,
+  reassignSkipEmpty: true, // 노선 재배정 시 탑승 0명 정류장 제외
   reassignRemoveId: null,
   reassignAbsorbIds: [],
   reassignDraft: [],
@@ -651,6 +656,21 @@ function pruneEmptyStopsFromBus(busId){
   return before - bus.stops.length;
 }
 
+function pruneAllEmptyStopsFromMapWorking(){
+  let n = 0;
+  state.mapWorking.forEach(b => { n += pruneEmptyStopsFromBus(b.id); });
+  return n;
+}
+
+/** 재배정 맵/목록에 그릴 정류장 (0명 제외 옵션 반영) */
+function stopsForReassignView(bus){
+  const stops = bus && bus.stops || [];
+  if(state.reassignMode && state.reassignSkipEmpty){
+    return stops.filter(s => isAcademyStop(s) || (Number(s.passengers) || 0) > 0);
+  }
+  return stops;
+}
+
 function academyPointForBus(bus){
   const stops = (bus && bus.stops) || [];
   const academy = stops.find(s => isAcademyStop(s) && s.lat != null && s.lng != null);
@@ -731,6 +751,14 @@ function toggleReassignMode(force){
     state.reassignAbsorbIds = [];
     state.reassignDraft = [];
     state.reassignResultHtml = '';
+    // 원본 정류장(0명 포함) 복구
+    resetMapPreview();
+  } else {
+    state.mapWorking = cloneMapBuses(busesForMap());
+    state.mapMoves = [];
+    if(state.reassignSkipEmpty){
+      pruneAllEmptyStopsFromMapWorking();
+    }
   }
   const btn = document.getElementById('reassignModeBtn');
   if(btn){
@@ -739,6 +767,22 @@ function toggleReassignMode(force){
   }
   const panel = document.getElementById('reassignPanel');
   if(panel) panel.style.display = state.reassignMode ? 'flex' : 'none';
+  const skipChk = document.getElementById('reassignSkipEmptyChk');
+  if(skipChk) skipChk.checked = !!state.reassignSkipEmpty;
+  renderMapSide();
+  renderKakaoMap(false);
+  renderReassignDraft();
+}
+
+function setReassignSkipEmpty(on){
+  state.reassignSkipEmpty = !!on;
+  if(!state.reassignMode) return;
+  // 원본에서 다시 복사한 뒤, 옵션에 따라 0명 정류장 제거
+  state.mapWorking = cloneMapBuses(busesForMap());
+  state.mapMoves = [];
+  state.reassignDraft = [];
+  state.reassignResultHtml = '';
+  if(state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
   renderMapSide();
   renderKakaoMap(false);
   renderReassignDraft();
@@ -820,8 +864,13 @@ function buildAutoReassignDraft(){
   // 원본 좌표 기준에서 초안 계산
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
+  const removeBus0 = state.mapWorking.find(b => b.id === removeId);
+  if(!removeBus0){ alert('없앨 노선을 찾을 수 없습니다.'); return; }
+  const skippedEmpty = state.reassignSkipEmpty
+    ? (removeBus0.stops || []).filter(s => !isAcademyStop(s) && (Number(s.passengers)||0) <= 0).length
+    : 0;
+  if(state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
   const removeBus = state.mapWorking.find(b => b.id === removeId);
-  if(!removeBus){ alert('없앨 노선을 찾을 수 없습니다.'); return; }
 
   const loads = {};
   absorbIds.forEach(id => {
@@ -830,11 +879,13 @@ function buildAutoReassignDraft(){
   });
 
   const stops = (removeBus.stops || [])
-    .filter(s => isActiveBoardingStop(s))
+    .filter(s => {
+      if(isAcademyStop(s)) return false;
+      if(state.reassignSkipEmpty) return (Number(s.passengers) || 0) > 0;
+      return (Number(s.passengers) || 0) > 0; // 편성 대상은 탑승 있는 정류장만
+    })
     .slice()
     .sort((a,b) => (Number(b.passengers)||0) - (Number(a.passengers)||0));
-
-  const skippedEmpty = (removeBus.stops || []).filter(s => !isAcademyStop(s) && (Number(s.passengers)||0) <= 0).length;
 
   const draft = [];
   stops.forEach(stop => {
@@ -942,6 +993,7 @@ function recomputeDraftWarnings(){
 function applyReassignDraftToMap(){
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
+  if(state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
   recomputeDraftWarnings();
   const removeId = state.reassignRemoveId;
   state.reassignDraft.forEach(item => {
@@ -951,6 +1003,7 @@ function applyReassignDraftToMap(){
     }
     previewMoveStop(removeId, item.stopId, item.toBusId);
   });
+  if(state.reassignSkipEmpty && removeId) pruneEmptyStopsFromBus(removeId);
   renderMapSide();
   renderKakaoMap(false);
   renderReassignDraft();
@@ -1336,7 +1389,7 @@ function renderMapSide(){
           <span class="map-swatch" style="background:${col}"></span>
           <div style="flex:1">
             <div style="font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${esc(b.label)} ${tags}</div>
-            <div class="meta">정류장 ${(b.stops||[]).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
+            <div class="meta">정류장 ${stopsForReassignView(b).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
           </div>
         </div>
         ${reassignCtrls}
@@ -1388,7 +1441,7 @@ function renderMapSide(){
   const visible = mapVisibleBuses();
   const rows = [];
   visible.forEach(bus => {
-    (bus.stops || []).filter(s => (s.passengers || 0) > 0 || (s.lat != null && s.lng != null)).forEach(s => {
+    stopsForReassignView(bus).filter(s => (s.passengers || 0) > 0 || (s.lat != null && s.lng != null)).forEach(s => {
       rows.push({ bus, stop: s });
     });
   });
@@ -1586,7 +1639,7 @@ function renderKakaoMap(fitBounds){
     const col = busColor(bus);
     const dim = state.reassignMode && reSel.size && !reSel.has(bus.id);
     const op = dim ? 0.25 : 0.75;
-    let stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+    let stops = stopsForReassignView(bus).filter(s => s.lat != null && s.lng != null);
 
     // 저장된 노선 순서대로 점선 연결. 없으면 원본 배열 순서(fallback).
     const savedOrder = state.routeOrders[bus.id];
@@ -2612,10 +2665,12 @@ function applyReductionPreviewToMap(bus, result){
   state.mapWorking = cloneMapBuses(busesForMap());
   state.mapMoves = [];
   state.mapBusFilter = 'ALL';
+  if(state.reassignMode && state.reassignSkipEmpty) pruneAllEmptyStopsFromMapWorking();
 
   // 정류장별로 가장 많은 인원을 받은 흡수 호차로 전체 정류장 이동 (지도는 정류장 단위)
   const byStop = {};
   moves.forEach(m => {
+    if(state.reassignSkipEmpty && (Number(m.stop.passengers)||0) <= 0) return;
     const sid = String(m.stop.id);
     if(!byStop[sid] || m.count > byStop[sid].count){
       byStop[sid] = { stopId: m.stop.id, toBusId: m.toBus.id, count: m.count };
@@ -2625,7 +2680,7 @@ function applyReductionPreviewToMap(bus, result){
     previewMoveStop(bus.id, item.stopId, item.toBusId);
   });
   // 탑승 없는 정류장은 없앤 노선 편성에서 제거
-  pruneEmptyStopsFromBus(bus.id);
+  if(state.reassignSkipEmpty) pruneEmptyStopsFromBus(bus.id);
 
   state.activeTab = 'map';
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -3129,6 +3184,7 @@ document.querySelectorAll('[data-alert-filter]').forEach(btn => {
 });
 document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
 document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
+document.getElementById('reassignSkipEmptyChk').onchange = (e) => setReassignSkipEmpty(e.target.checked);
 document.getElementById('reassignAutoBtn').onclick = () => buildAutoReassignDraft();
 document.getElementById('reassignRunSimBtn').onclick = () => runReductionSimulation();
 document.getElementById('reassignClearSelBtn').onclick = () => clearReassignSelection();

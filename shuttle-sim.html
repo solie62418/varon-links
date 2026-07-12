@@ -161,6 +161,7 @@ main.map-mode{max-width:none}
 <main>
   <div id="alertBanner" class="alert-banner" style="display:none"></div>
   <div class="branch-row" id="branchRow"></div>
+  <div class="filter-row" id="dayGroupRow" style="margin-top:-6px"></div>
 
   <section class="view active" id="view-dash">
     <div class="stat-row" id="dashStats"></div>
@@ -421,6 +422,11 @@ const state = {
   mapReady: false,
   alertFilter: 'all',
   alerts: [],
+  hydrations: {},
+  dayGroups: [],
+  dayGroupFilter: '전체',
+  dayMode: 'sum', // sum | group | conservative
+  timeSlotCol: null,
   reassignMode: false,
   reassignRemoveId: null,
   reassignAbsorbIds: [],
@@ -1724,6 +1730,7 @@ async function hydrateBranchApp(branch){
     const bubble = extractConst(html, 'BUBBLE_CNT') || {};
     const capacity = extractConst(html, 'CAPACITY') || {};
     const dash = extractConst(html, 'DASH_DATA') || {};
+    const fullData = extractConst(html, 'FULL_DATA') || {};
     const stopUnique = extractConst(html, 'STOP_UNIQUE') || {};
     const ll = extractConst(html, 'LL_DEFAULT') || {};
     const namesRaw = (() => {
@@ -1792,7 +1799,13 @@ async function hydrateBranchApp(branch){
         passengers,
         capacity: periodCap,
         seatSlots: seatSlots > 0 ? seatSlots : periodCap,
-        stops
+        stops,
+        groups,
+        full: fullData[id] || null,
+        ll: ll[id] || [],
+        names: namesRaw[id] || {},
+        stopUnique: stopUnique[id] || {},
+        bubble: Number(bubble[id]) || 0
       };
     });
     return out;
@@ -1873,31 +1886,45 @@ function buildStopBusMapFromAssignment(){
   return map;
 }
 
-function passengersFromStudents(branch, no, stopBusMap){
-  const combo = comboKey(branch, no);
-  const students = realRows(state.sheets['학생_기본정보']).filter(s => (s['소속분원']||'') === branch);
-  if(!students.length) return { count: 0, stops: [] };
-
-  // If assignment history empty, cannot attribute to bus reliably
-  if(!stopBusMap.size){
-    return { count: 0, stops: [], note: '배정이력_정류장 없음' };
+function detectTimeSlotColumn(){
+  const rows = realRows(state.sheets['학생_기본정보']);
+  if(!rows.length) return null;
+  const keys = new Set();
+  rows.slice(0, 80).forEach(r => Object.keys(r || {}).forEach(k => keys.add(k)));
+  const preferred = ['시간대','시간대(부)','등원부','수업부','부','시간'];
+  for(const k of preferred){
+    if(keys.has(k) && rows.some(r => String(r[k]||'').trim())) return k;
   }
+  for(const k of keys){
+    if(/시간대|수업부|등원부/.test(k) && rows.some(r => String(r[k]||'').trim())) return k;
+  }
+  return null;
+}
 
-  const stopAgg = new Map();
-  let count = 0;
-  students.forEach(s => {
-    const stopName = String(s['기본등원정류장'] || s['기본하원정류장'] || '').trim();
-    if(!stopName) return;
-    const assigned = stopBusMap.get(stopName);
-    if(!assigned) return;
-    if(String(assigned).replace(/\s+/g,'') !== combo.replace(/\s+/g,'') && busNo(assigned) !== busNo(no)) return;
-    count++;
-    const prev = stopAgg.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
-    prev.passengers++;
-    stopAgg.set(stopName, prev);
+function discoverDayGroups(){
+  const set = new Set();
+  realRows(state.sheets['학생_기본정보']).forEach(s => {
+    const v = String(s['요일그룹'] || '').trim();
+    if(v) set.add(v);
   });
+  Object.values(state.hydrations || {}).forEach(branchMap => {
+    Object.values(branchMap || {}).forEach(bus => {
+      Object.keys(bus.groups || {}).forEach(g => set.add(g));
+      Object.keys(bus.full || {}).forEach(g => set.add(g));
+    });
+  });
+  return [...set].sort((a,b) => a.localeCompare(b, 'ko'));
+}
 
-  // attach coords from 정류장 sheet
+function dayModeLabel(){
+  if(state.dayMode === 'conservative') return '보수적 모드(요일별 최대치)';
+  if(state.dayMode === 'group' && state.dayGroupFilter && state.dayGroupFilter !== '전체'){
+    return '요일그룹: ' + state.dayGroupFilter;
+  }
+  return '전체(합산)';
+}
+
+function attachStopCoords(stopAgg){
   const stopsSheet = realRows(state.sheets['정류장']);
   stopAgg.forEach((v, name) => {
     const row = stopsSheet.find(st => String(st['정류장명']||'').trim() === name);
@@ -1906,8 +1933,143 @@ function passengersFromStudents(branch, no, stopBusMap){
       if(Number.isFinite(lat) && Number.isFinite(lng) && lat && lng){ v.lat = lat; v.lng = lng; }
     }
   });
+}
 
-  return { count, stops: [...stopAgg.values()] };
+function aggregateBoardStops(fullBus, dayGroup){
+  const stopAgg = {};
+  const periods = (fullBus && fullBus[dayGroup]) || {};
+  Object.values(periods).forEach(p => {
+    Object.entries(p.board_stops || {}).forEach(([name, n]) => {
+      const key = String(name).trim();
+      if(!key) return;
+      stopAgg[key] = (stopAgg[key] || 0) + (Number(n) || 0);
+    });
+  });
+  return stopAgg;
+}
+
+function buildStopsFromLl(llStops, namesMap, nameToPax){
+  return (llStops || []).map(s => {
+    const sid = String(s.id);
+    const name = (namesMap && namesMap[sid]) || '';
+    const pax = name ? (Number(nameToPax[name]) || 0) : 0;
+    return { id: sid, lat: s.lat, lng: s.lng, name: name || ('정류장 ' + sid), passengers: pax };
+  });
+}
+
+function ridershipFromHydration(h){
+  if(!h) return null;
+  const groups = h.groups || {};
+  const groupNames = Object.keys(groups);
+
+  if(state.dayMode === 'group' && state.dayGroupFilter && state.dayGroupFilter !== '전체'){
+    const g = groups[state.dayGroupFilter];
+    const nameToPax = aggregateBoardStops(h.full, state.dayGroupFilter);
+    const stops = (h.ll && h.ll.length)
+      ? buildStopsFromLl(h.ll, h.names, nameToPax)
+      : Object.entries(nameToPax).map(([name, passengers], i) => ({ id: String(i+1), name, passengers, lat:null, lng:null }));
+    let passengers = g ? Number(g.unique) || 0 : 0;
+    if(!passengers) passengers = stops.reduce((a,s) => a + (Number(s.passengers)||0), 0);
+    const seatSlots = g && Number(g.capacity) > 0 ? Number(g.capacity) : (h.capacity || h.seatSlots);
+    return { passengers, seatSlots, stops, sourceNote: '요일그룹 ' + state.dayGroupFilter };
+  }
+
+  if(state.dayMode === 'conservative' && (groupNames.length || h.full)){
+    const names = groupNames.length ? groupNames : Object.keys(h.full || {});
+    const nameMax = {};
+    names.forEach(gn => {
+      const agg = aggregateBoardStops(h.full, gn);
+      Object.entries(agg).forEach(([name, n]) => {
+        nameMax[name] = Math.max(nameMax[name] || 0, Number(n) || 0);
+      });
+    });
+    const stops = (h.ll && h.ll.length)
+      ? buildStopsFromLl(h.ll, h.names, nameMax)
+      : Object.entries(nameMax).map(([name, passengers], i) => ({ id: String(i+1), name, passengers, lat:null, lng:null }));
+    const passengers = stops.reduce((a,s) => a + (Number(s.passengers)||0), 0);
+    const caps = names.map(gn => Number((groups[gn] && groups[gn].capacity) || 0)).filter(n => n > 0);
+    const seatSlots = caps.length ? Math.max(...caps) : (h.seatSlots || h.capacity);
+    return { passengers, seatSlots, stops, sourceNote: '요일별 최대치' };
+  }
+
+  // 전체 합산 (기존)
+  return {
+    passengers: h.passengers,
+    seatSlots: h.seatSlots || h.capacity,
+    stops: h.stops || [],
+    sourceNote: '전체 합산'
+  };
+}
+
+function passengersFromStudents(branch, no, stopBusMap){
+  const combo = comboKey(branch, no);
+  let students = realRows(state.sheets['학생_기본정보']).filter(s => (s['소속분원']||'') === branch);
+  if(!students.length) return { count: 0, stops: [] };
+
+  if(!stopBusMap.size){
+    return { count: 0, stops: [], note: '배정이력_정류장 없음' };
+  }
+
+  const matchesBus = (s) => {
+    const stopName = String(s['기본등원정류장'] || s['기본하원정류장'] || '').trim();
+    if(!stopName) return null;
+    const assigned = stopBusMap.get(stopName);
+    if(!assigned) return null;
+    if(String(assigned).replace(/\s+/g,'') !== combo.replace(/\s+/g,'') && busNo(assigned) !== busNo(no)) return null;
+    return stopName;
+  };
+
+  const stopAgg = new Map();
+
+  if(state.dayMode === 'group' && state.dayGroupFilter && state.dayGroupFilter !== '전체'){
+    students = students.filter(s => String(s['요일그룹'] || '').trim() === state.dayGroupFilter);
+    students.forEach(s => {
+      const stopName = matchesBus(s);
+      if(!stopName) return;
+      const prev = stopAgg.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
+      prev.passengers++;
+      stopAgg.set(stopName, prev);
+    });
+  } else if(state.dayMode === 'conservative'){
+    const groups = [...new Set(students.map(s => String(s['요일그룹']||'').trim()).filter(Boolean))];
+    if(!groups.length){
+      students.forEach(s => {
+        const stopName = matchesBus(s);
+        if(!stopName) return;
+        const prev = stopAgg.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
+        prev.passengers++;
+        stopAgg.set(stopName, prev);
+      });
+    } else {
+      groups.forEach(g => {
+        const local = new Map();
+        students.filter(s => String(s['요일그룹']||'').trim() === g).forEach(s => {
+          const stopName = matchesBus(s);
+          if(!stopName) return;
+          const prev = local.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
+          prev.passengers++;
+          local.set(stopName, prev);
+        });
+        local.forEach((v, name) => {
+          const prev = stopAgg.get(name);
+          if(!prev || v.passengers > prev.passengers) stopAgg.set(name, { ...v });
+        });
+      });
+    }
+  } else {
+    students.forEach(s => {
+      const stopName = matchesBus(s);
+      if(!stopName) return;
+      const prev = stopAgg.get(stopName) || { name: stopName, passengers: 0, lat:null, lng:null };
+      prev.passengers++;
+      stopAgg.set(stopName, prev);
+    });
+  }
+
+  attachStopCoords(stopAgg);
+  const stops = [...stopAgg.values()];
+  const count = stops.reduce((a,s) => a + (Number(s.passengers)||0), 0);
+  return { count, stops };
 }
 
 function buildBuses(hydrations){
@@ -1926,6 +2088,7 @@ function buildBuses(hydrations){
     let passengers = 0;
     let stops = [];
     let source = 'none';
+    let seatSlotsOverride = null;
 
     const fromStudents = passengersFromStudents(branch, no, stopBusMap);
     if(fromStudents.count > 0){
@@ -1933,16 +2096,17 @@ function buildBuses(hydrations){
       stops = fromStudents.stops;
       source = 'shuttle_data:학생+배정이력';
     }else if(hydrated){
-      passengers = hydrated.passengers || 0;
-      stops = (hydrated.stops || []).filter(s => s.passengers > 0 || (s.lat != null && s.lng != null));
-      // keep zero-pax stops with coords for distance graph neighbors
-      if(!stops.length) stops = hydrated.stops || [];
+      const dayRide = ridershipFromHydration(hydrated);
+      passengers = dayRide.passengers || 0;
+      stops = (dayRide.stops || []).filter(s => s.passengers > 0 || (s.lat != null && s.lng != null));
+      if(!stops.length) stops = dayRide.stops || hydrated.stops || [];
+      seatSlotsOverride = dayRide.seatSlots;
       source = BRANCH_APPS[branch] ? `branch-app:${BRANCH_APPS[branch]}` : 'shuttle_backup';
     }
 
     const capacity = resolveCapacity(branch, no, vehicle, contract, hydrated);
-    // 감차 판정용 이용률: (분원앱 DASH seatSlots) 또는 단일반 정원
-    const seatSlots = (hydrated && hydrated.seatSlots) || capacity;
+    // 감차 판정용 이용률: (분원앱 DASH seatSlots) 또는 단일반 정원 — 요일 모드면 해당 그룹 정원
+    const seatSlots = seatSlotsOverride || (hydrated && hydrated.seatSlots) || capacity;
     // 탑승 데이터가 없으면 이용률 미집계(null) — 0명=0%로 감차후보 오판 방지
     const utilization = (source === 'none')
       ? null
@@ -2029,6 +2193,66 @@ function renderBranches(){
     };
     row.appendChild(chip);
   });
+}
+
+function setDayMode(mode, group){
+  if(mode === 'sum'){
+    state.dayMode = 'sum';
+    state.dayGroupFilter = '전체';
+  } else if(mode === 'conservative'){
+    state.dayMode = 'conservative';
+    state.dayGroupFilter = '전체';
+  } else {
+    state.dayMode = 'group';
+    state.dayGroupFilter = group || '전체';
+    if(state.dayGroupFilter === '전체') state.dayMode = 'sum';
+  }
+  rebuildBusesForDayMode();
+}
+
+function renderDayGroupRow(){
+  const row = document.getElementById('dayGroupRow');
+  if(!row) return;
+  const groups = state.dayGroups || [];
+  let html = '<span class="meta" style="font-weight:800;color:var(--navy)">요일</span>';
+  const mk = (label, active, attrs) =>
+    '<button type="button" class="chip'+(active?' active':'')+'" '+attrs+'>'+esc(label)+'</button>';
+  html += mk('전체(합산)', state.dayMode === 'sum', 'data-day-mode="sum"');
+  groups.forEach(g => {
+    html += mk(g, state.dayMode === 'group' && state.dayGroupFilter === g, 'data-day-mode="group" data-day-group="'+esc(g)+'"');
+  });
+  html += mk('보수적 모드(요일별 최대치)', state.dayMode === 'conservative', 'data-day-mode="conservative"');
+  if(!state.timeSlotCol){
+    html += '<span class="map-tip" style="max-width:420px">시간대: 학생_기본정보 시트에 시간대를 구분하는 컬럼이 없어서 이 기능은 데이터 보완 후에 가능합니다.</span>';
+  } else {
+    html += '<span class="map-tip">시간대 컬럼 감지: '+esc(state.timeSlotCol)+' (탭 UI는 추후)</span>';
+  }
+  row.innerHTML = html;
+  row.querySelectorAll('[data-day-mode]').forEach(btn => {
+    btn.onclick = () => {
+      const mode = btn.getAttribute('data-day-mode');
+      const g = btn.getAttribute('data-day-group');
+      setDayMode(mode, g);
+    };
+  });
+}
+
+function rebuildBusesForDayMode(){
+  buildBuses(state.hydrations || {});
+  state.mapWorking = [];
+  state.mapMoves = [];
+  renderDayGroupRow();
+  renderDashboard();
+  renderSimSelect();
+  renderIncStopSelect();
+  renderAlertBanner();
+  if(state.activeTab === 'map') showMapView();
+  if(state.activeTab === 'alerts') renderAlerts();
+  const paxBuses = state.buses.filter(b => b.passengers > 0).length;
+  const status = document.getElementById('loadStatus');
+  if(status){
+    status.textContent = '호차 '+state.buses.length+'대 · 탑승집계 '+paxBuses+'대 · '+dayModeLabel()+' · 규칙 기준 '+fmtPct(state.rules.minUtilizationRate);
+  }
 }
 
 function renderDashboard(){
@@ -2234,6 +2458,10 @@ function simulateReduction(bus, peerIds){
   reasons.push(`데이터 출처: ${bus.source}`);
   reasons.push(`배정 방식: ${mode === 'distance' ? '인근 호차 정류장 거리 우선' : '좌표 없어 여유석 많은 호차 우선(근사)'}`);
   reasons.push(`여유석 버퍼: 정원 − ${rules.capacityBufferSeats}석`);
+  reasons.push('인원 집계: ' + dayModeLabel());
+  if(state.dayMode === 'conservative'){
+    reasons.push('요일별 최대 기준으로 계산됨 (보수적 모드)');
+  }
 
   const meta = { absorbed: Object.values(byBus), detourMin, moved, retention, moves };
 
@@ -2732,10 +2960,14 @@ async function loadAll(){
     }
   }
 
+  state.hydrations = hydrations;
+  state.dayGroups = discoverDayGroups();
+  state.timeSlotCol = detectTimeSlotColumn();
   buildBuses(hydrations);
   state.mapWorking = [];
   state.mapMoves = [];
   renderBranches();
+  renderDayGroupRow();
   renderDashboard();
   renderSimSelect();
   renderIncStopSelect();
@@ -2746,7 +2978,7 @@ async function loadAll(){
 
   const paxBuses = state.buses.filter(b => b.passengers > 0).length;
   const alertN = state.alerts.length;
-  status.textContent = `호차 ${state.buses.length}대 · 탑승집계 ${paxBuses}대 · 알림 ${alertN}건 · 규칙 기준 ${fmtPct(state.rules.minUtilizationRate)}`;
+  status.textContent = `호차 ${state.buses.length}대 · 탑승집계 ${paxBuses}대 · 알림 ${alertN}건 · ${dayModeLabel()} · 규칙 기준 ${fmtPct(state.rules.minUtilizationRate)}`;
 }
 
 function unlockAdmin(pw){

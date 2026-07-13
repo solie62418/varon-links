@@ -475,7 +475,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
             <div class="redraw-stat"><div class="num" id="redrawMin">-</div><div class="label">예상 분</div></div>
           </div>
           <div class="field">
-            <label>새 노선 이름 (마무리 시)</label>
+            <label>노선 이름 (그리기·편집 중 변경 가능)</label>
             <input type="text" id="redrawRouteName" placeholder="예: A노선 · 북부순환">
           </div>
           <button class="btn btn-yellow btn-sm" type="button" id="redrawFinishBtn" disabled>이 노선 마무리·라벨링</button>
@@ -820,10 +820,12 @@ let rLayers = [];
 let rmapReady = false;
 let redrawRenderSeq = 0;
 const FINE_ZOOM = {
-  wheelStep: 0.045,
-  buttonStep: 0.08,
-  snapUp: 1.16,
-  snapDown: 0.86,
+  // soft scale로 레벨 사이를 보간. 카카오 level 1단계는 약 2배이므로
+  // snap 임계도 2배에 맞춰야 +/− 클릭 시 급점프가 없다.
+  wheelStep: 0.04,
+  buttonStep: 0.055,
+  snapUp: 2,
+  snapDown: 0.5,
   minLevel: 1,
   maxLevel: 14
 };
@@ -1455,6 +1457,7 @@ function updateRedrawGuide(){
   if(stopEdit) stopEdit.disabled = !route;
   if(finishBtn) finishBtn.disabled = !canFinish;
   if(saveSetBtn) saveSetBtn.disabled = !canSaveRedrawSet();
+  updateRedrawFinishBtnLabel();
   const prog = document.getElementById('redrawProgress');
   if(prog) prog.textContent = redrawProgressText();
 }
@@ -1470,7 +1473,31 @@ function updateRedrawStatsUi(){
   if(n) n.textContent = String(count);
   if(km) km.textContent = count > 1 ? ((state.redrawStats.meters||0)/1000).toFixed(1) : '-';
   if(min) min.textContent = count > 1 ? String(Math.round(state.redrawStats.minutes||0)) : '-';
+  // 지도 경로 재계산 후 사이드 목록의 정류장/km/분도 같이 갱신
+  renderRedrawFinishedList();
   updateRedrawGuide();
+}
+
+/** 이름 입력란 → 활성 노선에 즉시 반영 (편집 중 이름 변경) */
+function syncRedrawRouteNameFromInput(){
+  const route = getActiveNewRoute();
+  const nameInput = document.getElementById('redrawRouteName');
+  if(!route || !nameInput) return;
+  const name = nameInput.value.trim();
+  if(name) route.name = name;
+  renderRedrawFinishedList();
+  updateRedrawFinishBtnLabel();
+}
+
+function updateRedrawFinishBtnLabel(){
+  const finishBtn = document.getElementById('redrawFinishBtn');
+  const guideBtn = document.getElementById('redrawGuideSaveBtn');
+  const route = getActiveNewRoute();
+  const editing = !!(route && route.reedit);
+  const label = editing ? '편집 저장·이름 반영' : '이 노선 마무리·라벨링';
+  const guideLabel = editing ? '편집 저장' : '마무리';
+  if(finishBtn) finishBtn.textContent = label;
+  if(guideBtn) guideBtn.textContent = guideLabel;
 }
 
 async function refreshRedrawStats(){
@@ -1542,6 +1569,7 @@ function startNewRedrawRoute(){
     name: '',
     stops: normalizeAcademyEndpoint([]),
     finished: false,
+    reedit: false,
     meters: 0,
     minutes: 0,
     source: 'osrm',
@@ -1564,16 +1592,21 @@ function beginEditNewRoute(routeId){
   const route = state.redrawNewRoutes.find(r => r.id === routeId);
   if(!route) return;
   route.finished = false;
+  route.reedit = true;
   route.stops = normalizeAcademyEndpoint(route.stops);
   state.redrawActiveRouteId = routeId;
   const nameInput = document.getElementById('redrawRouteName');
-  if(nameInput) nameInput.value = route.name || '';
+  if(nameInput){
+    nameInput.value = route.name || '';
+    try{ nameInput.focus(); nameInput.select(); }catch(e){}
+  }
   state.redrawStats = { meters: route.meters||0, minutes: route.minutes||0, source: route.source||'osrm' };
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '재편집: <b>'+esc(route.name || '새 노선')+'</b> · '+esc(academyEndpointLabel())+' 고정 · 정류장 추가/삭제 후 다시 마무리';
+  if(sum) sum.innerHTML = '재편집: <b>'+esc(route.name || '새 노선')+'</b> · 이름·정류장을 바꾼 뒤 <b>편집 저장</b>하세요. '+esc(academyEndpointLabel())+' 고정.';
   renderRedrawSide();
   renderRedrawMap(true);
   refreshRedrawStats();
+  updateRedrawFinishBtnLabel();
 }
 
 function stopEditRedrawBus(){
@@ -1662,6 +1695,7 @@ async function finishRedrawRoute(){
   }
   const nameInput = document.getElementById('redrawRouteName');
   let name = nameInput && nameInput.value.trim();
+  if(!name) name = (route.name || '').trim();
   if(!name){
     name = prompt('새 노선 이름을 입력하세요', '새 노선 ' + (state.redrawNewRoutes.filter(r=>r.finished).length + 1)) || '';
     name = name.trim();
@@ -1673,6 +1707,7 @@ async function finishRedrawRoute(){
   await refreshRedrawStats();
   route.name = name;
   route.finished = true;
+  route.reedit = false;
   route.meters = state.redrawStats.meters || 0;
   route.minutes = state.redrawStats.minutes || 0;
   route.source = state.redrawStats.source || 'osrm';
@@ -1680,7 +1715,9 @@ async function finishRedrawRoute(){
   if(nameInput) nameInput.value = '';
   const sum = document.getElementById('redrawSelectionSummary');
   if(sum){
-    sum.innerHTML = '<b>'+esc(name)+'</b> 저장됨 · '+esc(academyEndpointLabel())+' 고정. 「새 노선 그리기」로 다음을 만들거나, 전체 세트를 저장하세요.';
+    sum.innerHTML = '<b>'+esc(name)+'</b> 저장됨 · 정류장 '+route.stops.length+' · '+
+      ((route.meters||0)/1000).toFixed(1)+'km / '+Math.round(route.minutes||0)+'분 · '+
+      esc(academyEndpointLabel())+' 고정. 「새 노선 그리기」로 다음을 만들거나, 전체 세트를 저장하세요.';
   }
   renderRedrawSide();
   renderRedrawMap(true);
@@ -3447,7 +3484,7 @@ function applySoftZoomCss(target){
   }
 }
 
-/** 세밀 줌: CSS soft scale + 임계값에서 카카오 level 스냅 */
+/** 세밀 줌: CSS soft scale + 임계값(~2배)에서 카카오 level 스냅 */
 function fineZoomBy(target, direction, step){
   const map = getMapByTarget(target);
   if(!map) return;
@@ -3463,11 +3500,12 @@ function fineZoomBy(target, direction, step){
     level += 1;
   }
   soft = Math.min(FINE_ZOOM.snapUp - 0.001, Math.max(FINE_ZOOM.snapDown + 0.001, soft));
+  // soft를 먼저 맞춘 뒤 level을 바꿔 시각적 연속성 유지
+  setSoftZoom(target, soft);
+  applySoftZoomCss(target);
   if(level !== map.getLevel()){
     try{ map.setLevel(level); }catch(e){}
   }
-  setSoftZoom(target, soft);
-  applySoftZoomCss(target);
 }
 
 function commitSoftZoom(target){
@@ -3476,20 +3514,21 @@ function commitSoftZoom(target){
   if(!map) return;
   let soft = getSoftZoom(target);
   let level = map.getLevel();
-  if(soft >= 1.08 && level > FINE_ZOOM.minLevel){
+  // √2 기준으로 가까운 정수 level로 흡수 (레벨 비 ≈ 2)
+  if(soft >= 1.414 && level > FINE_ZOOM.minLevel){
     level -= 1;
     soft = 1;
-  } else if(soft <= 0.92 && level < FINE_ZOOM.maxLevel){
+  } else if(soft <= 0.707 && level < FINE_ZOOM.maxLevel){
     level += 1;
     soft = 1;
   } else {
     soft = 1;
   }
+  setSoftZoom(target, soft);
+  applySoftZoomCss(target);
   if(level !== map.getLevel()){
     try{ map.setLevel(level); }catch(e){}
   }
-  setSoftZoom(target, 1);
-  applySoftZoomCss(target);
 }
 
 function attachFineZoom(map, target){
@@ -5979,6 +6018,13 @@ document.getElementById('redrawStartNewBtn').onclick = () => startNewRedrawRoute
 document.getElementById('redrawAutoRecommendBtn').onclick = () => autoRecommendRedrawRoutes().catch(err => alert(err.message));
 document.getElementById('redrawFinishBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
 document.getElementById('redrawGuideSaveBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
+(function wireRedrawRouteNameInput(){
+  const nameInput = document.getElementById('redrawRouteName');
+  if(!nameInput || nameInput.__redrawNameWired) return;
+  nameInput.__redrawNameWired = true;
+  nameInput.addEventListener('input', () => syncRedrawRouteNameFromInput());
+  nameInput.addEventListener('change', () => syncRedrawRouteNameFromInput());
+})();
 document.getElementById('redrawSelectAllBtn').onclick = () => selectAllRedrawPool();
 document.getElementById('redrawClearPoolBtn').onclick = () => clearRedrawPool();
 document.getElementById('redrawSaveSetBtn').onclick = () => saveRedrawSet().catch(err => alert(err.message));

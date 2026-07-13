@@ -127,6 +127,24 @@ main.map-mode{max-width:none}
 .map-bus-acc-body{display:none;margin-top:8px}
 .map-bus-item.open .map-bus-acc-body{display:block}
 .map-swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.map-swatch-wrap{
+  position:relative;width:18px;height:18px;flex-shrink:0;border-radius:50%;overflow:hidden;
+  border:2px solid #fff;box-shadow:0 0 0 1px var(--border);cursor:pointer;background:#ccc;
+}
+.map-swatch-wrap input[type=color]{
+  position:absolute;inset:-6px;width:30px;height:30px;padding:0;border:0;cursor:pointer;background:transparent;
+}
+.map-color-row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px}
+.map-color-row .lbl{font-size:11px;font-weight:700;color:var(--muted);margin-right:2px}
+.map-color-row button.swatch{
+  width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--border);
+  padding:0;cursor:pointer;font-family:inherit;
+}
+.map-color-row button.swatch.active{box-shadow:0 0 0 2px var(--navy)}
+.map-color-row button.reset-color{
+  font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;border:1px solid var(--border);
+  background:#fff;color:var(--muted);cursor:pointer;font-family:inherit;
+}
 .map-preview-log{font-size:12px;color:var(--muted);line-height:1.55;background:#F8FAFD;border-radius:10px;padding:10px;border:1px solid var(--border)}
 .map-preview-log b{color:var(--navy)}
 .map-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(243,244,247,.92);z-index:2;padding:24px;text-align:center}
@@ -784,7 +802,12 @@ const BUS_COLOR_FIXED = {
   '61':'#E74C3C','62':'#E67E22','63':'#C8A000','65':'#27AE60',
   '67':'#1ABC9C','68':'#2E86C1'
 };
-const BUS_PALETTE = ['#E74C3C','#E67E22','#C8A000','#27AE60','#1ABC9C','#2E86C1','#8E44AD','#E91E8C','#16A085','#D35400','#2980B9','#9B59B6'];
+const BUS_PALETTE = [
+  '#E74C3C','#E67E22','#C8A000','#27AE60','#1ABC9C','#2E86C1',
+  '#8E44AD','#E91E8C','#16A085','#D35400','#2980B9','#9B59B6',
+  '#1F3A64','#BF8F00','#C0392B','#0E6655','#6C3483','#1A5276'
+];
+const BUS_COLOR_LS_KEY = 'shuttle-sim:busColorOverrides';
 const BRANCH_MAP_CENTER = {
   '장안': { lat: 37.295, lng: 127.005, level: 6 },
   '남동탄': { lat: 37.165, lng: 127.11, level: 6 },
@@ -830,6 +853,7 @@ const state = {
   mapMoves: [],
   mapBusFilter: 'ALL',
   mapBusAccordion: {}, // { [busId]: true } — 현재 노선상황 호차 카드 펼침
+  busColorOverrides: {}, // { [busId]: '#rrggbb' } — 사용자가 지정한 노선 색
   mapReady: false,
   hydrations: {},
   dayGroups: [],
@@ -921,13 +945,59 @@ function parseSalary(v){
 function busNo(raw){
   return String(raw || '').replace(/\s+/g,'').replace(/호$/,'').trim();
 }
-function busColor(bus){
-  const no = busNo(bus.no || bus);
+function normalizeHexColor(v){
+  const s = String(v || '').trim();
+  const m = s.match(/^#?([0-9a-fA-F]{6})$/);
+  return m ? ('#' + m[1].toUpperCase()) : null;
+}
+function loadBusColorOverrides(){
+  try{
+    const raw = localStorage.getItem(BUS_COLOR_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    state.busColorOverrides = (obj && typeof obj === 'object') ? obj : {};
+  }catch(e){
+    state.busColorOverrides = {};
+  }
+}
+function saveBusColorOverrides(){
+  try{
+    localStorage.setItem(BUS_COLOR_LS_KEY, JSON.stringify(state.busColorOverrides || {}));
+  }catch(e){ /* ignore quota */ }
+}
+function setBusColorOverride(busId, color, opts){
+  if(!busId) return;
+  if(!state.busColorOverrides) state.busColorOverrides = {};
+  const hex = normalizeHexColor(color);
+  if(!hex) delete state.busColorOverrides[busId];
+  else state.busColorOverrides[busId] = hex;
+  saveBusColorOverrides();
+  const soft = !!(opts && opts.soft);
+  if(soft){
+    const inp = Array.from(document.querySelectorAll('[data-bus-color-input]'))
+      .find(el => el.getAttribute('data-bus-color-input') === busId);
+    const wrap = inp && inp.closest('.map-swatch-wrap');
+    if(wrap) wrap.style.background = hex || defaultBusColor({ id: busId });
+    if(inp && hex) inp.value = hex;
+    if(state.activeTab === 'map' && state.mapReady) renderKakaoMap(false);
+    return;
+  }
+  renderMapSide();
+  if(state.activeTab === 'map' && state.mapReady) renderKakaoMap(false);
+}
+function defaultBusColor(bus){
+  const no = busNo(bus && (bus.no || bus));
   if(BUS_COLOR_FIXED[no]) return BUS_COLOR_FIXED[no];
   let h = 0;
-  const key = String(bus.id || no);
+  const key = String((bus && bus.id) || no);
   for(let i=0;i<key.length;i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return BUS_PALETTE[h % BUS_PALETTE.length];
+}
+function busColor(bus){
+  const id = bus && bus.id;
+  if(id && state.busColorOverrides && state.busColorOverrides[id]){
+    return state.busColorOverrides[id];
+  }
+  return defaultBusColor(bus);
 }
 
 function cloneMapBuses(list){
@@ -3520,12 +3590,19 @@ function renderMapSide(){
         : '';
       const open = !!(state.mapBusAccordion && state.mapBusAccordion[b.id]);
       if(open) cls += ' open';
+      const custom = !!(state.busColorOverrides && state.busColorOverrides[b.id]);
+      const presets = BUS_PALETTE.map(c => {
+        const on = normalizeHexColor(col) === normalizeHexColor(c);
+        return `<button type="button" class="swatch${on?' active':''}" data-set-bus-color="${esc(b.id)}" data-color="${c}" style="background:${c}" title="${c}"></button>`;
+      }).join('');
       return `<div class="${cls}" data-map-bus-id="${esc(b.id)}">
         <div class="map-bus-acc-head" data-map-acc-toggle="${esc(b.id)}">
-          <span class="map-swatch" style="background:${col}"></span>
+          <label class="map-swatch-wrap" style="background:${col}" title="노선 색 변경" data-color-stop>
+            <input type="color" data-bus-color-input="${esc(b.id)}" value="${esc(normalizeHexColor(col) || '#2E86C1')}" aria-label="${esc(b.label)} 노선 색">
+          </label>
           <div class="acc-summary">
             <div style="font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${esc(b.label)} ${tags}</div>
-            <div class="meta" style="margin-top:2px">탑승 ${pax} · 정류장 ${stopN}</div>
+            <div class="meta" style="margin-top:2px">탑승 ${pax} · 정류장 ${stopN}${custom?' · 색 지정됨':''}</div>
           </div>
           <span class="acc-chevron" aria-hidden="true">${open ? '▼' : '▶'}</span>
         </div>
@@ -3534,6 +3611,11 @@ function renderMapSide(){
             <div class="cell"><div class="n">${spare}</div><div class="l">여유석</div></div>
             <div class="cell"><div class="n" data-map-stat="km">${distTxt}</div><div class="l">운행거리</div></div>
             <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행시간</div></div>
+          </div>
+          <div class="map-color-row">
+            <span class="lbl">노선 색</span>
+            ${presets}
+            <button type="button" class="reset-color" data-reset-bus-color="${esc(b.id)}" title="기본 색으로">기본</button>
           </div>
           ${reassignCtrls}
           <div class="map-bus-stop-order" data-bus-stop-list="${esc(b.id)}"></div>
@@ -3545,11 +3627,36 @@ function renderMapSide(){
     }).join('');
     list.querySelectorAll('[data-map-acc-toggle]').forEach(head => {
       head.addEventListener('click', (ev) => {
-        if(ev.target.closest('input,label,button,a')) return;
+        if(ev.target.closest('input,label,button,a,[data-color-stop]')) return;
         const id = head.getAttribute('data-map-acc-toggle');
         if(!state.mapBusAccordion) state.mapBusAccordion = {};
         state.mapBusAccordion[id] = !state.mapBusAccordion[id];
         renderMapSide();
+      });
+    });
+    list.querySelectorAll('[data-bus-color-input]').forEach(inp => {
+      inp.addEventListener('click', (ev) => ev.stopPropagation());
+      inp.addEventListener('input', (ev) => {
+        ev.stopPropagation();
+        setBusColorOverride(inp.getAttribute('data-bus-color-input'), inp.value, { soft: true });
+      });
+      inp.addEventListener('change', (ev) => {
+        ev.stopPropagation();
+        setBusColorOverride(inp.getAttribute('data-bus-color-input'), inp.value);
+      });
+    });
+    list.querySelectorAll('[data-set-bus-color]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setBusColorOverride(btn.getAttribute('data-set-bus-color'), btn.getAttribute('data-color'));
+      });
+    });
+    list.querySelectorAll('[data-reset-bus-color]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setBusColorOverride(btn.getAttribute('data-reset-bus-color'), null);
       });
     });
     buses.forEach(b => {
@@ -6492,6 +6599,7 @@ async function loadAll(){
   status.textContent = 'Firestore 불러오는 중…';
   state.dataSources = [];
   state.rosterMeta = null;
+  loadBusColorOverrides();
   updateRosterUploadStatus();
 
   await ensureRules();
@@ -6717,6 +6825,7 @@ window.addEventListener('afterprint', () => {
   if(!state.mapOnlyMode) document.body.classList.remove('map-only');
   refreshActiveMapLayout(false);
 });
+loadBusColorOverrides();
 loadAll().catch(err => {
   console.error(err);
   document.getElementById('loadStatus').textContent = '서버 연결 실패';

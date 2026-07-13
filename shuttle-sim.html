@@ -283,33 +283,59 @@ body.map-only .map-only-toolbar [data-map-only-enter]{display:none}
 body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
 .map-only-toolbar [data-map-only-exit]{display:none}
 @media print{
-  @page{size:landscape;margin:0}
+  @page{size:landscape;margin:0 !important}
   html,body{
     margin:0 !important;padding:0 !important;background:#fff !important;
     width:100% !important;height:100% !important;overflow:hidden !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+    color-adjust:exact !important;
   }
-  body *{visibility:hidden}
-  body.map-only .map-main,
-  body.map-only .map-main *,
-  body.map-printing .map-main,
-  body.map-printing .map-main *{
-    visibility:visible !important;
-  }
+  /* visibility:hidden은 레이아웃 공간을 남겨 지도가 카드처럼 떠 보임 → display:none 사용 */
   .topbar,.tabs,#alertBanner,#coordMissingBanner,#branchRow,#dayGroupRow,footer,
-  .map-side,.redraw-guide,.coord-pick-banner,.map-only-toolbar,.modal-overlay{
-    display:none !important;visibility:hidden !important;
+  .map-side,.redraw-guide,.coord-pick-banner,.map-only-toolbar,.modal-overlay,
+  .view:not(.active),.map-empty,.order-modal{
+    display:none !important;
   }
   main,.view.active,.map-layout{
-    position:static !important;margin:0 !important;padding:0 !important;
-    width:100% !important;height:100% !important;max-width:none !important;
+    display:block !important;
+    position:static !important;
+    margin:0 !important;padding:0 !important;
+    width:100% !important;height:auto !important;max-width:none !important;
+    overflow:visible !important;
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
   }
-  .map-main{
-    position:fixed !important;inset:0 !important;width:100vw !important;height:100vh !important;
-    border:none !important;border-radius:0 !important;overflow:visible !important;
-    box-shadow:none !important;background:#fff !important;
+  body.map-printing .view.active .map-main,
+  body.map-only .view.active .map-main,
+  .view.active .map-main{
+    position:fixed !important;
+    left:0 !important;top:0 !important;right:0 !important;bottom:0 !important;
+    width:100% !important;height:100% !important;
+    min-width:100vw !important;min-height:100vh !important;
+    margin:0 !important;padding:0 !important;
+    border:none !important;border-radius:0 !important;
+    box-shadow:none !important;outline:none !important;
+    overflow:hidden !important;
+    background:#fff !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
+  #kakaoMap,#redrawMap,
+  #kakaoMap *,#redrawMap *,
+  .view.active .map-main *{
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+    box-shadow:none !important;
   }
   #kakaoMap,#redrawMap{
-    width:100vw !important;height:100vh !important;min-height:100vh !important;
+    position:absolute !important;
+    left:0 !important;top:0 !important;
+    width:100% !important;height:100% !important;
+    min-width:100% !important;min-height:100% !important;
+    transform:none !important;
+    border:none !important;border-radius:0 !important;
   }
 }
 </style>
@@ -3816,22 +3842,51 @@ function exitMapOnlyMode(opts){
   }
 }
 
+function prepareMapForPrint(target){
+  const t = target || state.mapOnlyTarget || (state.activeTab === 'redraw' ? 'redraw' : 'map');
+  // soft scale이 있으면 인쇄 시 중앙에 작게 떠 보이므로 정수 level로 정리
+  commitSoftZoom(t);
+  applySoftZoomCss(t);
+  document.body.classList.add('map-only');
+  document.body.classList.add('map-printing');
+  document.querySelector('main').classList.add('map-mode');
+  try{
+    const map = getMapByTarget(t);
+    if(map){
+      map.relayout();
+      // 타일·오버레이가 새 크기에 맞게 다시 그려지도록
+      const c = map.getCenter();
+      const lv = map.getLevel();
+      map.setLevel(lv);
+      map.setCenter(c);
+    }
+  }catch(e){}
+  return t;
+}
+
 function printActiveMap(){
   const target = state.mapOnlyTarget || (state.activeTab === 'redraw' ? 'redraw' : 'map');
   const wasOnly = state.mapOnlyMode;
   if(!wasOnly) enterMapOnlyMode(target);
-  document.body.classList.add('map-printing');
+  prepareMapForPrint(target);
   const runPrint = () => {
-    refreshActiveMapLayout(true);
+    prepareMapForPrint(target);
+    refreshActiveMapLayout(false);
+    // 전체화면 레이아웃·타일 로딩 여유
     setTimeout(() => {
+      prepareMapForPrint(target);
       try{ window.print(); }
       finally{
         document.body.classList.remove('map-printing');
         if(!wasOnly) exitMapOnlyMode();
+        else {
+          // map-only 유지 시 soft/레이아웃만 복구
+          refreshActiveMapLayout(false);
+        }
       }
-    }, 450);
+    }, 700);
   };
-  requestAnimationFrame(() => setTimeout(runPrint, 200));
+  requestAnimationFrame(() => setTimeout(runPrint, 350));
 }
 
 function wireMapOnlyControls(){
@@ -5989,11 +6044,11 @@ document.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('beforeprint', () => {
-  document.body.classList.add('map-printing');
-  if(!state.mapOnlyMode && (state.activeTab === 'map' || state.activeTab === 'redraw')){
-    document.body.classList.add('map-only');
+  const t = state.mapOnlyTarget || (state.activeTab === 'redraw' ? 'redraw' : 'map');
+  if(state.activeTab === 'map' || state.activeTab === 'redraw' || state.mapOnlyMode){
+    prepareMapForPrint(t);
+    refreshActiveMapLayout(false);
   }
-  refreshActiveMapLayout(false);
 });
 window.addEventListener('afterprint', () => {
   document.body.classList.remove('map-printing');

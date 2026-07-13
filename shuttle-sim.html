@@ -248,7 +248,7 @@ main.map-mode{max-width:none}
 .sim-compare-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
 .attempt-item.starred{border-color:var(--busyellow)}
 .attempt-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
-.map-bus-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:8px}
+.map-bus-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin-top:0}
 .map-bus-stats .cell{
   background:#F8FAFD;border:1px solid var(--border);border-radius:8px;
   padding:5px 1px 4px;text-align:center;min-width:0;overflow:hidden;
@@ -262,6 +262,9 @@ main.map-mode{max-width:none}
   font-size:9px;color:var(--muted);margin-top:2px;line-height:1.15;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.04em;
 }
+.map-bus-stop-order{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.map-bus-stop-order .order-item{padding:7px 8px;font-size:12px}
+.map-bus-stop-order .map-tip{margin:0 0 2px;font-size:11px}
 .roster-upload{
   background:var(--card);border:1px solid var(--border);border-radius:12px;
   padding:12px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
@@ -1222,6 +1225,50 @@ function stopsForMapPath(bus, orderedStops){
   const tab = state.mapLineOrder || state.orderTab || '등원';
   if(academyEndpointMode(tab) === 'first') return [ac, ...mid];
   return [...mid, ac];
+}
+
+/** 현재 지도 선순서 칩 기준 routeOrders 키 */
+function mapLineOrderKey(){
+  return state.mapLineOrder === '하원' ? '하원순서' : '등원순서';
+}
+
+/** 호차 정류장을 현재 선순서(등원/하원) 기준으로 정렬한 중간 정류장 목록 */
+function orderedStopsForMapBus(bus){
+  const stops = stopsForReassignView(bus).filter(s => !isAcademyStop(s));
+  if(!bus) return [];
+  const saved = state.routeOrders[bus.id] || {};
+  const preferKey = mapLineOrderKey();
+  const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
+  const orderIds = (saved[preferKey] && saved[preferKey].length)
+    ? saved[preferKey]
+    : (saved[altKey] && saved[altKey].length ? saved[altKey] : null);
+  if(!orderIds || !orderIds.length) return stops.slice();
+  const byId = new Map(stops.map(s => [String(s.id), s]));
+  const ordered = [];
+  orderIds.forEach(id => {
+    const s = byId.get(String(id));
+    if(s){ ordered.push(s); byId.delete(String(id)); }
+  });
+  byId.forEach(s => ordered.push(s));
+  return ordered;
+}
+
+/** 사이드바 드래그로 바꾼 순서를 routeOrders에 반영하고 지도 선을 다시 그림 */
+function applyInlineBusStopOrder(busId, orderedStops){
+  if(!busId) return;
+  if(!state.routeOrders[busId]) state.routeOrders[busId] = {};
+  const key = mapLineOrderKey();
+  state.routeOrders[busId][key] = (orderedStops || [])
+    .filter(s => s && !isAcademyStop(s))
+    .map(s => String(s.id));
+  const bus = state.mapWorking.find(b => b.id === busId);
+  if(bus){
+    const academyStops = (bus.stops || []).filter(s => isAcademyStop(s));
+    const mid = (orderedStops || []).filter(s => s && !isAcademyStop(s));
+    bus.stops = [...mid, ...academyStops];
+  }
+  renderKakaoMap(false);
+  renderMapSideTravelOnly();
 }
 
 function academyPointForBus(bus){
@@ -3221,8 +3268,8 @@ function bindOrderItemDrag(el){
       ghost.style.left = p.clientX + 'px';
       ghost.style.top = p.clientY + 'px';
       const hit = document.elementFromPoint(p.clientX, p.clientY);
-      const item = hit && hit.closest('[data-order-idx]');
-      document.querySelectorAll('.order-item').forEach(n => n.classList.remove('drag-over'));
+      const item = hit && hit.closest('#orderList [data-order-idx]');
+      document.querySelectorAll('#orderList .order-item').forEach(n => n.classList.remove('drag-over'));
       if(item){
         overIdx = Number(item.getAttribute('data-order-idx'));
         item.classList.add('drag-over');
@@ -3233,7 +3280,7 @@ function bindOrderItemDrag(el){
       document.removeEventListener('pointerup', onUp);
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onUp);
-      document.querySelectorAll('.order-item').forEach(n => n.classList.remove('drag-over'));
+      document.querySelectorAll('#orderList .order-item').forEach(n => n.classList.remove('drag-over'));
       if(ghost.parentNode) ghost.parentNode.removeChild(ghost);
       if(overIdx !== fromIdx && overIdx >= 0 && overIdx < state.orderDraft.length){
         const arr = state.orderDraft.slice();
@@ -3241,6 +3288,84 @@ function bindOrderItemDrag(el){
         arr.splice(overIdx, 0, moved);
         state.orderDraft = arr;
         renderOrderList();
+      }
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+  el.addEventListener('pointerdown', onDown);
+}
+
+/** 현재 노선상황 호차 카드 안 정류장 목록 채우기 */
+function fillMapBusStopOrderList(bus){
+  const box = Array.from(document.querySelectorAll('[data-bus-stop-list]'))
+    .find(el => el.getAttribute('data-bus-stop-list') === bus.id);
+  if(!box) return;
+  const mid = orderedStopsForMapBus(bus);
+  const tab = state.mapLineOrder || '등원';
+  const mode = academyEndpointMode(tab);
+  const academy = academyPointForBus(bus);
+  const academyHtml = '<div class="order-item academy"><span class="ord">'
+    + (mode === 'first' ? 1 : (mid.length + 1))
+    + '</span><div>'+esc(academyEndpointLabel(tab))+' · '+esc((academy && academy.name) || '학원')+'</div></div>';
+  const midHtml = mid.map((s, i) => {
+    const ord = mode === 'first' ? (i + 2) : (i + 1);
+    return '<div class="order-item" data-order-idx="'+i+'" data-stop-id="'+esc(String(s.id))+'">'
+      + '<span class="ord">'+ord+'</span>'
+      + '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+      + esc(s.name || ('정류장 '+s.id)) + '</div>'
+      + '<div class="meta">'+(Number(s.passengers)||0)+'명 · 드래그로 순서</div></div></div>';
+  }).join('');
+  box.innerHTML = '<div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 순서 · '
+    + esc(tab) + ' 선</div>'
+    + (mode === 'first' ? (academyHtml + midHtml) : (midHtml + academyHtml));
+  const draft = mid.slice();
+  box.querySelectorAll('.order-item[data-order-idx]').forEach(el => {
+    bindMapBusStopDrag(el, bus.id, draft, box);
+  });
+}
+
+function bindMapBusStopDrag(el, busId, draft, listRoot){
+  const onDown = (ev) => {
+    if(ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const fromIdx = Number(el.getAttribute('data-order-idx'));
+    const pt = ev.touches ? ev.touches[0] : ev;
+    const ghost = document.createElement('div');
+    ghost.className = 'map-drag-ghost';
+    ghost.textContent = el.textContent.trim().slice(0, 40);
+    ghost.style.left = pt.clientX + 'px';
+    ghost.style.top = pt.clientY + 'px';
+    document.body.appendChild(ghost);
+    let overIdx = fromIdx;
+    const clearOver = () => listRoot.querySelectorAll('.order-item').forEach(n => n.classList.remove('drag-over'));
+    const onMove = (e2) => {
+      const p = e2.touches ? e2.touches[0] : e2;
+      ghost.style.left = p.clientX + 'px';
+      ghost.style.top = p.clientY + 'px';
+      const hit = document.elementFromPoint(p.clientX, p.clientY);
+      const item = hit && hit.closest('[data-bus-stop-list] [data-order-idx]');
+      clearOver();
+      if(item && listRoot.contains(item)){
+        overIdx = Number(item.getAttribute('data-order-idx'));
+        item.classList.add('drag-over');
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      clearOver();
+      if(ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      if(overIdx !== fromIdx && overIdx >= 0 && overIdx < draft.length){
+        const [moved] = draft.splice(fromIdx, 1);
+        draft.splice(overIdx, 0, moved);
+        applyInlineBusStopOrder(busId, draft);
+        renderMapSide();
       }
     };
     document.addEventListener('pointermove', onMove);
@@ -3406,13 +3531,12 @@ function renderMapSide(){
         </div>
         <div class="map-bus-acc-body">
           <div class="map-bus-stats">
-            <div class="cell"><div class="n">${stopN}</div><div class="l">정류장</div></div>
-            <div class="cell"><div class="n">${pax}</div><div class="l">탑승</div></div>
             <div class="cell"><div class="n">${spare}</div><div class="l">여유석</div></div>
-            <div class="cell"><div class="n" data-map-stat="km">${distTxt}</div><div class="l">거리</div></div>
-            <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행</div></div>
+            <div class="cell"><div class="n" data-map-stat="km">${distTxt}</div><div class="l">운행거리</div></div>
+            <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행시간</div></div>
           </div>
           ${reassignCtrls}
+          <div class="map-bus-stop-order" data-bus-stop-list="${esc(b.id)}"></div>
           <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
             <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">리스트로 순서</button>
           </div>
@@ -3427,6 +3551,10 @@ function renderMapSide(){
         state.mapBusAccordion[id] = !state.mapBusAccordion[id];
         renderMapSide();
       });
+    });
+    buses.forEach(b => {
+      if(!(state.mapBusAccordion && state.mapBusAccordion[b.id])) return;
+      fillMapBusStopOrderList(b);
     });
     list.querySelectorAll('[data-reassign-remove]').forEach(inp => {
       inp.addEventListener('click', (ev) => {
@@ -3709,24 +3837,7 @@ async function renderKakaoMap(fitBounds){
     const col = busColor(bus);
     const dim = state.reassignMode && reSel.size && !reSel.has(bus.id);
     const op = dim ? 0.25 : 0.85;
-    let stops = stopsForReassignView(bus).filter(s => s.lat != null && s.lng != null);
-
-    const savedOrder = state.routeOrders[bus.id];
-    const preferKey = state.mapLineOrder === '하원' ? '하원순서' : '등원순서';
-    const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
-    const orderIds = savedOrder && ((savedOrder[preferKey] && savedOrder[preferKey].length)
-      ? savedOrder[preferKey]
-      : savedOrder[altKey]);
-    if(orderIds && orderIds.length){
-      const byId = new Map(stops.map(s => [String(s.id), s]));
-      const ordered = [];
-      orderIds.forEach(id => {
-        const s = byId.get(String(id));
-        if(s){ ordered.push(s); byId.delete(String(id)); }
-      });
-      byId.forEach(s => ordered.push(s));
-      stops = ordered;
-    }
+    let stops = orderedStopsForMapBus(bus).filter(s => s.lat != null && s.lng != null);
 
     // 학원 끝점(고정 좌표)을 등원/하원 규칙에 맞게 붙여 마지막↔학원 선 연결
     const pathStops = stopsForMapPath(bus, stops);

@@ -199,6 +199,20 @@ main.map-mode{max-width:none}
 .coord-missing-item input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit}
 .coord-missing-item label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
 .coord-missing-item.saved{border-color:#A8D5B5;background:#F4FBF6}
+.coord-pick-banner{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(27,31,39,.92);color:#fff;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:700;line-height:1.45;display:none;gap:10px;align-items:center;max-width:min(560px,calc(100% - 24px));box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.coord-pick-banner.show{display:flex}
+.coord-meta{font-size:11px;color:var(--muted);line-height:1.4}
+.coord-missing-item.active-pick{border-color:var(--busyellow);box-shadow:inset 0 0 0 1px var(--busyellow)}
+.sim-compare-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.sim-compare-item{border:1px solid var(--border);border-radius:10px;padding:12px;background:#F8FAFD}
+.sim-compare-item.starred{border-color:var(--busyellow);background:#FFFDF5}
+.sim-compare-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
+.attempt-item.starred{border-color:var(--busyellow)}
+.attempt-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
+.map-bus-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
+.map-bus-stats .cell{background:#F8FAFD;border:1px solid var(--border);border-radius:8px;padding:6px 4px;text-align:center}
+.map-bus-stats .cell .n{font-size:13px;font-weight:800;color:var(--navy)}
+.map-bus-stats .cell .l{font-size:9px;color:var(--muted);margin-top:1px}
 </style>
 </head>
 <body>
@@ -223,9 +237,9 @@ main.map-mode{max-width:none}
   <div id="coordMissingBanner" class="coord-banner" role="status">
     <div class="coord-banner-text">
       <span id="coordMissingBannerText">이 분원은 좌표가 없는 정류장이 있습니다.</span>
-      <span class="coord-banner-warn">※ 좌표 저장은 미리보기가 아니라 Firestore 원본 정류장 시트에 실제로 반영됩니다.</span>
+      <span class="coord-banner-warn">※ 지도에 위치를 찍어 저장하면 미리보기가 아니라 Firestore 원본 정류장 시트에 실제로 반영됩니다.</span>
     </div>
-    <button class="btn btn-navy btn-sm" type="button" id="coordMissingOpenBtn">좌표 입력하기</button>
+    <button class="btn btn-navy btn-sm" type="button" id="coordMissingOpenBtn">지도상에 위치 표시하기</button>
   </div>
   <div class="branch-row" id="branchRow"></div>
   <div class="filter-row" id="dayGroupRow" style="margin-top:-6px"></div>
@@ -243,8 +257,17 @@ main.map-mode{max-width:none}
   <section class="view" id="view-map">
     <div class="map-layout">
       <aside class="map-side">
-        <div class="map-banner">감차·재배정 미리보기 · 정류장 드래그는 호차 이동 시뮬레이션만 (원본 미변경)</div>
-        <p class="map-tip">노선을 <b>클릭해서 다시 그리는</b> 작업은 <b>노선 다시 그리기</b> 탭에서 합니다. 이 탭은 감차·흡수 재배정용입니다.</p>
+        <div class="map-banner">현재 노선상황 · 도로(OSRM) 기준 경로 · 감차·재배정은 미리보기만 (원본 미변경)</div>
+        <p class="map-tip">노선을 <b>새로 짜는</b> 작업은 <b>노선 다시 그리기</b> 탭에서 합니다. 이 탭은 현재 호차별 노선·탑승 현황과 감차·흡수 미리보기용입니다.</p>
+        <div id="coordPickPanel" class="reassign-panel" style="display:none">
+          <div class="map-tip" style="margin:0;font-weight:800;color:var(--navy)">좌표 없는 정류장 · 지도에서 위치 찍기</div>
+          <div class="coord-save-notice" style="margin:0">저장 시 Firestore 원본 <code>정류장</code> 시트에 반영됩니다.</div>
+          <div id="coordPickList" class="coord-missing-list" style="max-height:280px"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-navy btn-sm" type="button" id="coordPickSaveAllBtn">찍은 좌표 전체 저장</button>
+            <button class="btn btn-outline btn-sm" type="button" id="coordPickCancelBtn">위치 찍기 종료</button>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
         </div>
@@ -267,20 +290,24 @@ main.map-mode{max-width:none}
         </div>
         <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
         <div id="mapBusList"></div>
-        <div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 목록 (드래그 → 왼쪽 호차 카드)</div>
+        <div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 목록 (호차별 현황)</div>
         <div id="mapStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
-        <div class="map-preview-log" id="mapPreviewLog">아직 미리보기 이동이 없습니다.</div>
+        <div class="map-preview-log" id="mapPreviewLog">재배정·감차 미리보기 이동이 있으면 여기에 표시됩니다.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" type="button" id="mapUndoBtn" disabled>한 단계 되돌리기</button>
           <button class="btn btn-outline" type="button" id="mapResetBtn">미리보기 초기화</button>
         </div>
       </aside>
       <div class="map-main">
+        <div class="coord-pick-banner" id="coordPickMapBanner">
+          <span id="coordPickMapText">지도에서 정류장 위치를 클릭하세요.</span>
+          <button class="btn btn-yellow btn-sm" type="button" id="coordPickBannerCancel">취소</button>
+        </div>
         <div id="kakaoMap"></div>
         <div class="map-empty" id="mapEmpty"><div>
           <div style="font-size:32px;margin-bottom:8px">🗺️</div>
           <p><b>지도에 표시할 좌표가 없습니다.</b></p>
-          <p class="map-tip">분원을 선택하고, 좌표가 없는 정류장은 「좌표 입력하기」로 채워주세요.</p>
+          <p class="map-tip">분원을 선택하고, 좌표가 없는 정류장은 「지도상에 위치 표시하기」로 채워주세요.</p>
         </div></div>
       </div>
     </div>
@@ -302,6 +329,7 @@ main.map-mode{max-width:none}
           <div class="map-tip" style="margin:0" id="redrawSelectionSummary">정류장 풀이 준비되면 <b>새 노선 그리기</b>를 누르세요.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-navy btn-sm" type="button" id="redrawStartNewBtn" disabled>새 노선 그리기</button>
+            <button class="btn btn-yellow btn-sm" type="button" id="redrawAutoRecommendBtn" disabled>노선 자동추천(최소시간)</button>
             <button class="btn btn-outline btn-sm" type="button" id="redrawClearOrderBtn" disabled>순서만 지우기</button>
             <button class="btn btn-outline btn-sm" type="button" id="redrawUndoBtn" disabled>마지막 클릭 취소</button>
             <button class="btn btn-outline btn-sm" type="button" id="redrawStopEditBtn" disabled>그리기 종료</button>
@@ -359,6 +387,12 @@ main.map-mode{max-width:none}
         </div>
       </div>
       <div id="simResult"></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>관련 노선안 비교</h2>
+      <p class="desc">위에서 고른 호차가 <b>원본으로 포함된</b> 「노선 다시 그리기」 저장 세트를 함께 보여 줍니다. 쓸 만한 안은 즐겨찾기하고, 선호안으로 지정해 두면 나중에 현재 노선 교체 준비에 쓸 수 있습니다.</p>
+      <div id="simRelatedSets" class="sim-compare-list"></div>
     </div>
 
     <div class="panel" style="margin-top:16px">
@@ -462,17 +496,18 @@ main.map-mode{max-width:none}
 
 <div class="modal-overlay" id="coordMissingOverlay">
   <div class="modal-card wide">
-    <h3 id="coordMissingTitle">정류장 좌표 입력</h3>
+    <h3 id="coordMissingTitle">정류장 좌표 · 지도에서 위치 표시</h3>
     <div class="coord-save-notice">
-      이 화면에서 저장하면 <b>미리보기가 아니라</b> Firestore <code>shuttle_data/정류장</code> 원본 시트에 위도·경도가 실제로 기록됩니다.
-      다른 시뮬레이션(감차·재배정 미리보기)과 달리 원본이 바뀌니 좌표를 확인한 뒤 저장하세요.
+      이 기능은 <b>미리보기가 아니라</b> Firestore <code>shuttle_data/정류장</code> 원본에 위도·경도를 저장합니다.
+      목록에서 정류장을 고른 뒤 <b>현재 노선상황</b> 지도에서 위치를 클릭하세요. (위도·경도 직접 입력도 가능)
     </div>
-    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px" id="coordMissingDesc">카카오맵에서 찾아 좌표를 확인한 뒤 입력하세요.</p>
+    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px" id="coordMissingDesc">좌표 없는 정류장 목록</p>
     <div class="coord-missing-list" id="coordMissingList"></div>
     <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap">
       <button class="btn btn-outline" type="button" id="coordMissingCloseBtn">닫기</button>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-navy" type="button" id="coordMissingSaveAllBtn">입력한 좌표 전체 저장</button>
+        <button class="btn btn-yellow" type="button" id="coordMissingGoMapBtn">지도에서 위치 찍기</button>
+        <button class="btn btn-navy" type="button" id="coordMissingSaveAllBtn">입력·찍은 좌표 전체 저장</button>
       </div>
     </div>
   </div>
@@ -531,7 +566,7 @@ const STAFF_DOC_STALE_DAYS = 365;
 
 const TABS = [
   { key:'dash', label:'대시보드', view:'view-dash' },
-  { key:'map', label:'재배정 지도', view:'view-map' },
+  { key:'map', label:'현재 노선상황', view:'view-map' },
   { key:'redraw', label:'노선 다시 그리기', view:'view-redraw' },
   { key:'sim', label:'시뮬레이션', view:'view-sim' },
   { key:'alerts', label:'알림함', view:'view-alerts' },
@@ -619,12 +654,20 @@ const state = {
   redrawActiveSetId: null,
   redrawAttempts: {},
   redrawStats: { meters: 0, minutes: 0, source: 'osrm' },
-  redrawColorIdx: 0
+  redrawColorIdx: 0,
+  coordMissingCount: 0,
+  coordPickMode: false,
+  coordPickName: null,
+  coordDrafts: {},
+  mapTravelByBus: {},
+  preferredSetByBranch: {}
 };
 
 let lmap = null;
 let lLayers = [];
 let mapDrag = null;
+let mapRenderSeq = 0;
+let mapClickBound = false;
 let rmap = null;
 let rLayers = [];
 let rmapReady = false;
@@ -1130,11 +1173,24 @@ async function loadRouteAttempts(){
     const data = snap.exists ? (snap.data() || {}) : {};
     state.redrawAttempts = data.attempts || {};
     state.redrawSets = data.sets || {};
+    state.preferredSetByBranch = data.preferredSetByBranch || {};
   }catch(e){
     console.warn('route_attempts', e);
     state.redrawAttempts = {};
     state.redrawSets = {};
+    state.preferredSetByBranch = {};
   }
+}
+
+async function persistRouteAttempts(extra){
+  const payload = {
+    sets: state.redrawSets,
+    attempts: state.redrawAttempts,
+    preferredSetByBranch: state.preferredSetByBranch || {},
+    updatedAt: new Date().toISOString(),
+    ...(extra || {})
+  };
+  await db.collection('shuttle_data').doc('route_attempts').set(payload, { merge: true });
 }
 
 function redrawBuses(){
@@ -1237,6 +1293,8 @@ function updateRedrawGuide(){
   const finishBtn = document.getElementById('redrawFinishBtn');
   const saveSetBtn = document.getElementById('redrawSaveSetBtn');
   if(startBtn) startBtn.disabled = !state.redrawStopPool.length;
+  const autoBtn = document.getElementById('redrawAutoRecommendBtn');
+  if(autoBtn) autoBtn.disabled = !state.redrawStopPool.length || !!getActiveNewRoute();
   if(clearBtn) clearBtn.disabled = !route;
   if(undoBtn) undoBtn.disabled = !(route && nonAcademyStops(route.stops).length);
   if(stopEdit) stopEdit.disabled = !route;
@@ -1547,14 +1605,11 @@ async function saveRedrawSet(){
   state.redrawSets[id] = setDoc;
   state.redrawActiveSetId = id;
   try{
-    await db.collection('shuttle_data').doc('route_attempts').set({
-      sets: state.redrawSets,
-      attempts: state.redrawAttempts,
-      updatedAt: setDoc.createdAt
-    }, { merge: true });
+    await persistRouteAttempts({ updatedAt: setDoc.createdAt });
     await persistRouteCache();
     if(setInput) setInput.value = '';
     renderRedrawAttempts();
+    renderSimRelatedSets();
     alert('전체 노선 세트를 저장했습니다. (route_attempts.sets · '+routes.length+'개 노선)');
   }catch(e){
     delete state.redrawSets[id];
@@ -1596,15 +1651,127 @@ async function deleteRedrawSet(id){
   if(!confirm('이 세트를 삭제할까요?')) return;
   delete state.redrawSets[id];
   if(state.redrawActiveSetId === id) state.redrawActiveSetId = null;
+  Object.keys(state.preferredSetByBranch || {}).forEach(br => {
+    if(state.preferredSetByBranch[br] === id) delete state.preferredSetByBranch[br];
+  });
   try{
-    await db.collection('shuttle_data').doc('route_attempts').set({
-      sets: state.redrawSets,
-      attempts: state.redrawAttempts,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await persistRouteAttempts();
     renderRedrawAttempts();
+    renderSimRelatedSets();
   }catch(e){
     alert('삭제 실패: ' + e.message);
+  }
+}
+
+/** 풀 정류장을 최소시간(최근접) 기준으로 여러 노선으로 자동 편성 */
+async function autoRecommendRedrawRoutes(){
+  if(!state.redrawStopPool.length){
+    alert('먼저 원본 노선을 선택해 정류장 풀을 만드세요.');
+    return;
+  }
+  if(getActiveNewRoute()){
+    alert('그리는 중인 노선이 있습니다. 마무리하거나 종료한 뒤 자동추천을 실행하세요.');
+    return;
+  }
+  if(state.redrawNewRoutes.some(r => r.finished)){
+    if(!confirm('이미 만든 새 노선이 있습니다. 지우고 자동추천으로 다시 짤까요?')) return;
+  }
+
+  const btn = document.getElementById('redrawAutoRecommendBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '추천 계산 중…'; }
+
+  try{
+    const pool = state.redrawStopPool
+      .filter(s => isValidLatLng(s.lat, s.lng) && !isJanganAcademyStop(s) && !isAcademyStop(s))
+      .map(s => ({ ...s }));
+    if(!pool.length){
+      alert('좌표가 있는 풀 정류장이 없습니다.');
+      return;
+    }
+
+    const srcBuses = redrawBuses().filter(b => state.redrawSourceBusIds.includes(b.id));
+    const avgCap = Math.max(8, Math.round(
+      srcBuses.reduce((a,b) => a + (Number(b.seatSlots || b.capacity) || 25), 0) / Math.max(1, srcBuses.length)
+    ));
+    const totalPax = pool.reduce((a,s) => a + (Number(s.passengers)||0), 0);
+    const routeCount = Math.max(1, srcBuses.length || Math.ceil(totalPax / avgCap) || 1);
+
+    // 학원에서 먼 순으로 시드 → 각 노선에 최근접 추가(정원·탑승 고려)
+    const academy = { lat: JANGAN_ACADEMY.lat, lng: JANGAN_ACADEMY.lng };
+    const remaining = pool.slice().sort((a,b) => haversineM(b, academy) - haversineM(a, academy));
+    const groups = [];
+    for(let i=0;i<routeCount && remaining.length;i++){
+      const seed = remaining.shift();
+      groups.push({ stops: [seed], pax: Number(seed.passengers)||0 });
+    }
+    while(remaining.length){
+      const stop = remaining.shift();
+      let bestG = -1; let bestD = Infinity;
+      groups.forEach((g, gi) => {
+        if(g.pax + (Number(stop.passengers)||0) > avgCap + state.rules.capacityBufferSeats) return;
+        g.stops.forEach(s => {
+          const d = haversineM(stop, s);
+          if(d < bestD){ bestD = d; bestG = gi; }
+        });
+      });
+      if(bestG < 0){
+        // 정원 초과면 새 노선
+        groups.push({ stops: [stop], pax: Number(stop.passengers)||0 });
+      } else {
+        groups[bestG].stops.push(stop);
+        groups[bestG].pax += Number(stop.passengers)||0;
+      }
+    }
+
+    // 각 그룹: 학원 끝점 규칙 + nearest-neighbor 순서
+    const mode = academyEndpointMode();
+    const newRoutes = [];
+    for(let gi=0; gi<groups.length; gi++){
+      const stops = groups[gi].stops.slice();
+      const ordered = [];
+      let cursor = academy;
+      const left = stops.slice();
+      while(left.length){
+        let bi = 0; let bd = Infinity;
+        left.forEach((s, i) => {
+          const d = haversineM(cursor, s);
+          if(d < bd){ bd = d; bi = i; }
+        });
+        const next = left.splice(bi, 1)[0];
+        ordered.push(next);
+        cursor = next;
+      }
+      // 등원: 학원 마지막 / 하원: 학원 첫
+      const withAc = normalizeAcademyEndpoint(ordered);
+      const built = await buildRoadPath(withAc);
+      const id = 'nr_auto_' + Date.now().toString(36) + '_' + gi;
+      newRoutes.push({
+        id,
+        name: '추천 ' + (gi + 1) + '노선',
+        stops: withAc,
+        finished: true,
+        meters: built.meters || 0,
+        minutes: built.minutes || 0,
+        source: built.source || 'osrm',
+        path: built.path || [],
+        color: nextRedrawColor()
+      });
+    }
+
+    state.redrawNewRoutes = newRoutes;
+    state.redrawActiveRouteId = null;
+    const sum = document.getElementById('redrawSelectionSummary');
+    if(sum) sum.innerHTML = '자동추천 <b>'+newRoutes.length+'</b>개 노선(최소시간·최근접) · 이름을 확인하고 세트로 저장하세요.';
+    renderRedrawSide();
+    await renderRedrawMap(true);
+    updateRedrawStatsUi();
+    alert('최소시간(최근접) 기준으로 '+newRoutes.length+'개 노선을 추천했습니다. 필요하면 클릭해 수정한 뒤 세트를 저장하세요.');
+  }catch(err){
+    console.error(err);
+    alert('자동추천 실패: ' + (err && err.message || err));
+  } finally {
+    if(btn){ btn.disabled = !state.redrawStopPool.length; btn.textContent = '노선 자동추천(최소시간)'; }
+    updateRedrawGuide();
   }
 }
 
@@ -1744,21 +1911,30 @@ function renderRedrawAttempts(){
   let list = Object.values(state.redrawSets || {}).filter(a => a.kind === 'new-route-set' || a.routes);
   const branch = effectiveMapBranch();
   if(branch) list = list.filter(a => !a.branch || a.branch === branch || a.branch === '전체');
-  list.sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  list.sort((a,b) => {
+    if(!!b.starred !== !!a.starred) return b.starred ? 1 : -1;
+    return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+  });
   if(!list.length){
     box.innerHTML = `<div class="map-tip">저장된 전체 세트가 없습니다.</div>`;
     return;
   }
+  const preferredId = state.preferredSetByBranch[branch];
   box.innerHTML = list.map(a => {
     const n = (a.routeIds || Object.keys(a.routes||{})).length;
-    return `<div class="attempt-item${state.redrawActiveSetId===a.id?' active':''}">
+    const star = a.starred ? '★' : '☆';
+    const badges = (a.starred ? '<span class="badge gold">즐겨찾기</span> ' : '')
+      + (preferredId === a.id ? '<span class="badge green">선호안</span> ' : '');
+    return `<div class="attempt-item${state.redrawActiveSetId===a.id?' active':''}${a.starred?' starred':''}${preferredId===a.id?' preferred':''}">
       <div class="row">
-        <div style="font-weight:800;font-size:13px">${esc(a.name || a.id)}</div>
+        <div style="font-weight:800;font-size:13px">${esc(a.name || a.id)} ${badges}</div>
         <span class="badge gray">${esc(a.tab || '')}</span>
       </div>
       <div class="meta">새 노선 ${n}개 · ${((a.totalMeters||0)/1000).toFixed(1)}km / ${Math.round(a.totalMinutes||0)}분</div>
       <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-outline btn-sm" data-set-star="${esc(a.id)}">${star} 즐겨찾기</button>
+        <button type="button" class="btn btn-outline btn-sm" data-set-prefer="${esc(a.id)}">선호안</button>
         <button type="button" class="btn btn-navy btn-sm" data-set-load="${esc(a.id)}">불러오기</button>
         <button type="button" class="btn btn-outline btn-sm" data-set-del="${esc(a.id)}">삭제</button>
       </div>
@@ -1770,6 +1946,48 @@ function renderRedrawAttempts(){
   box.querySelectorAll('[data-set-del]').forEach(btn => {
     btn.onclick = (ev) => { ev.stopPropagation(); deleteRedrawSet(btn.getAttribute('data-set-del')); };
   });
+  box.querySelectorAll('[data-set-star]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); toggleRedrawSetStar(btn.getAttribute('data-set-star')); };
+  });
+  box.querySelectorAll('[data-set-prefer]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); setPreferredRedrawSet(btn.getAttribute('data-set-prefer')); };
+  });
+}
+
+async function toggleRedrawSetStar(id){
+  const doc = state.redrawSets[id];
+  if(!doc) return;
+  doc.starred = !doc.starred;
+  try{
+    await persistRouteAttempts();
+    renderRedrawAttempts();
+    renderSimRelatedSets();
+  }catch(e){
+    doc.starred = !doc.starred;
+    alert('즐겨찾기 저장 실패: ' + e.message);
+  }
+}
+
+async function setPreferredRedrawSet(id){
+  const doc = state.redrawSets[id];
+  if(!doc) return;
+  const branch = doc.branch || effectiveMapBranch();
+  if(state.preferredSetByBranch[branch] === id){
+    delete state.preferredSetByBranch[branch];
+  } else {
+    state.preferredSetByBranch[branch] = id;
+    doc.starred = true;
+  }
+  try{
+    await persistRouteAttempts();
+    renderRedrawAttempts();
+    renderSimRelatedSets();
+    alert(state.preferredSetByBranch[branch]
+      ? '「'+ (doc.name||id) +'」을(를) '+branch+' 선호 노선안으로 지정했습니다. 시뮬레이션 탭에서 비교·교체 준비에 쓸 수 있습니다.'
+      : '선호안 지정을 해제했습니다.');
+  }catch(e){
+    alert('선호안 저장 실패: ' + e.message);
+  }
 }
 
 function forceRedrawRelayout(){
@@ -2817,7 +3035,7 @@ function renderMapSide(){
   const mapBranch = effectiveMapBranch();
   const banner = document.querySelector('#view-map .map-banner');
   if(banner){
-    banner.innerHTML = `시뮬레이션 모드 · <b>${esc(mapBranch)}</b> 분원 표시 · 정류장 드래그는 미리보기만 (Firestore 원본 변경 없음)` +
+    banner.innerHTML = `현재 노선상황 · <b>${esc(mapBranch)}</b> · 도로(네비) 경로 표시 · 감차·재배정은 미리보기만` +
       (state.branchFilter === '전체' ? `<br><span style="font-weight:600">상단에서 분원을 고르면 해당 지도로 전환됩니다.</span>` : '');
   }
   const filterRow = document.getElementById('mapBusFilterRow');
@@ -2859,7 +3077,11 @@ function renderMapSide(){
     const selected = new Set([state.reassignRemoveId, ...state.reassignAbsorbIds].filter(Boolean));
     list.innerHTML = buses.map(b => {
       const col = busColor(b);
-      const spare = (b.seatSlots || b.capacity) - (b.passengers || 0) - state.rules.capacityBufferSeats;
+      const stopN = stopsForReassignView(b).length;
+      const pax = Number(b.passengers) || 0;
+      const spare = (b.seatSlots || b.capacity) - pax - state.rules.capacityBufferSeats;
+      const travel = state.mapTravelByBus[b.id];
+      const travelTxt = travel && travel.minutes != null ? Math.round(travel.minutes) + '분' : '…';
       const isRem = state.reassignMode && state.reassignRemoveId === b.id;
       const isAbs = state.reassignMode && state.reassignAbsorbIds.includes(b.id);
       const dim = state.reassignMode && selected.size && !selected.has(b.id);
@@ -2881,12 +3103,17 @@ function renderMapSide(){
             </label>
           </div>`
         : '';
-      return `<div class="${cls}" data-map-bus-id="${esc(b.id)}" title="여기에 정류장을 드롭하면 미리보기 이동">
+      return `<div class="${cls}" data-map-bus-id="${esc(b.id)}">
         <div class="row">
           <span class="map-swatch" style="background:${col}"></span>
           <div style="flex:1">
             <div style="font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${esc(b.label)} ${tags}</div>
-            <div class="meta">정류장 ${stopsForReassignView(b).length} · 탑승 ${b.passengers||0}명 · 여유약 ${spare}석</div>
+            <div class="map-bus-stats">
+              <div class="cell"><div class="n">${stopN}</div><div class="l">정류장</div></div>
+              <div class="cell"><div class="n">${pax}</div><div class="l">탑승</div></div>
+              <div class="cell"><div class="n">${spare}</div><div class="l">여유석</div></div>
+              <div class="cell"><div class="n">${travelTxt}</div><div class="l">운행시간</div></div>
+            </div>
           </div>
         </div>
         ${reassignCtrls}
@@ -2926,7 +3153,7 @@ function renderMapSide(){
 
   const log = document.getElementById('mapPreviewLog');
   if(!state.mapMoves.length){
-    log.innerHTML = '아직 미리보기 이동이 없습니다.';
+    log.innerHTML = '재배정·감차 미리보기 이동이 있으면 여기에 표시됩니다.';
   } else {
     log.innerHTML = `<b>미리보기 이동 ${state.mapMoves.length}건</b><br>` +
       state.mapMoves.slice(0, 12).map(m =>
@@ -2947,7 +3174,7 @@ function renderMapSide(){
     stopList.innerHTML = `<div class="map-tip">표시할 정류장이 없습니다.</div>`;
   } else {
     stopList.innerHTML = rows.slice(0, 40).map(({bus, stop}) => `
-      <div class="stop-list-item" data-from-bus="${esc(bus.id)}" data-stop-id="${esc(stop.id)}" data-stop-name="${esc(stop.name || ('정류장 '+stop.id))}" data-stop-pax="${Number(stop.passengers)||0}" title="호차 카드로 드래그">
+      <div class="stop-list-item" data-from-bus="${esc(bus.id)}" data-stop-id="${esc(stop.id)}" data-stop-name="${esc(stop.name || ('정류장 '+stop.id))}" data-stop-pax="${Number(stop.passengers)||0}">
         <span class="dot" style="background:${busColor(bus)}"></span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(stop.name || ('정류장 '+stop.id))}</div>
@@ -2962,6 +3189,7 @@ function renderMapSide(){
       });
     });
   }
+  if(state.coordPickMode) renderCoordPickPanel();
 }
 
 function clearMapLayers(){
@@ -2970,90 +3198,13 @@ function clearMapLayers(){
 }
 
 function bindStopDrag(el, busId, stop){
+  // 정류장 호차 간 드래그 이동은 제거. 순서 지정 모드에서만 클릭 편성.
   const onDown = (ev) => {
-    // 지도 클릭 순서 지정 중이면 드래그 이동 비활성 · 해당 노선만 클릭 편성
     if(state.mapOrderPicking){
       ev.preventDefault();
       ev.stopPropagation();
       if(busId === state.orderBusId) pickStopForOrder(busId, stop);
-      return;
     }
-    ev.preventDefault();
-    ev.stopPropagation();
-    const pt = ev.touches ? ev.touches[0] : ev;
-    mapDrag = {
-      busId,
-      stopId: String(stop.id),
-      name: stop.name || `정류장 ${stop.id}`,
-      passengers: Number(stop.passengers) || 0,
-      startX: pt.clientX,
-      startY: pt.clientY,
-      moved: false
-    };
-    const ghost = document.createElement('div');
-    ghost.className = 'map-drag-ghost';
-    ghost.textContent = `${mapDrag.name} · ${mapDrag.passengers}명`;
-    ghost.style.left = pt.clientX + 'px';
-    ghost.style.top = pt.clientY + 'px';
-    document.body.appendChild(ghost);
-    mapDrag.ghost = ghost;
-
-    const onMove = (e2) => {
-      if(!mapDrag) return;
-      const p = e2.touches ? e2.touches[0] : e2;
-      if(Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY) > 14) mapDrag.moved = true;
-      mapDrag.ghost.style.left = p.clientX + 'px';
-      mapDrag.ghost.style.top = p.clientY + 'px';
-      document.querySelectorAll('.map-bus-item').forEach(card => {
-        const r = card.getBoundingClientRect();
-        const hot = p.clientX >= r.left && p.clientX <= r.right && p.clientY >= r.top && p.clientY <= r.bottom
-          && card.getAttribute('data-map-bus-id') !== mapDrag.busId;
-        card.classList.toggle('drop-hot', hot);
-      });
-    };
-    const onUp = (e2) => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onUp);
-      document.querySelectorAll('.map-bus-item').forEach(c => c.classList.remove('drop-hot'));
-      if(!mapDrag) return;
-      const p = (e2.changedTouches && e2.changedTouches[0]) || e2;
-      const ghostEl = mapDrag.ghost;
-      if(ghostEl && ghostEl.parentNode) ghostEl.parentNode.removeChild(ghostEl);
-
-      if(!mapDrag.moved){
-        mapDrag = null;
-        return;
-      }
-
-      let toBusId = findDropBusFromPoint(p.clientX, p.clientY);
-      if(toBusId === mapDrag.busId) toBusId = null;
-
-      // 지도 패닝처럼 크게 움직인 뒤 빈 곳에 놓으면 근처 정류장 자동 흡수하지 않음
-      const travel = Math.abs(p.clientX - mapDrag.startX) + Math.abs(p.clientY - mapDrag.startY);
-      if(!toBusId && travel <= 160){
-        const ll = latLngFromMouse(p);
-        if(ll){
-          const near = findNearestOtherStop(ll.getLat(), ll.getLng(), mapDrag.busId);
-          const limit = Math.max(state.rules.walkToleranceMeters || 500, 350);
-          if(near && near.meters <= limit) toBusId = near.busId;
-        }
-      }
-
-      if(toBusId){
-        const ok = previewMoveStop(mapDrag.busId, mapDrag.stopId, toBusId);
-        if(ok){
-          renderMapSide();
-          renderKakaoMap(false);
-        }
-      }
-      mapDrag = null;
-    };
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onUp);
   };
   el.addEventListener('pointerdown', onDown);
 }
@@ -3112,11 +3263,13 @@ function forceMapRelayout(){
   }, ms));
 }
 
-function renderKakaoMap(fitBounds){
+async function renderKakaoMap(fitBounds){
+  const seq = ++mapRenderSeq;
   const buses = mapVisibleBuses();
-  const hasGeo = buses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null));
+  const hasGeo = buses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null))
+    || (state.coordPickMode && Object.keys(state.coordDrafts||{}).length);
 
-  if(!hasGeo){
+  if(!hasGeo && !state.coordPickMode){
     clearMapLayers();
     const branch = state.branchFilter !== '전체' ? state.branchFilter : effectiveMapBranch();
     setMapEmptyMessage(`<div>
@@ -3140,17 +3293,18 @@ function renderKakaoMap(fitBounds){
 
   setMapEmptyMessage(null, false);
   clearMapLayers();
+  ensureMapClickHandler();
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
 
   const reSel = new Set([state.reassignRemoveId, ...state.reassignAbsorbIds].filter(Boolean));
-  buses.forEach(bus => {
+  for(const bus of buses){
+    if(seq !== mapRenderSeq) return;
     const col = busColor(bus);
     const dim = state.reassignMode && reSel.size && !reSel.has(bus.id);
-    const op = dim ? 0.25 : 0.75;
+    const op = dim ? 0.25 : 0.85;
     let stops = stopsForReassignView(bus).filter(s => s.lat != null && s.lng != null);
 
-    // 저장된 노선 순서대로 점선 연결. 없으면 원본 배열 순서(fallback).
     const savedOrder = state.routeOrders[bus.id];
     const preferKey = state.mapLineOrder === '하원' ? '하원순서' : '등원순서';
     const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
@@ -3164,29 +3318,33 @@ function renderKakaoMap(fitBounds){
         const s = byId.get(String(id));
         if(s){ ordered.push(s); byId.delete(String(id)); }
       });
-      byId.forEach(s => ordered.push(s)); // 순서에 없는(재배정 신규) 정류장은 뒤에
+      byId.forEach(s => ordered.push(s));
       stops = ordered;
-    } else {
-      // fallback: 원본 stops 배열 순서 사용
-      console.debug('[map line] no saved order for', bus.id, '— using raw stop array order');
     }
 
     if(stops.length > 1){
+      const built = await buildRoadPath(stops);
+      if(seq !== mapRenderSeq) return;
+      state.mapTravelByBus[bus.id] = { minutes: built.minutes, meters: built.meters, source: built.source };
+      const path = (built.path && built.path.length > 1)
+        ? built.path.map(p => new kakao.maps.LatLng(p.lat, p.lng))
+        : stops.map(s => new kakao.maps.LatLng(s.lat, s.lng));
       const pl = new kakao.maps.Polyline({
-        path: stops.map(s => new kakao.maps.LatLng(s.lat, s.lng)),
-        strokeWeight: 3,
+        path,
+        strokeWeight: 5,
         strokeColor: col,
         strokeOpacity: op,
-        strokeStyle: 'shortdash'
+        strokeStyle: 'solid'
       });
       pl.setMap(lmap);
       lLayers.push(pl);
+    } else if(stops.length === 1){
+      state.mapTravelByBus[bus.id] = { minutes: 0, meters: 0, source: 'none' };
     }
 
     const maxPax = Math.max(1, ...stops.map(s => Number(s.passengers)||0));
     const pickingThis = state.mapOrderPicking && state.orderBusId === bus.id;
     stops.forEach(s => {
-      // 장안분원 학원은 고정 마커로만 표시 (호차별 중복 핀 방지)
       if(isJanganAcademyStop(s)) return;
       const n = Number(s.passengers) || 0;
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
@@ -3197,9 +3355,9 @@ function renderKakaoMap(fitBounds){
       const cls = 'stop-bubble' + (picked ? ' order-picked' : (pickingThis ? ' order-target' : ''));
       const tip = pickingThis
         ? (picked ? ((s.name||'') + ' · 순서 ' + (ordIdx+1)) : ((s.name||'') + ' · 클릭하여 다음 순서로'))
-        : ((s.name||'') + ' · ' + n + '명 → 드래그하여 이동');
+        : ((s.name||'') + ' · ' + n + '명 · ' + (bus.label||''));
       const html = '<div id="'+id+'" class="'+cls+'" title="'+esc(tip)+'"'
-        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+';cursor:'+(pickingThis?'pointer':'grab')+'">'+label+'</div>';
+        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+';cursor:'+(pickingThis?'pointer':'default')+'">'+label+'</div>';
       const pos = new kakao.maps.LatLng(s.lat, s.lng);
       const overlay = new kakao.maps.CustomOverlay({
         position: pos,
@@ -3217,14 +3375,34 @@ function renderKakaoMap(fitBounds){
         if(el) bindStopDrag(el, bus.id, s);
       }, 0);
     });
+  }
+
+  // 좌표 찍기 중인 임시 핀
+  Object.keys(state.coordDrafts || {}).forEach(name => {
+    const d = state.coordDrafts[name];
+    if(!d || !isValidLatLng(d.lat, d.lng)) return;
+    const id = 'coord-draft-' + String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const active = state.coordPickName === name;
+    const html = '<div id="'+id+'" title="'+esc(name)+'" style="width:'+(active?28:22)+'px;height:'+(active?28:22)+'px;border-radius:50%;background:#BF8F00;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>';
+    const pos = new kakao.maps.LatLng(Number(d.lat), Number(d.lng));
+    const overlay = new kakao.maps.CustomOverlay({
+      position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 30
+    });
+    overlay.setMap(lmap);
+    lLayers.push(overlay);
+    bounds.extend(pos);
+    boundCount++;
   });
 
-  // 정상어학원(장안분원) 고정 표시 — 어느 분원 지도에서도 식별 가능
   const academyMark = drawFixedAcademyMarker(lmap, lLayers, { domId: 'fixed-academy-reassign' });
   if(academyMark){
     bounds.extend(academyMark.pos);
     boundCount++;
   }
+
+  if(seq !== mapRenderSeq) return;
+  // 운행시간 숫자 갱신
+  renderMapSideTravelOnly();
 
   if(fitBounds && boundCount){
     try{
@@ -3243,6 +3421,26 @@ function renderKakaoMap(fitBounds){
     }
   }
   forceMapRelayout();
+}
+
+function renderMapSideTravelOnly(){
+  document.querySelectorAll('#mapBusList [data-map-bus-id]').forEach(card => {
+    const id = card.getAttribute('data-map-bus-id');
+    const travel = state.mapTravelByBus[id];
+    const cell = card.querySelector('.map-bus-stats .cell:nth-child(4) .n');
+    if(cell && travel && travel.minutes != null) cell.textContent = Math.round(travel.minutes) + '분';
+  });
+}
+
+function ensureMapClickHandler(){
+  if(!lmap || mapClickBound) return;
+  mapClickBound = true;
+  kakao.maps.event.addListener(lmap, 'click', (mouseEvent) => {
+    if(!state.coordPickMode || !state.coordPickName) return;
+    const latlng = mouseEvent.latLng;
+    if(!latlng) return;
+    applyCoordPickAt(latlng.getLat(), latlng.getLng());
+  });
 }
 
 function initKakaoMap(){
@@ -3712,6 +3910,38 @@ function findMissingCoordStops(branch){
   return missing;
 }
 
+function stopUsageMeta(name, branch){
+  const key = String(name || '').trim();
+  const busLabels = [];
+  let passengers = 0;
+  state.buses.filter(b => !branch || b.branch === branch).forEach(b => {
+    const hit = (b.stops || []).find(s => String(s.name || '').trim() === key);
+    if(hit){
+      busLabels.push(b.label);
+      passengers += Number(hit.passengers) || 0;
+    }
+  });
+  if(!passengers){
+    realRows(state.sheets['학생_기본정보']).forEach(s => {
+      if(branch && String(s['소속분원']||'').trim() !== branch) return;
+      const a = String(s['기본등원정류장']||'').trim();
+      const c = String(s['기본하원정류장']||'').trim();
+      if(a === key || c === key) passengers += 1;
+    });
+  }
+  if(!busLabels.length){
+    realRows(state.sheets['배정이력_정류장']).forEach(r => {
+      const stop = String(r['정류장명'] || r['정류장'] || r['stop'] || '').trim();
+      if(stop !== key) return;
+      const bus = r['호차'] || r['배정호차'] || r['현재배정호차'];
+      if(branch && branchFromRef(bus) !== branch) return;
+      const label = String(bus || '').trim();
+      if(label && !busLabels.includes(label)) busLabels.push(label);
+    });
+  }
+  return { busLabels, passengers };
+}
+
 function renderCoordMissingBanner(){
   const banner = document.getElementById('coordMissingBanner');
   const text = document.getElementById('coordMissingBannerText');
@@ -3727,8 +3957,85 @@ function renderCoordMissingBanner(){
     banner.classList.remove('show');
     return;
   }
-  text.textContent = '이 분원(' + branch + ')은 좌표가 없는 정류장이 ' + missing.length + '개 있습니다. 좌표를 입력하면 지도에 표시됩니다.';
+  text.textContent = '이 분원(' + branch + ')은 좌표가 없는 정류장이 ' + missing.length + '개 있습니다. 지도상에 위치를 표시하면 좌표를 찾아 저장합니다.';
   banner.classList.add('show');
+}
+
+function enrichMissingItems(missing, branch){
+  return missing.map(item => {
+    const meta = stopUsageMeta(item.name, branch);
+    const draft = state.coordDrafts[item.name];
+    return {
+      ...item,
+      busLabels: meta.busLabels,
+      passengers: meta.passengers,
+      draftLat: draft ? draft.lat : (item.lat || ''),
+      draftLng: draft ? draft.lng : (item.lng || '')
+    };
+  });
+}
+
+function renderCoordItemHtml(item, idx){
+  const draftOk = isValidLatLng(item.draftLat, item.draftLng);
+  const buses = item.busLabels && item.busLabels.length
+    ? item.busLabels.slice(0, 4).map(esc).join(', ') + (item.busLabels.length > 4 ? ' 외' : '')
+    : '연결 호차 미상';
+  const active = state.coordPickName === item.name ? ' active-pick' : '';
+  const saved = draftOk ? ' saved' : '';
+  return `<div class="coord-missing-item${active}${saved}" data-coord-idx="${idx}" data-stop-name="${esc(item.name)}">
+    <div class="name">${esc(item.name)}${item.exists ? '' : ' <span class="badge gray">시트에 없음 · 저장 시 새 행</span>'}${draftOk ? ' <span class="badge green">위치 찍음</span>' : ''}</div>
+    <div class="coord-meta">관련 노선: ${buses} · 탑승 추정 ${item.passengers||0}명</div>
+    <div class="coord-row">
+      <div>
+        <label>위도</label>
+        <input type="number" step="0.000001" data-coord-lat value="${esc(item.draftLat)}" placeholder="지도 클릭 또는 직접 입력">
+      </div>
+      <div>
+        <label>경도</label>
+        <input type="number" step="0.000001" data-coord-lng value="${esc(item.draftLng)}" placeholder="지도 클릭 또는 직접 입력">
+      </div>
+      <button class="btn btn-yellow btn-sm" type="button" data-coord-pick>지도에서 찍기</button>
+      <button class="btn btn-navy btn-sm" type="button" data-coord-save-one>저장</button>
+    </div>
+  </div>`;
+}
+
+function wireCoordItemActions(listEl, branch){
+  if(!listEl) return;
+  listEl.querySelectorAll('[data-coord-lat], [data-coord-lng]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const item = inp.closest('.coord-missing-item');
+      if(!item) return;
+      const name = item.getAttribute('data-stop-name');
+      const lat = item.querySelector('[data-coord-lat]').value;
+      const lng = item.querySelector('[data-coord-lng]').value;
+      if(isValidLatLng(lat, lng)){
+        state.coordDrafts[name] = { lat: Number(lat), lng: Number(lng) };
+      } else {
+        delete state.coordDrafts[name];
+      }
+    });
+  });
+  listEl.querySelectorAll('[data-coord-pick]').forEach(btn => {
+    btn.onclick = () => {
+      const item = btn.closest('.coord-missing-item');
+      if(!item) return;
+      beginCoordPick(item.getAttribute('data-stop-name'));
+    };
+  });
+  listEl.querySelectorAll('[data-coord-save-one]').forEach(btn => {
+    btn.onclick = () => {
+      const item = btn.closest('.coord-missing-item');
+      if(!item) return;
+      const name = item.getAttribute('data-stop-name');
+      const lat = item.querySelector('[data-coord-lat]').value;
+      const lng = item.querySelector('[data-coord-lng]').value;
+      saveStopCoordinates([{ name, lat, lng, branch, itemEl: item }], { single: true }).catch(err => {
+        console.error(err);
+        alert('저장 실패: ' + (err && err.message || err));
+      });
+    };
+  });
 }
 
 function openCoordMissingModal(){
@@ -3737,54 +4044,22 @@ function openCoordMissingModal(){
     alert('먼저 상단에서 분원을 선택하세요.');
     return;
   }
-  const missing = findMissingCoordStops(branch);
+  const missing = enrichMissingItems(findMissingCoordStops(branch), branch);
   const overlay = document.getElementById('coordMissingOverlay');
   const list = document.getElementById('coordMissingList');
   const title = document.getElementById('coordMissingTitle');
   const desc = document.getElementById('coordMissingDesc');
   if(!overlay || !list) return;
-  if(title) title.textContent = branch + ' · 정류장 좌표 입력';
+  if(title) title.textContent = branch + ' · 정류장 좌표 · 지도에서 위치 표시';
   if(desc){
     desc.innerHTML = missing.length
-      ? '좌표 없는 정류장 <b>'+missing.length+'</b>개 · 카카오맵에서 찾아 위도·경도를 확인한 뒤 입력하세요.'
+      ? '좌표 없는 정류장 <b>'+missing.length+'</b>개 · 관련 노선·탑승 수를 확인한 뒤 지도에서 위치를 찍거나 위도·경도를 입력하세요.'
       : '이 분원에 좌표가 비어 있는 정류장이 없습니다.';
   }
-  if(!missing.length){
-    list.innerHTML = '<div class="map-tip">입력할 항목이 없습니다.</div>';
-  } else {
-    list.innerHTML = missing.map((item, idx) => {
-      const q = encodeURIComponent(item.name);
-      const kakaoUrl = 'https://map.kakao.com/?q=' + q;
-      return `<div class="coord-missing-item" data-coord-idx="${idx}" data-stop-name="${esc(item.name)}">
-        <div class="name">${esc(item.name)}${item.exists ? '' : ' <span class="badge gray">시트에 없음 · 저장 시 새 행</span>'}</div>
-        <div class="coord-row">
-          <div>
-            <label>위도</label>
-            <input type="number" step="0.000001" data-coord-lat value="${esc(item.lat)}" placeholder="예: 37.263">
-          </div>
-          <div>
-            <label>경도</label>
-            <input type="number" step="0.000001" data-coord-lng value="${esc(item.lng)}" placeholder="예: 127.028">
-          </div>
-          <a class="btn btn-outline btn-sm" href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오맵에서 찾기</a>
-          <button class="btn btn-navy btn-sm" type="button" data-coord-save-one>저장</button>
-        </div>
-      </div>`;
-    }).join('');
-    list.querySelectorAll('[data-coord-save-one]').forEach(btn => {
-      btn.onclick = () => {
-        const item = btn.closest('.coord-missing-item');
-        if(!item) return;
-        const name = item.getAttribute('data-stop-name');
-        const lat = item.querySelector('[data-coord-lat]').value;
-        const lng = item.querySelector('[data-coord-lng]').value;
-        saveStopCoordinates([{ name, lat, lng, branch, itemEl: item }], { single: true }).catch(err => {
-          console.error(err);
-          alert('저장 실패: ' + (err && err.message || err));
-        });
-      };
-    });
-  }
+  list.innerHTML = missing.length
+    ? missing.map((item, idx) => renderCoordItemHtml(item, idx)).join('')
+    : '<div class="map-tip">입력할 항목이 없습니다.</div>';
+  wireCoordItemActions(list, branch);
   overlay.classList.add('active');
 }
 
@@ -3793,8 +4068,81 @@ function closeCoordMissingModal(){
   if(overlay) overlay.classList.remove('active');
 }
 
-function readCoordInputsFromModal(){
-  const list = document.getElementById('coordMissingList');
+function renderCoordPickPanel(){
+  const panel = document.getElementById('coordPickPanel');
+  const list = document.getElementById('coordPickList');
+  if(!panel || !list) return;
+  if(!state.coordPickMode){
+    panel.style.display = 'none';
+    return;
+  }
+  const branch = state.branchFilter;
+  const missing = enrichMissingItems(findMissingCoordStops(branch), branch);
+  panel.style.display = 'flex';
+  list.innerHTML = missing.length
+    ? missing.map((item, idx) => renderCoordItemHtml(item, idx)).join('')
+    : '<div class="map-tip">좌표 없는 정류장이 없습니다.</div>';
+  wireCoordItemActions(list, branch);
+  updateCoordPickBanner();
+}
+
+function updateCoordPickBanner(){
+  const banner = document.getElementById('coordPickMapBanner');
+  const text = document.getElementById('coordPickMapText');
+  if(!banner || !text) return;
+  if(state.coordPickMode && state.coordPickName){
+    text.textContent = '「' + state.coordPickName + '」 위치를 지도에서 클릭하세요.';
+    banner.classList.add('show');
+  } else if(state.coordPickMode){
+    text.textContent = '왼쪽 목록에서 정류장을 고른 뒤 지도에서 위치를 클릭하세요.';
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+function beginCoordPick(stopName){
+  const branch = state.branchFilter;
+  if(!branch || branch === '전체'){
+    alert('먼저 상단에서 분원을 선택하세요.');
+    return;
+  }
+  state.coordPickMode = true;
+  state.coordPickName = stopName || null;
+  closeCoordMissingModal();
+  // 지도 탭으로 이동
+  state.activeTab = 'map';
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-map').classList.add('active');
+  renderTabs();
+  showMapView();
+  renderCoordPickPanel();
+  updateCoordPickBanner();
+}
+
+function endCoordPickMode(){
+  state.coordPickMode = false;
+  state.coordPickName = null;
+  renderCoordPickPanel();
+  updateCoordPickBanner();
+}
+
+function applyCoordPickAt(lat, lng){
+  if(!state.coordPickMode || !state.coordPickName) return false;
+  if(!isValidLatLng(lat, lng)) return false;
+  const name = state.coordPickName;
+  state.coordDrafts[name] = { lat: Number(lat), lng: Number(lng) };
+  // 다음 미입력 항목으로 자동 이동
+  const branch = state.branchFilter;
+  const missing = findMissingCoordStops(branch);
+  const next = missing.find(m => !isValidLatLng((state.coordDrafts[m.name]||{}).lat, (state.coordDrafts[m.name]||{}).lng));
+  state.coordPickName = next ? next.name : name;
+  renderCoordPickPanel();
+  renderKakaoMap(false);
+  return true;
+}
+
+function readCoordInputsFromList(list){
   if(!list) return [];
   const branch = state.branchFilter;
   const out = [];
@@ -3805,8 +4153,32 @@ function readCoordInputsFromModal(){
     const lat = latEl ? latEl.value : '';
     const lng = lngEl ? lngEl.value : '';
     if(!name) return;
-    if(String(lat).trim() === '' && String(lng).trim() === '') return;
-    out.push({ name, lat, lng, branch, itemEl: item });
+    const draft = state.coordDrafts[name];
+    const useLat = (String(lat).trim() !== '' ? lat : (draft && draft.lat));
+    const useLng = (String(lng).trim() !== '' ? lng : (draft && draft.lng));
+    if(useLat == null || useLng == null || String(useLat).trim() === '' || String(useLng).trim() === '') return;
+    out.push({ name, lat: useLat, lng: useLng, branch, itemEl: item });
+  });
+  return out;
+}
+
+function readCoordInputsFromModal(){
+  return readCoordInputsFromList(document.getElementById('coordMissingList'));
+}
+
+function readAllCoordDrafts(){
+  const branch = state.branchFilter;
+  const out = [];
+  Object.keys(state.coordDrafts || {}).forEach(name => {
+    const d = state.coordDrafts[name];
+    if(d && isValidLatLng(d.lat, d.lng)) out.push({ name, lat: d.lat, lng: d.lng, branch });
+  });
+  // also merge visible list inputs
+  const lists = [document.getElementById('coordMissingList'), document.getElementById('coordPickList')];
+  lists.forEach(list => {
+    readCoordInputsFromList(list).forEach(e => {
+      if(!out.some(x => x.name === e.name)) out.push(e);
+    });
   });
   return out;
 }
@@ -3824,18 +4196,20 @@ async function saveStopCoordinates(entries, opts){
     const lat = Number(e.lat); const lng = Number(e.lng);
     if(!name) continue;
     if(!isValidLatLng(lat, lng)){
-      alert('「'+name+'」의 위도·경도를 올바른 숫자로 입력하세요.');
+      alert('「'+name+'」의 위도·경도를 올바른 숫자로 입력하세요. (지도에서 위치를 찍거나 직접 입력)');
       return;
     }
     valid.push({ name, lat, lng, branch: e.branch || branch, itemEl: e.itemEl });
   }
   if(!valid.length){
-    alert('저장할 좌표가 없습니다. 위도·경도를 입력하세요.');
+    alert('저장할 좌표가 없습니다. 지도에서 위치를 찍거나 위도·경도를 입력하세요.');
     return;
   }
 
   const saveAllBtn = document.getElementById('coordMissingSaveAllBtn');
+  const pickSaveBtn = document.getElementById('coordPickSaveAllBtn');
   if(saveAllBtn) saveAllBtn.disabled = true;
+  if(pickSaveBtn) pickSaveBtn.disabled = true;
 
   try{
     const rows = (state.sheets['정류장'] || []).slice();
@@ -3861,6 +4235,7 @@ async function saveStopCoordinates(entries, opts){
         });
         created++;
       }
+      delete state.coordDrafts[v.name];
     });
 
     const updatedAt = new Date().toISOString();
@@ -3873,12 +4248,15 @@ async function saveStopCoordinates(entries, opts){
     buildBuses(state.hydrations || {});
     state.mapWorking = [];
     state.mapMoves = [];
+    state.mapTravelByBus = {};
     renderDashboard();
     renderSimSelect();
     renderIncStopSelect();
     renderCoordMissingBanner();
+    renderSimRelatedSets();
     if(state.activeTab === 'map') showMapView();
     if(state.activeTab === 'redraw') showRedrawView();
+    if(state.coordPickMode) renderCoordPickPanel();
 
     if(opts.single && valid[0] && valid[0].itemEl){
       valid[0].itemEl.classList.add('saved');
@@ -3888,10 +4266,16 @@ async function saveStopCoordinates(entries, opts){
     alert('원본 정류장 시트에 저장했습니다. (수정 '+updated+' · 신규 '+created+')' +
       (left ? '\n남은 좌표 없음: '+left+'개' : '\n이 분원 좌표 입력이 완료되었습니다.'));
 
-    if(!left) closeCoordMissingModal();
-    else if(!opts.single) openCoordMissingModal();
+    if(!left){
+      closeCoordMissingModal();
+      endCoordPickMode();
+    } else if(!opts.single){
+      if(document.getElementById('coordMissingOverlay').classList.contains('active')) openCoordMissingModal();
+      if(state.coordPickMode) renderCoordPickPanel();
+    }
   } finally {
     if(saveAllBtn) saveAllBtn.disabled = false;
+    if(pickSaveBtn) pickSaveBtn.disabled = false;
   }
 }
 
@@ -3901,7 +4285,7 @@ function coordMissingEmptyHint(branch){
   const n = findMissingCoordStops(b).length;
   if(!n) return '';
   return `<p class="map-tip" style="margin-top:10px">이 분원에 좌표 없는 정류장이 <b>${n}</b>개 있습니다.<br>
-    <button type="button" class="btn btn-navy btn-sm" id="coordMissingEmptyBtn" style="margin-top:8px">좌표 입력하기</button></p>`;
+    <button type="button" class="btn btn-navy btn-sm" id="coordMissingEmptyBtn" style="margin-top:8px">지도상에 위치 표시하기</button></p>`;
 }
 
 function wireCoordMissingEmptyBtn(){
@@ -4143,6 +4527,7 @@ function renderTabs(){
       if(t.key === 'sim'){ renderSimSelect(); renderIncStopSelect(); }
       if(t.key === 'alerts') renderAlerts();
       if(t.key === 'settings') fillRulesForm();
+      if(t.key !== 'map' && state.coordPickMode) endCoordPickMode();
     };
     bar.appendChild(btn);
   });
@@ -4305,6 +4690,175 @@ function renderSimSelect(preferId){
     `<option value="${esc(b.id)}">${esc(b.label)} · 이용률 ${b.utilization==null?'-':fmtPct(b.utilization)} (${b.passengers}/${b.capacity})</option>`
   ).join('');
   if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  renderSimRelatedSets();
+}
+
+function relatedRedrawSetsForBus(busId){
+  if(!busId) return [];
+  const bus = state.buses.find(b => b.id === busId);
+  const list = Object.values(state.redrawSets || {}).filter(a => a.kind === 'new-route-set' || a.routes);
+  return list.filter(a => {
+    const src = a.sourceBusIds || [];
+    if(src.map(String).includes(String(busId))) return true;
+    if(bus && a.branch && a.branch === bus.branch) return true;
+    return false;
+  }).sort((a,b) => {
+    if(!!b.starred !== !!a.starred) return b.starred ? 1 : -1;
+    return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+  });
+}
+
+function currentBusTravelMinutes(bus){
+  if(!bus) return null;
+  const cached = state.mapTravelByBus[bus.id];
+  if(cached && cached.minutes != null) return cached.minutes;
+  const stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+  if(stops.length < 2) return 0;
+  // 동기 근사 (비교용)
+  let m = 0;
+  for(let i=1;i<stops.length;i++) m += haversineM(stops[i-1], stops[i]) * ROAD_APPROX_FACTOR;
+  return (m / 1000) / AVG_SPEED_KMH * 60;
+}
+
+function renderSimRelatedSets(){
+  const box = document.getElementById('simRelatedSets');
+  if(!box) return;
+  const sel = document.getElementById('simBusSelect');
+  const busId = sel && sel.value;
+  const bus = state.buses.find(b => b.id === busId);
+  if(!bus){
+    box.innerHTML = '<div class="map-tip">호차를 선택하면 관련 노선안이 표시됩니다.</div>';
+    return;
+  }
+  const related = relatedRedrawSetsForBus(busId);
+  const preferredId = state.preferredSetByBranch[bus.branch];
+  const curMin = currentBusTravelMinutes(bus);
+  if(!related.length){
+    box.innerHTML = `<div class="map-tip"><b>${esc(bus.label)}</b>과 관련된 저장 노선안이 없습니다. 「노선 다시 그리기」에서 세트를 저장하면 여기에 비교됩니다.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="map-tip" style="margin:0 0 8px">현재 호차 <b>${esc(bus.label)}</b> · 정류장 ${(bus.stops||[]).length} · 탑승 ${bus.passengers||0} · 운행 약 ${curMin==null?'-':Math.round(curMin)}분</div>` +
+    related.map(a => {
+      const n = (a.routeIds || Object.keys(a.routes||{})).length;
+      const includes = (a.sourceBusIds||[]).map(String).includes(String(busId));
+      const star = a.starred ? '★' : '☆';
+      const badges = (includes ? '<span class="badge gray">원본 포함</span> ' : '<span class="badge gray">같은 분원</span> ')
+        + (a.starred ? '<span class="badge gold">즐겨찾기</span> ' : '')
+        + (preferredId === a.id ? '<span class="badge green">선호안</span> ' : '');
+      const delta = curMin != null ? (Math.round(a.totalMinutes||0) - Math.round(curMin)) : null;
+      const deltaTxt = delta == null ? '' : (delta > 0 ? ` · 현재 대비 +${delta}분(세트합)` : ` · 현재 대비 ${delta}분(세트합)`);
+      return `<div class="sim-compare-item${a.starred?' starred':''}${preferredId===a.id?' preferred':''}">
+        <div style="font-weight:800;color:var(--navy)">${esc(a.name||a.id)} ${badges}</div>
+        <div class="meta">새 노선 ${n}개 · ${((a.totalMeters||0)/1000).toFixed(1)}km / ${Math.round(a.totalMinutes||0)}분${deltaTxt}</div>
+        <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))} · ${esc(a.tab||'')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button type="button" class="btn btn-outline btn-sm" data-sim-star="${esc(a.id)}">${star} 즐겨찾기</button>
+          <button type="button" class="btn btn-outline btn-sm" data-sim-prefer="${esc(a.id)}">선호안 지정</button>
+          <button type="button" class="btn btn-navy btn-sm" data-sim-open="${esc(a.id)}">다시그리기에서 열기</button>
+          <button type="button" class="btn btn-yellow btn-sm" data-sim-apply="${esc(a.id)}">현 노선 순서로 교체(원본버스)</button>
+        </div>
+      </div>`;
+    }).join('');
+  box.querySelectorAll('[data-sim-star]').forEach(btn => {
+    btn.onclick = () => toggleRedrawSetStar(btn.getAttribute('data-sim-star'));
+  });
+  box.querySelectorAll('[data-sim-prefer]').forEach(btn => {
+    btn.onclick = () => setPreferredRedrawSet(btn.getAttribute('data-sim-prefer'));
+  });
+  box.querySelectorAll('[data-sim-open]').forEach(btn => {
+    btn.onclick = () => openRedrawSetInTab(btn.getAttribute('data-sim-open'));
+  });
+  box.querySelectorAll('[data-sim-apply]').forEach(btn => {
+    btn.onclick = () => applyRedrawSetToRouteOrders(btn.getAttribute('data-sim-apply')).catch(err => {
+      console.error(err);
+      alert('교체 실패: ' + (err && err.message || err));
+    });
+  });
+}
+
+function openRedrawSetInTab(id){
+  state.activeTab = 'redraw';
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-redraw').classList.add('active');
+  renderTabs();
+  showRedrawView();
+  loadRedrawSet(id);
+}
+
+/** 저장 세트의 새 노선 순서를 원본 호차 route_orders에 매핑해 교체 */
+async function applyRedrawSetToRouteOrders(setId){
+  const setDoc = state.redrawSets[setId];
+  if(!setDoc) return;
+  const routes = Object.values(setDoc.routes || {});
+  if(!routes.length){
+    alert('세트에 노선이 없습니다.');
+    return;
+  }
+  if(!confirm('「'+(setDoc.name||setId)+'」의 정류장 순서를 관련 원본 호차의 등원/하원 순서(route_orders)에 반영할까요?\n호차·정류장 시트 원본은 바꾸지 않고 순서 문서만 갱신합니다.')) return;
+
+  const tab = setDoc.tab || '등원';
+  const orderKey = tab === '하원' ? '하원순서' : '등원순서';
+  const srcIds = (setDoc.sourceBusIds || []).slice();
+  const buses = state.buses.filter(b => srcIds.includes(b.id));
+  if(!buses.length){
+    alert('이 세트의 원본 호차를 찾을 수 없습니다.');
+    return;
+  }
+
+  // 각 원본 호차에 대해 정지장 이름 겹침이 가장 큰 새 노선 매칭
+  let applied = 0;
+  buses.forEach(bus => {
+    const busNames = new Set((bus.stops||[]).map(s => String(s.name||'').trim()).filter(Boolean));
+    let best = null; let bestScore = -1;
+    routes.forEach(r => {
+      const names = (r.stopNames || (r.stops||[]).map(s => s.name) || []).map(n => String(n||'').trim());
+      const score = names.filter(n => busNames.has(n)).length;
+      if(score > bestScore){ bestScore = score; best = r; }
+    });
+    if(!best || bestScore <= 0) return;
+    const nameToId = new Map((bus.stops||[]).map(s => [String(s.name||'').trim(), String(s.id)]));
+    const orderIds = [];
+    (best.stopNames || (best.stops||[]).map(s => s.name) || []).forEach(n => {
+      const id = nameToId.get(String(n||'').trim());
+      if(id && !orderIds.includes(id)) orderIds.push(id);
+    });
+    // 매칭 안 된 기존 정류장은 뒤에
+    (bus.stops||[]).forEach(s => {
+      const id = String(s.id);
+      if(!orderIds.includes(id)) orderIds.push(id);
+    });
+    if(orderIds.length < 2) return;
+    const prev = state.routeOrders[bus.id] || {};
+    state.routeOrders[bus.id] = {
+      ...prev,
+      [orderKey]: orderIds,
+      updatedAt: new Date().toISOString(),
+      fromRedrawSetId: setId
+    };
+    applied++;
+  });
+
+  if(!applied){
+    alert('호차와 정류장 이름이 겹치는 노선안을 찾지 못했습니다.');
+    return;
+  }
+
+  await db.collection('shuttle_data').doc('route_orders').set({
+    orders: state.routeOrders,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+  state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
+  state.preferredSetByBranch[setDoc.branch || buses[0].branch] = setId;
+  setDoc.starred = true;
+  await persistRouteAttempts();
+
+  alert(applied + '개 호차의 '+orderKey+'를 노선안에 맞게 교체했습니다. 현재 노선상황 지도에서 확인하세요.');
+  state.activeTab = 'map';
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-map').classList.add('active');
+  renderTabs();
+  showMapView();
+  renderSimRelatedSets();
 }
 
 function nearestBusDistance(stop, candidates){
@@ -5039,6 +5593,7 @@ document.getElementById('redrawClearOrderBtn').onclick = () => clearRedrawOrderO
 document.getElementById('redrawUndoBtn').onclick = () => undoRedrawClick();
 document.getElementById('redrawStopEditBtn').onclick = () => stopEditRedrawBus();
 document.getElementById('redrawStartNewBtn').onclick = () => startNewRedrawRoute();
+document.getElementById('redrawAutoRecommendBtn').onclick = () => autoRecommendRedrawRoutes().catch(err => alert(err.message));
 document.getElementById('redrawFinishBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
 document.getElementById('redrawGuideSaveBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
 document.getElementById('redrawSelectAllBtn').onclick = () => selectAllRedrawPool();
@@ -5046,16 +5601,32 @@ document.getElementById('redrawClearPoolBtn').onclick = () => clearRedrawPool();
 document.getElementById('redrawSaveSetBtn').onclick = () => saveRedrawSet().catch(err => alert(err.message));
 document.getElementById('coordMissingOpenBtn').onclick = () => openCoordMissingModal();
 document.getElementById('coordMissingCloseBtn').onclick = () => closeCoordMissingModal();
+document.getElementById('coordMissingGoMapBtn').onclick = () => {
+  const branch = state.branchFilter;
+  const missing = findMissingCoordStops(branch);
+  const first = missing.find(m => !isValidLatLng((state.coordDrafts[m.name]||{}).lat, (state.coordDrafts[m.name]||{}).lng));
+  beginCoordPick(first ? first.name : (missing[0] && missing[0].name));
+};
 document.getElementById('coordMissingSaveAllBtn').onclick = () => {
-  const entries = readCoordInputsFromModal();
+  const entries = readAllCoordDrafts();
   saveStopCoordinates(entries, { single: false }).catch(err => {
     console.error(err);
     alert('저장 실패: ' + (err && err.message || err));
   });
 };
+document.getElementById('coordPickSaveAllBtn').onclick = () => {
+  const entries = readAllCoordDrafts();
+  saveStopCoordinates(entries, { single: false }).catch(err => {
+    console.error(err);
+    alert('저장 실패: ' + (err && err.message || err));
+  });
+};
+document.getElementById('coordPickCancelBtn').onclick = () => endCoordPickMode();
+document.getElementById('coordPickBannerCancel').onclick = () => endCoordPickMode();
 document.getElementById('coordMissingOverlay').addEventListener('click', (e) => {
   if(e.target === e.currentTarget) closeCoordMissingModal();
 });
+document.getElementById('simBusSelect').addEventListener('change', () => renderSimRelatedSets());
 document.querySelectorAll('[data-order-tab]').forEach(btn => {
   btn.addEventListener('click', () => switchOrderTab(btn.getAttribute('data-order-tab')));
 });

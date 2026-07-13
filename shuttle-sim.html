@@ -79,12 +79,28 @@ main{padding:24px 28px 60px;max-width:1180px;margin:0 auto}
 .status-group-label{font-size:11px;font-weight:800;color:var(--navy);letter-spacing:.02em;margin:8px 0 6px;display:flex;align-items:center;gap:8px}
 .status-group-label::after{content:'';flex:1;height:1px;background:var(--border)}
 .status-period-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.status-period-btn{
+  width:100%;border:1px solid transparent;background:#F8FAFD;border-radius:8px;
+  padding:6px 8px;cursor:pointer;font-family:inherit;text-align:left;
+}
+.status-period-btn:hover{border-color:var(--border);background:#F0F4FA}
+.status-period-btn.open{border-color:var(--slate);background:#EEF3FA}
 .status-period-lbl{width:28px;flex-shrink:0;font-size:11px;font-weight:800;color:var(--muted)}
 .status-period-bar{flex:1;height:7px;background:#EEF0F3;border-radius:999px;overflow:hidden;min-width:40px}
 .status-period-bar > span{display:block;height:100%;border-radius:999px}
 .status-period-pct{min-width:42px;text-align:right;font-weight:800;font-size:12px}
 .status-period-cnt{min-width:54px;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.status-stop-detail{
+  margin:0 0 10px;padding:8px 10px;background:#fff;border:1px solid var(--border);
+  border-radius:10px;max-height:220px;overflow:auto;
+}
+.status-stop-detail .hdr{font-size:11px;font-weight:800;color:var(--navy);margin:0 0 6px}
+.status-stop-row{display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid #F0F2F5;font-size:12px}
+.status-stop-row:last-child{border-bottom:0}
+.status-stop-row .nm{flex:1;min-width:0;color:var(--text);line-height:1.35}
+.status-stop-row .px{flex-shrink:0;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
 .status-empty{font-size:12px;color:var(--muted);padding:4px 0}
+.status-empty.soft{padding:6px 0;font-size:11px}
 .sim-section-gap{height:16px}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,24,32,.55);align-items:center;justify-content:center;z-index:100;padding:20px}
 .modal-overlay.active{display:flex}
@@ -386,7 +402,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
 
   <section class="view active" id="view-dash">
     <div class="stat-row" id="dashStats"></div>
-    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금 1–4부 / 화목 1–2부) · 고유이용자/정원. 상단 요일그룹 칩으로 필터할 수 있습니다.</p>
+    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금 1–4부 / 화목 1–2부) · 고유이용자/정원. <b>부 행을 클릭</b>하면 정류장별 탑승인원을 볼 수 있습니다. 상단 요일그룹 칩으로 필터하세요.</p>
     <div class="filter-row">
       <button class="chip active" data-dash-filter="all" type="button">전체 호차</button>
       <button class="chip" data-dash-filter="candidate" type="button">감차 후보만</button>
@@ -764,6 +780,7 @@ const state = {
   buses: [],
   branchFilter: '전체',
   dashFilter: 'all',
+  dashDetail: null, // { busId, group, period } — 현황 정류장별 탑승 펼침
   activeTab: 'dash',
   adminUnlocked: false,
   dataSources: [],
@@ -5008,6 +5025,7 @@ function renderBranches(){
     chip.textContent = b;
     chip.onclick = () => {
       state.branchFilter = b;
+      state.dashDetail = null;
       renderBranches();
       renderDashboard();
       renderSimSelect();
@@ -5091,6 +5109,64 @@ function periodsForDayGroup(gName){
   return [1, 2, 3, 4];
 }
 
+/** FULL_DATA 기준: 호차·요일그룹·부 → 정류장별 탑승 */
+function stopBoardDetail(bus, groupName, period){
+  const full = (bus && bus.full) || {};
+  const g = full[groupName] || {};
+  const p = g[String(period)] || g[Number(period)] || null;
+  if(!p){
+    return { boarded: null, total: null, rate: null, stops: [], hasData: false };
+  }
+  const stops = Object.entries(p.board_stops || {})
+    .map(([name, n]) => ({ name: String(name).trim(), passengers: Number(n) || 0 }))
+    .filter(s => s.name && s.passengers > 0)
+    .sort((a,b) => b.passengers - a.passengers || a.name.localeCompare(b.name, 'ko'));
+  const boarded = p.boarded != null
+    ? Number(p.boarded)
+    : stops.reduce((a,s) => a + s.passengers, 0);
+  return {
+    boarded,
+    total: p.total != null ? Number(p.total) : null,
+    rate: p.rate != null ? Number(p.rate) : null,
+    stops,
+    hasData: true
+  };
+}
+
+function isDashDetailOpen(busId, group, period){
+  const d = state.dashDetail;
+  return !!(d && d.busId === busId && d.group === group && String(d.period) === String(period));
+}
+
+function toggleDashStopDetail(busId, group, period){
+  if(isDashDetailOpen(busId, group, period)) state.dashDetail = null;
+  else state.dashDetail = { busId, group, period: Number(period) || period };
+  renderDashboard();
+}
+
+function renderStopBoardDetailHtml(bus, groupName, period){
+  const detail = stopBoardDetail(bus, groupName, period);
+  if(!detail.hasData){
+    return `<div class="status-stop-detail"><p class="status-empty soft">${esc(groupName)} ${esc(String(period))}부 정류장별 탑승 자료가 없습니다.</p></div>`;
+  }
+  if(!detail.stops.length){
+    return `<div class="status-stop-detail">
+      <div class="hdr">${esc(groupName)} ${esc(String(period))}부 · 탑승 ${detail.boarded != null ? detail.boarded : 0}명 · 정류장별 0</div>
+      <p class="status-empty soft">board_stops 에 탑승 &gt; 0인 정류장이 없습니다.</p>
+    </div>`;
+  }
+  const sum = detail.stops.reduce((a,s) => a + s.passengers, 0);
+  const head = `${esc(groupName)} ${esc(String(period))}부 · 정류장 ${detail.stops.length}곳 · 합계 ${sum}명`
+    + (detail.boarded != null ? ` (집계 boarded ${detail.boarded})` : '');
+  return `<div class="status-stop-detail">
+    <div class="hdr">${head}</div>
+    ${detail.stops.map(s => `<div class="status-stop-row">
+      <span class="nm">${esc(s.name)}</span>
+      <span class="px">${s.passengers}명</span>
+    </div>`).join('')}
+  </div>`;
+}
+
 /** 호차×요일그룹×부 현황 — 고유이용자/정원(DASH) 기준 */
 function periodStatusRows(bus){
   const groupsObj = bus.groups || {};
@@ -5114,10 +5190,13 @@ function periodStatusRows(bus){
         den = Number(dashP.capacity != null ? dashP.capacity : bus.capacity) || 0;
         rate01 = den > 0 ? num / den : (dashP.rate != null ? Number(dashP.rate) / 100 : null);
       }
+      const stopDetail = stopBoardDetail(bus, gName, pk);
       return {
         period: pk,
         num, den, rate01,
-        barPct: rate01 == null ? 0 : Math.min(100, Math.round(rate01 * 100))
+        barPct: rate01 == null ? 0 : Math.min(100, Math.round(rate01 * 100)),
+        stopCount: stopDetail.stops.length,
+        hasStopData: stopDetail.hasData
       };
     });
     out.push({
@@ -5143,12 +5222,19 @@ function renderBusPeriodBreakdown(bus){
       const col = utilColor(r.rate01);
       const pct = r.rate01 == null ? '-' : fmtPct(r.rate01);
       const cnt = (r.num != null && r.den != null) ? `${r.num}/${r.den}` : '-';
-      return `<div class="status-period-row">
+      const open = isDashDetailOpen(bus.id, g.name, r.period);
+      const stopHint = r.hasStopData
+        ? (r.stopCount ? ` · 정류장 ${r.stopCount}` : ' · 정류장 0')
+        : '';
+      return `<button type="button" class="status-period-row status-period-btn${open?' open':''}"
+          data-dash-bus="${esc(bus.id)}" data-dash-group="${esc(g.name)}" data-dash-period="${esc(String(r.period))}"
+          title="클릭하면 정류장별 탑승인원">
         <span class="status-period-lbl">${esc(String(r.period))}부</span>
         <div class="status-period-bar"><span style="width:${r.barPct}%;background:${col}"></span></div>
         <span class="status-period-pct" style="color:${col}">${pct}</span>
-        <span class="status-period-cnt">${cnt}</span>
-      </div>`;
+        <span class="status-period-cnt">${cnt}${stopHint}</span>
+      </button>
+      ${open ? renderStopBoardDetailHtml(bus, g.name, r.period) : ''}`;
     }).join('');
     return `<div class="status-group">
       <div class="status-group-label">${esc(g.name)}${gMeta}</div>
@@ -5167,11 +5253,12 @@ function renderDashboard(){
     ? withPax.reduce((s,b)=>s+(b.utilization||0),0) / withPax.length
     : null;
   const withPeriods = all.filter(b => periodStatusRows(b).length).length;
+  const withStopBoard = all.filter(b => b.full && Object.keys(b.full).length).length;
 
   document.getElementById('dashStats').innerHTML = `
     <div class="stat-card"><div class="num">${all.length}</div><div class="label">운행 호차</div></div>
     <div class="stat-card"><div class="num">${avgUtil==null?'-':fmtPct(avgUtil)}</div><div class="label">평균 이용률</div></div>
-    <div class="stat-card"><div class="num">${withPeriods}</div><div class="label">부별 현황 있음</div></div>
+    <div class="stat-card"><div class="num">${withStopBoard}</div><div class="label">정류장별 탑승자료</div></div>
     <div class="stat-card warn"><div class="num">${candidates}</div><div class="label">감차 후보 (&lt;${fmtPct(state.rules.minUtilizationRate)})</div></div>
     <div class="stat-card danger"><div class="num">${expiring}</div><div class="label">계약 ${CONTRACT_EXPIRY_DAYS}일 이내</div></div>
   `;
@@ -5184,29 +5271,42 @@ function renderDashboard(){
   grid.innerHTML = list.map(b => {
     const rate = b.utilization;
     const col = busColor(b);
-    return `<article class="bus-card ${b.candidate?'candidate':''}" data-id="${esc(b.id)}" title="클릭하면 시뮬레이션 탭으로">
-      <div class="head">
+    const hasFull = !!(b.full && Object.keys(b.full).length);
+    return `<article class="bus-card ${b.candidate?'candidate':''}" data-id="${esc(b.id)}">
+      <div class="head" data-dash-sim="${esc(b.id)}" style="cursor:pointer" title="클릭하면 시뮬레이션 탭으로">
         <div class="hocha-badge" style="background:${col};color:#fff;box-shadow:none"><div class="num">${esc(b.no)}호</div><div class="branch" style="color:rgba(255,255,255,.85)">${esc(b.branch)}</div></div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800">${esc(b.label)}</div>
-          <div class="meta">정원 ${b.capacity}명 · 슬롯 ${b.seatSlots||b.capacity} · 이용률 ${rate==null?'-':fmtPct(rate)}</div>
+          <div class="meta">정원 ${b.capacity}명 · 슬롯 ${b.seatSlots||b.capacity} · 이용률 ${rate==null?'-':fmtPct(rate)}${hasFull?' · 부 클릭→정류장 탑승':''}</div>
         </div>
       </div>
       ${renderBusPeriodBreakdown(b)}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${b.candidate?`<span class="badge red">감차 후보</span>`:`<span class="badge green">기준 이상</span>`}
         ${b.expiring?`<span class="badge gold">계약 만료 임박${b.contractEndDays!=null?` D-${b.contractEndDays}`:''}</span>`:''}
+        ${hasFull?`<span class="badge gray">정류장별 탑승</span>`:`<span class="badge gray">정류장별 자료 없음</span>`}
       </div>
     </article>`;
   }).join('');
 
-  grid.querySelectorAll('.bus-card').forEach(card => {
-    card.addEventListener('click', () => {
+  grid.querySelectorAll('[data-dash-sim]').forEach(el => {
+    el.addEventListener('click', () => {
       state.activeTab = 'sim';
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-sim').classList.add('active');
       renderTabs();
-      renderSimSelect(card.dataset.id);
+      renderSimSelect(el.getAttribute('data-dash-sim'));
+    });
+  });
+  grid.querySelectorAll('[data-dash-bus]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleDashStopDetail(
+        btn.getAttribute('data-dash-bus'),
+        btn.getAttribute('data-dash-group'),
+        btn.getAttribute('data-dash-period')
+      );
     });
   });
 }

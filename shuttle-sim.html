@@ -1142,6 +1142,31 @@ function stopsForReassignView(bus){
   return stops;
 }
 
+/**
+ * 지도 폴리라인·운행시간용 정류장 순서.
+ * 중간 정류장만 있는 원본도 학원(고정 좌표)을 등원=마지막 / 하원=처음으로 붙여
+ * 마지막 정류장 ↔ 정상어학원이 선으로 연결되게 한다.
+ */
+function stopsForMapPath(bus, orderedStops){
+  const mid = (orderedStops || []).filter(s =>
+    s && s.lat != null && s.lng != null && !isAcademyStop(s)
+  );
+  const academy = academyPointForBus(bus);
+  if(!academy || academy.lat == null || academy.lng == null) return mid;
+  const ac = {
+    id: academy.id || JANGAN_ACADEMY.id,
+    name: academy.name || JANGAN_ACADEMY.name,
+    lat: Number(academy.lat),
+    lng: Number(academy.lng),
+    passengers: 0,
+    isAcademy: true,
+    fixed: true
+  };
+  const tab = state.mapLineOrder || state.orderTab || '등원';
+  if(academyEndpointMode(tab) === 'first') return [ac, ...mid];
+  return [...mid, ac];
+}
+
 function academyPointForBus(bus){
   // 장안 분원은 항상 고정 학원 좌표 사용
   if(bus && bus.branch === '장안'){
@@ -3618,13 +3643,16 @@ async function renderKakaoMap(fitBounds){
       stops = ordered;
     }
 
-    if(stops.length > 1){
-      const built = await buildRoadPath(stops);
+    // 학원 끝점(고정 좌표)을 등원/하원 규칙에 맞게 붙여 마지막↔학원 선 연결
+    const pathStops = stopsForMapPath(bus, stops);
+
+    if(pathStops.length > 1){
+      const built = await buildRoadPath(pathStops);
       if(seq !== mapRenderSeq) return;
       state.mapTravelByBus[bus.id] = { minutes: built.minutes, meters: built.meters, source: built.source };
       const path = (built.path && built.path.length > 1)
         ? built.path.map(p => new kakao.maps.LatLng(p.lat, p.lng))
-        : stops.map(s => new kakao.maps.LatLng(s.lat, s.lng));
+        : pathStops.map(s => new kakao.maps.LatLng(s.lat, s.lng));
       const pl = new kakao.maps.Polyline({
         path,
         strokeWeight: 5,
@@ -3634,24 +3662,29 @@ async function renderKakaoMap(fitBounds){
       });
       pl.setMap(lmap);
       lLayers.push(pl);
-    } else if(stops.length === 1){
+    } else if(pathStops.length === 1){
       state.mapTravelByBus[bus.id] = { minutes: 0, meters: 0, source: 'none' };
     }
 
-    const maxPax = Math.max(1, ...stops.map(s => Number(s.passengers)||0));
+    const drawStops = pathStops.filter(s => !isAcademyStop(s));
+    const maxPax = Math.max(1, ...drawStops.map(s => Number(s.passengers)||0), 1);
     const pickingThis = state.mapOrderPicking && state.orderBusId === bus.id;
-    stops.forEach(s => {
+    drawStops.forEach(s => {
       if(isJanganAcademyStop(s)) return;
       const n = Number(s.passengers) || 0;
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
       const id = 'ms-' + bus.id.replace(/__/g,'-') + '-' + s.id;
       const ordIdx = pickingThis ? state.orderDraft.findIndex(d => String(d.id) === String(s.id)) : -1;
       const picked = ordIdx >= 0;
-      const label = picked ? String(ordIdx + 1) : (n > 0 ? n : '');
+      // 등원: 학원이 마지막 → 중간만 1..n / 하원: 학원이 첫 → 표시는 기존과 동일하게 중간 순서
+      const seqLabel = !pickingThis
+        ? (pathStops.findIndex(p => String(p.id) === String(s.id)) + 1)
+        : (picked ? (ordIdx + 1) : '');
+      const label = pickingThis ? (picked ? String(ordIdx + 1) : (n > 0 ? n : '')) : String(seqLabel);
       const cls = 'stop-bubble' + (picked ? ' order-picked' : (pickingThis ? ' order-target' : ''));
       const tip = pickingThis
         ? (picked ? ((s.name||'') + ' · 순서 ' + (ordIdx+1)) : ((s.name||'') + ' · 클릭하여 다음 순서로'))
-        : ((s.name||'') + ' · ' + n + '명 · ' + (bus.label||''));
+        : ((s.name||'') + ' · ' + n + '명 · ' + (bus.label||'') + ' · ' + seqLabel + '번');
       const html = '<div id="'+id+'" class="'+cls+'" title="'+esc(tip)+'"'
         + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.max(9,Math.round(sz*.32))+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.25:1)+';cursor:'+(pickingThis?'pointer':'default')+'">'+label+'</div>';
       const pos = new kakao.maps.LatLng(s.lat, s.lng);

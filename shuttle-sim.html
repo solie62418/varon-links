@@ -3794,10 +3794,10 @@ function enterMapOnlyMode(target){
   state.mapOnlyTarget = t;
   document.body.classList.add('map-only');
   document.querySelector('main').classList.add('map-mode');
-  // 레이아웃 전환 후 지도 다시 맞춤
+  // 레이아웃 전환 후 지도 맞춤 · soft zoom 배율 유지
   requestAnimationFrame(() => {
-    setTimeout(() => refreshActiveMapLayout(true), 80);
-    setTimeout(() => refreshActiveMapLayout(true), 320);
+    setTimeout(() => { refreshActiveMapLayout(true); applySoftZoomCss(t); }, 80);
+    setTimeout(() => { refreshActiveMapLayout(true); applySoftZoomCss(t); }, 320);
   });
 }
 

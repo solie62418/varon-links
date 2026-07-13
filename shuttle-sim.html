@@ -164,6 +164,19 @@ main.map-mode{max-width:none}
 .map-bus-item.redraw-done{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
 .stop-bubble.redraw-idle{opacity:.92}
 .stop-bubble.redraw-num{outline:2px solid #FFC72C;outline-offset:2px}
+.academy-fixed{
+  position:relative;display:flex;flex-direction:column;align-items:center;pointer-events:none;
+}
+.academy-fixed .academy-pin{
+  width:34px;height:34px;border-radius:50%;background:#C0392B;border:3px solid #fff;
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;
+  box-shadow:0 4px 12px rgba(192,57,43,.45);
+}
+.academy-fixed .academy-label{
+  margin-top:4px;padding:3px 8px;border-radius:999px;background:rgba(27,31,39,.92);color:#FFC72C;
+  font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.28);
+  max-width:180px;overflow:hidden;text-overflow:ellipsis;
+}
 #redrawMap{width:100%;height:480px;min-height:480px}
 @media (min-width:901px){
   #redrawMap{height:100%;min-height:480px}
@@ -498,6 +511,16 @@ const BRANCH_MAP_CENTER = {
   '운정1': { lat: 37.72, lng: 126.76, level: 7 },
   '운정2': { lat: 37.73, lng: 126.77, level: 7 }
 };
+/** 정상어학원(장안분원) — 모든 지도에 고정 표시 */
+const JANGAN_ACADEMY = {
+  id: '__jangan_academy__',
+  name: '정상어학원 (장안분원)',
+  shortName: '장안분원',
+  lat: 37.29555,
+  lng: 126.99318,
+  isAcademy: true,
+  fixed: true
+};
 
 const firebaseConfig = {
   apiKey: 'AIzaSyACokruLFwbkCpxriOdQgVZAQfryYBmUxM',
@@ -785,8 +808,50 @@ function seatCapOf(bus){
 }
 
 function isAcademyStop(stop){
+  if(stop && (stop.fixed || stop.id === JANGAN_ACADEMY.id)) return true;
   const n = String(stop && stop.name || '');
   return /정상어학원|학원\s*\(|학원$/.test(n);
+}
+
+function isJanganAcademyStop(stop){
+  if(!stop) return false;
+  if(stop.id === JANGAN_ACADEMY.id || stop.fixed) return true;
+  const n = String(stop.name || '');
+  return /정상어학원/.test(n) && /장안/.test(n);
+}
+
+/** 카카오맵에 정상어학원(장안분원) 고정 마커+라벨 표시 */
+function drawFixedAcademyMarker(map, layerArr, opts){
+  if(!map || typeof kakao === 'undefined' || !kakao.maps) return null;
+  const clickable = !!(opts && opts.clickable);
+  const uid = (opts && opts.domId) || ('fixed-academy-' + Math.random().toString(36).slice(2, 8));
+  const html = '<div class="academy-fixed" id="'+uid+'" title="'+esc(JANGAN_ACADEMY.name)+' · 고정 표시"'
+    + (clickable ? ' style="pointer-events:auto;cursor:pointer"' : '') + '>'
+    + '<div class="academy-pin">학</div>'
+    + '<div class="academy-label">'+esc(JANGAN_ACADEMY.name)+'</div>'
+    + '</div>';
+  const pos = new kakao.maps.LatLng(JANGAN_ACADEMY.lat, JANGAN_ACADEMY.lng);
+  const overlay = new kakao.maps.CustomOverlay({
+    position: pos,
+    content: html,
+    xAnchor: 0.5,
+    yAnchor: 1,
+    zIndex: 100
+  });
+  overlay.setMap(map);
+  if(layerArr) layerArr.push(overlay);
+  if(clickable && opts && typeof opts.onClick === 'function'){
+    setTimeout(() => {
+      const el = document.getElementById(uid);
+      if(!el) return;
+      el.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        opts.onClick({ ...JANGAN_ACADEMY });
+      };
+    }, 0);
+  }
+  return { overlay, pos };
 }
 
 /** 탑승 0명 정류장(학원 제외) — 재배정·감차 편성 대상에서 제외 */
@@ -820,11 +885,15 @@ function stopsForReassignView(bus){
 }
 
 function academyPointForBus(bus){
+  // 장안 분원은 항상 고정 학원 좌표 사용
+  if(bus && bus.branch === '장안'){
+    return { ...JANGAN_ACADEMY };
+  }
   const stops = (bus && bus.stops) || [];
   const academy = stops.find(s => isAcademyStop(s) && s.lat != null && s.lng != null);
   if(academy) return { lat: academy.lat, lng: academy.lng, name: academy.name, id: academy.id, isAcademy: true };
-  const c = BRANCH_MAP_CENTER[bus.branch] || BRANCH_MAP_CENTER['장안'];
-  return { lat: c.lat, lng: c.lng, name: '학원 도착', id: '__academy__', isAcademy: true };
+  // 기본값도 장안분원 고정점 (어느 지도에서든 식별 가능)
+  return { ...JANGAN_ACADEMY };
 }
 
 function routeCacheKey(from, to){
@@ -1616,24 +1685,49 @@ function forceRedrawRelayout(){
 async function renderRedrawMap(fitBounds){
   const seq = ++redrawRenderSeq;
   const pool = state.redrawStopPool;
-  if(!pool.length && !state.redrawNewRoutes.some(r => (r.stops||[]).length)){
-    clearRedrawLayers();
-    if(!state.redrawSourceBusIds.length){
-      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>원본 노선을 선택하세요.</b></p><p class="map-tip">선택한 노선의 정류장이 구분 없이 지도에 모입니다.</p></div>`);
-    } else {
-      setRedrawEmpty(true, null);
-    }
-    return;
-  }
   if(!rmap){
     setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 로딩 중…</b></p></div>`);
     return;
   }
+
+  if(!pool.length && !state.redrawNewRoutes.some(r => (r.stops||[]).length)){
+    clearRedrawLayers();
+    const academyOnly = drawFixedAcademyMarker(rmap, rLayers, {
+      domId: 'fixed-academy-redraw',
+      clickable: true,
+      onClick: (stop) => pickPoolStop(stop)
+    });
+    if(!state.redrawSourceBusIds.length){
+      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>원본 노선을 선택하세요.</b></p><p class="map-tip">선택한 노선의 정류장이 구분 없이 지도에 모입니다.<br>빨간 <b>학</b> 마커 = 정상어학원 (장안분원) 고정</p></div>`);
+    } else {
+      setRedrawEmpty(true, null);
+    }
+    if(academyOnly && fitBounds){
+      try{
+        rmap.setCenter(academyOnly.pos);
+        rmap.setLevel(5);
+      }catch(e){}
+    }
+    forceRedrawRelayout();
+    return;
+  }
+
   setRedrawEmpty(false);
   clearRedrawLayers();
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
   const active = getActiveNewRoute();
+
+  // 0) 정상어학원(장안분원) 고정 — 항상 표시·식별
+  const academyMark = drawFixedAcademyMarker(rmap, rLayers, {
+    domId: 'fixed-academy-redraw',
+    clickable: true,
+    onClick: (stop) => pickPoolStop(stop)
+  });
+  if(academyMark){
+    bounds.extend(academyMark.pos);
+    boundCount++;
+  }
 
   // 1) 미구분 정류장 풀 (원본 노선 색/선 없음)
   pool.forEach(s => {
@@ -2902,6 +2996,8 @@ function renderKakaoMap(fitBounds){
     const maxPax = Math.max(1, ...stops.map(s => Number(s.passengers)||0));
     const pickingThis = state.mapOrderPicking && state.orderBusId === bus.id;
     stops.forEach(s => {
+      // 장안분원 학원은 고정 마커로만 표시 (호차별 중복 핀 방지)
+      if(isJanganAcademyStop(s)) return;
       const n = Number(s.passengers) || 0;
       const sz = Math.max(16, Math.round(16 + (n / maxPax) * 18));
       const id = 'ms-' + bus.id.replace(/__/g,'-') + '-' + s.id;
@@ -2932,6 +3028,13 @@ function renderKakaoMap(fitBounds){
       }, 0);
     });
   });
+
+  // 정상어학원(장안분원) 고정 표시 — 어느 분원 지도에서도 식별 가능
+  const academyMark = drawFixedAcademyMarker(lmap, lLayers, { domId: 'fixed-academy-reassign' });
+  if(academyMark){
+    bounds.extend(academyMark.pos);
+    boundCount++;
+  }
 
   if(fitBounds && boundCount){
     try{

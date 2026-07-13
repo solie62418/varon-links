@@ -213,6 +213,98 @@ main.map-mode{max-width:none}
 .map-bus-stats .cell{background:#F8FAFD;border:1px solid var(--border);border-radius:8px;padding:6px 4px;text-align:center}
 .map-bus-stats .cell .n{font-size:13px;font-weight:800;color:var(--navy)}
 .map-bus-stats .cell .l{font-size:9px;color:var(--muted);margin-top:1px}
+.map-only-toolbar{
+  position:absolute;top:12px;right:12px;z-index:20;display:flex;gap:6px;flex-wrap:wrap;
+  background:rgba(27,31,39,.88);padding:8px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.28);
+}
+.map-only-toolbar .btn{box-shadow:none}
+body.map-only .topbar,
+body.map-only .tabs,
+body.map-only #alertBanner,
+body.map-only #coordMissingBanner,
+body.map-only #branchRow,
+body.map-only #dayGroupRow,
+body.map-only footer,
+body.map-only .map-side,
+body.map-only .redraw-guide,
+body.map-only .coord-pick-banner{
+  display:none !important;
+}
+body.map-only{
+  background:#fff;
+  overflow:hidden;
+}
+body.map-only main{
+  max-width:none !important;
+  padding:0 !important;
+  margin:0 !important;
+  height:100vh;
+  width:100vw;
+}
+body.map-only .view.active{
+  display:block;
+  height:100%;
+}
+body.map-only .map-layout{
+  display:block !important;
+  height:100vh !important;
+  min-height:100vh !important;
+  gap:0 !important;
+  margin:0 !important;
+}
+body.map-only .map-main{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100vh !important;
+  min-height:100vh !important;
+  border:none !important;
+  border-radius:0 !important;
+  z-index:50;
+  background:#E8EEF5;
+}
+body.map-only #kakaoMap,
+body.map-only #redrawMap{
+  width:100% !important;
+  height:100% !important;
+  min-height:100% !important;
+}
+body.map-only .map-only-toolbar{
+  top:16px;right:16px;
+}
+body.map-only .map-only-toolbar [data-map-only-enter]{display:none}
+body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
+.map-only-toolbar [data-map-only-exit]{display:none}
+@media print{
+  @page{size:landscape;margin:0}
+  html,body{
+    margin:0 !important;padding:0 !important;background:#fff !important;
+    width:100% !important;height:100% !important;overflow:hidden !important;
+  }
+  body *{visibility:hidden}
+  body.map-only .map-main,
+  body.map-only .map-main *,
+  body.map-printing .map-main,
+  body.map-printing .map-main *{
+    visibility:visible !important;
+  }
+  .topbar,.tabs,#alertBanner,#coordMissingBanner,#branchRow,#dayGroupRow,footer,
+  .map-side,.redraw-guide,.coord-pick-banner,.map-only-toolbar,.modal-overlay{
+    display:none !important;visibility:hidden !important;
+  }
+  main,.view.active,.map-layout{
+    position:static !important;margin:0 !important;padding:0 !important;
+    width:100% !important;height:100% !important;max-width:none !important;
+  }
+  .map-main{
+    position:fixed !important;inset:0 !important;width:100vw !important;height:100vh !important;
+    border:none !important;border-radius:0 !important;overflow:visible !important;
+    box-shadow:none !important;background:#fff !important;
+  }
+  #kakaoMap,#redrawMap{
+    width:100vw !important;height:100vh !important;min-height:100vh !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -299,6 +391,11 @@ main.map-mode{max-width:none}
         </div>
       </aside>
       <div class="map-main">
+        <div class="map-only-toolbar" aria-label="지도 보기 도구">
+          <button class="btn btn-yellow btn-sm" type="button" data-map-only-enter data-map-target="map">지도만 보기</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-map-only-exit style="background:rgba(255,255,255,.18);color:#fff">화면으로 돌아가기</button>
+          <button class="btn btn-navy btn-sm" type="button" data-map-only-print data-map-target="map">인쇄</button>
+        </div>
         <div class="coord-pick-banner" id="coordPickMapBanner">
           <span id="coordPickMapText">지도에서 정류장 위치를 클릭하세요.</span>
           <button class="btn btn-yellow btn-sm" type="button" id="coordPickBannerCancel">취소</button>
@@ -359,6 +456,11 @@ main.map-mode{max-width:none}
         <div id="redrawStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
       </aside>
       <div class="map-main">
+        <div class="map-only-toolbar" aria-label="지도 보기 도구">
+          <button class="btn btn-yellow btn-sm" type="button" data-map-only-enter data-map-target="redraw">지도만 보기</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-map-only-exit style="background:rgba(255,255,255,.18);color:#fff">화면으로 돌아가기</button>
+          <button class="btn btn-navy btn-sm" type="button" data-map-only-print data-map-target="redraw">인쇄</button>
+        </div>
         <div class="redraw-guide" id="redrawGuide">
           <span id="redrawGuideText">왼쪽에서 원본 노선을 여러 개(또는 전체) 선택하세요.</span>
           <button class="btn btn-yellow btn-sm" type="button" id="redrawGuideSaveBtn" disabled>마무리</button>
@@ -660,7 +762,9 @@ const state = {
   coordPickName: null,
   coordDrafts: {},
   mapTravelByBus: {},
-  preferredSetByBranch: {}
+  preferredSetByBranch: {},
+  mapOnlyMode: false,
+  mapOnlyTarget: null // 'map' | 'redraw'
 };
 
 let lmap = null;
@@ -3529,7 +3633,95 @@ function showMapView(){
 }
 
 function hideMapMode(){
+  if(state.mapOnlyMode) exitMapOnlyMode({ skipRelayout: true });
   document.querySelector('main').classList.remove('map-mode');
+}
+
+function refreshActiveMapLayout(fitBounds){
+  const fit = fitBounds !== false;
+  if(state.activeTab === 'map' || state.mapOnlyTarget === 'map'){
+    forceMapRelayout();
+    if(lmap) renderKakaoMap(fit);
+  }
+  if(state.activeTab === 'redraw' || state.mapOnlyTarget === 'redraw'){
+    forceRedrawRelayout();
+    if(rmap) renderRedrawMap(fit);
+  }
+}
+
+function enterMapOnlyMode(target){
+  const t = target || (state.activeTab === 'redraw' ? 'redraw' : 'map');
+  if(t === 'redraw' && state.activeTab !== 'redraw'){
+    state.activeTab = 'redraw';
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-redraw').classList.add('active');
+    renderTabs();
+    showRedrawView();
+  } else if(t === 'map' && state.activeTab !== 'map'){
+    state.activeTab = 'map';
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-map').classList.add('active');
+    renderTabs();
+    showMapView();
+  }
+  state.mapOnlyMode = true;
+  state.mapOnlyTarget = t;
+  document.body.classList.add('map-only');
+  document.querySelector('main').classList.add('map-mode');
+  // 레이아웃 전환 후 지도 다시 맞춤
+  requestAnimationFrame(() => {
+    setTimeout(() => refreshActiveMapLayout(true), 80);
+    setTimeout(() => refreshActiveMapLayout(true), 320);
+  });
+}
+
+function exitMapOnlyMode(opts){
+  opts = opts || {};
+  if(!state.mapOnlyMode && !document.body.classList.contains('map-only')) return;
+  state.mapOnlyMode = false;
+  state.mapOnlyTarget = null;
+  document.body.classList.remove('map-only');
+  document.body.classList.remove('map-printing');
+  if(!opts.skipRelayout){
+    requestAnimationFrame(() => {
+      setTimeout(() => refreshActiveMapLayout(true), 80);
+      setTimeout(() => refreshActiveMapLayout(false), 280);
+    });
+  }
+}
+
+function printActiveMap(){
+  const target = state.mapOnlyTarget || (state.activeTab === 'redraw' ? 'redraw' : 'map');
+  const wasOnly = state.mapOnlyMode;
+  if(!wasOnly) enterMapOnlyMode(target);
+  document.body.classList.add('map-printing');
+  const runPrint = () => {
+    refreshActiveMapLayout(true);
+    setTimeout(() => {
+      try{ window.print(); }
+      finally{
+        document.body.classList.remove('map-printing');
+        if(!wasOnly) exitMapOnlyMode();
+      }
+    }, 450);
+  };
+  requestAnimationFrame(() => setTimeout(runPrint, 200));
+}
+
+function wireMapOnlyControls(){
+  document.querySelectorAll('[data-map-only-enter]').forEach(btn => {
+    btn.onclick = () => enterMapOnlyMode(btn.getAttribute('data-map-target') || undefined);
+  });
+  document.querySelectorAll('[data-map-only-exit]').forEach(btn => {
+    btn.onclick = () => exitMapOnlyMode();
+  });
+  document.querySelectorAll('[data-map-only-print]').forEach(btn => {
+    btn.onclick = () => {
+      const t = btn.getAttribute('data-map-target');
+      if(t && !state.mapOnlyMode) state.mapOnlyTarget = t;
+      printActiveMap();
+    };
+  });
 }
 
 function comboKey(branch, no){
@@ -4528,6 +4720,7 @@ function renderTabs(){
       if(t.key === 'alerts') renderAlerts();
       if(t.key === 'settings') fillRulesForm();
       if(t.key !== 'map' && state.coordPickMode) endCoordPickMode();
+      if(t.key !== 'map' && t.key !== 'redraw' && state.mapOnlyMode) exitMapOnlyMode({ skipRelayout: true });
     };
     bar.appendChild(btn);
   });
@@ -5653,6 +5846,25 @@ document.getElementById('resetRulesBtn').onclick = () => {
 };
 
 renderTabs();
+wireMapOnlyControls();
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && state.mapOnlyMode){
+    e.preventDefault();
+    exitMapOnlyMode();
+  }
+});
+window.addEventListener('beforeprint', () => {
+  document.body.classList.add('map-printing');
+  if(!state.mapOnlyMode && (state.activeTab === 'map' || state.activeTab === 'redraw')){
+    document.body.classList.add('map-only');
+  }
+  refreshActiveMapLayout(false);
+});
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('map-printing');
+  if(!state.mapOnlyMode) document.body.classList.remove('map-only');
+  refreshActiveMapLayout(false);
+});
 loadAll().catch(err => {
   console.error(err);
   document.getElementById('loadStatus').textContent = '서버 연결 실패';

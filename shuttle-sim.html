@@ -265,7 +265,7 @@ main.map-mode{max-width:none}
   <section class="view" id="view-redraw">
     <div class="map-layout">
       <aside class="map-side">
-        <div class="map-banner">1) 원본 노선 여러 개/전체 선택 → 2) 정류장이 구분 없이 표시 → 3) 새 노선 그리기 → 4) 이름 붙여 마무리 → 5) 반복 후 전체 세트 저장</div>
+        <div class="map-banner">1) 원본 노선 선택 → 2) 정류장 풀 표시 → 3) 새 노선 그리기 → 4) 마무리·라벨 → 5) 전체 세트 저장 · <b>학원(장안분원)은 등원=마지막 / 하원=첫 정류장 고정</b></div>
         <div class="filter-row" style="margin:0" id="redrawLineOrderRow"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
           <button class="btn btn-navy btn-sm" type="button" id="redrawSelectAllBtn">원본 전체 선택</button>
@@ -820,6 +820,28 @@ function isJanganAcademyStop(stop){
   return /정상어학원/.test(n) && /장안/.test(n);
 }
 
+/** 등원=학원 도착(마지막), 하원=학원 출발(첫) */
+function academyEndpointMode(tab){
+  const t = tab || state.redrawTab || state.orderTab || '등원';
+  return t === '하원' ? 'first' : 'last';
+}
+
+function academyEndpointLabel(tab){
+  return academyEndpointMode(tab) === 'first' ? '학원 출발' : '학원 도착';
+}
+
+/** 학원을 항상 첫 또는 마지막 정류장으로 고정 */
+function normalizeAcademyEndpoint(stops, tab){
+  const mid = (stops || []).filter(s => !isJanganAcademyStop(s));
+  const academy = { ...JANGAN_ACADEMY, passengers: 0 };
+  if(academyEndpointMode(tab) === 'first') return [academy, ...mid];
+  return [...mid, academy];
+}
+
+function nonAcademyStops(stops){
+  return (stops || []).filter(s => !isJanganAcademyStop(s));
+}
+
 /** 카카오맵에 정상어학원(장안분원) 고정 마커+라벨 표시 */
 function drawFixedAcademyMarker(map, layerArr, opts){
   if(!map || typeof kakao === 'undefined' || !kakao.maps) return null;
@@ -1120,7 +1142,7 @@ function getActiveNewRoute(){
 }
 
 function canSaveRedrawSet(){
-  return state.redrawNewRoutes.some(r => r.finished && (r.stops || []).length >= 2);
+  return state.redrawNewRoutes.some(r => r.finished && nonAcademyStops(r.stops).length >= 1 && (r.stops || []).length >= 2);
 }
 
 function redrawProgressText(){
@@ -1156,15 +1178,16 @@ function updateRedrawGuide(){
   } else if(!state.redrawStopPool.length){
     text.textContent = '선택한 원본에 좌표 있는 정류장이 없습니다.';
   } else if(!route){
-    text.textContent = '정류장이 구분 없이 표시됩니다. 「새 노선 그리기」를 누른 뒤 순서대로 클릭하세요.';
-  } else if(!route.stops.length){
-    text.textContent = '새 노선 그리는 중 · 정류장을 순서대로 클릭 · 같은 정류장 재클릭=취소';
+    text.textContent = '정류장이 구분 없이 표시됩니다. 「새 노선 그리기」· '+academyEndpointLabel()+' 고정.';
+  } else if(nonAcademyStops(route.stops).length === 0){
+    text.textContent = '새 노선 · '+academyEndpointLabel()+' 고정 · 정류장을 순서대로 클릭 · 재클릭=취소';
   } else {
     const src = state.redrawStats.source === 'osrm' ? '도로' : '도로근사';
-    text.textContent = '새 노선 · 정류장 '+route.stops.length+' · '+src+' '+
-      ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분 · 끝나면 마무리';
+    text.textContent = '새 노선 · '+academyEndpointLabel()+' · 정류장 '+route.stops.length+' · '+src+' '+
+      ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분';
   }
-  if(saveBtn) saveBtn.disabled = !(route && route.stops.length >= 2);
+  const canFinish = !!(route && nonAcademyStops(route.stops).length >= 1 && route.stops.length >= 2);
+  if(saveBtn) saveBtn.disabled = !canFinish;
   const startBtn = document.getElementById('redrawStartNewBtn');
   const clearBtn = document.getElementById('redrawClearOrderBtn');
   const undoBtn = document.getElementById('redrawUndoBtn');
@@ -1173,9 +1196,9 @@ function updateRedrawGuide(){
   const saveSetBtn = document.getElementById('redrawSaveSetBtn');
   if(startBtn) startBtn.disabled = !state.redrawStopPool.length;
   if(clearBtn) clearBtn.disabled = !route;
-  if(undoBtn) undoBtn.disabled = !(route && route.stops.length);
+  if(undoBtn) undoBtn.disabled = !(route && nonAcademyStops(route.stops).length);
   if(stopEdit) stopEdit.disabled = !route;
-  if(finishBtn) finishBtn.disabled = !(route && route.stops.length >= 2);
+  if(finishBtn) finishBtn.disabled = !canFinish;
   if(saveSetBtn) saveSetBtn.disabled = !canSaveRedrawSet();
   const prog = document.getElementById('redrawProgress');
   if(prog) prog.textContent = redrawProgressText();
@@ -1246,12 +1269,13 @@ function startNewRedrawRoute(){
   // 진행 중 미마무리 노선이 있으면 그걸 이어서
   const unfinished = state.redrawNewRoutes.find(r => !r.finished);
   if(unfinished){
+    unfinished.stops = normalizeAcademyEndpoint(unfinished.stops);
     state.redrawActiveRouteId = unfinished.id;
     const nameInput = document.getElementById('redrawRouteName');
     if(nameInput) nameInput.value = unfinished.name || '';
     state.redrawStats = { meters: unfinished.meters||0, minutes: unfinished.minutes||0, source: unfinished.source||'osrm' };
     const sum = document.getElementById('redrawSelectionSummary');
-    if(sum) sum.innerHTML = '그리는 중: <b>'+esc(unfinished.name || '새 노선')+'</b> · 정류장을 순서대로 클릭하세요.';
+    if(sum) sum.innerHTML = '그리는 중: <b>'+esc(unfinished.name || '새 노선')+'</b> · '+esc(academyEndpointLabel())+' 고정 · 정류장을 순서대로 클릭하세요.';
     renderRedrawSide();
     renderRedrawMap(false);
     refreshRedrawStats();
@@ -1261,7 +1285,7 @@ function startNewRedrawRoute(){
   const route = {
     id,
     name: '',
-    stops: [],
+    stops: normalizeAcademyEndpoint([]),
     finished: false,
     meters: 0,
     minutes: 0,
@@ -1275,7 +1299,7 @@ function startNewRedrawRoute(){
   const nameInput = document.getElementById('redrawRouteName');
   if(nameInput) nameInput.value = '';
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '<b>새 노선</b> 그리는 중 · 풀 정류장을 순서대로 클릭 · 끝나면 이름 붙여 마무리';
+  if(sum) sum.innerHTML = '<b>새 노선</b> · '+esc(academyEndpointLabel())+' 고정 · 풀 정류장을 순서대로 클릭 · 끝나면 이름 붙여 마무리';
   renderRedrawSide();
   renderRedrawMap(false);
   updateRedrawStatsUi();
@@ -1285,12 +1309,13 @@ function beginEditNewRoute(routeId){
   const route = state.redrawNewRoutes.find(r => r.id === routeId);
   if(!route) return;
   route.finished = false;
+  route.stops = normalizeAcademyEndpoint(route.stops);
   state.redrawActiveRouteId = routeId;
   const nameInput = document.getElementById('redrawRouteName');
   if(nameInput) nameInput.value = route.name || '';
   state.redrawStats = { meters: route.meters||0, minutes: route.minutes||0, source: route.source||'osrm' };
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '재편집: <b>'+esc(route.name || '새 노선')+'</b> · 정류장 추가/삭제 후 다시 마무리';
+  if(sum) sum.innerHTML = '재편집: <b>'+esc(route.name || '새 노선')+'</b> · '+esc(academyEndpointLabel())+' 고정 · 정류장 추가/삭제 후 다시 마무리';
   renderRedrawSide();
   renderRedrawMap(true);
   refreshRedrawStats();
@@ -1298,8 +1323,8 @@ function beginEditNewRoute(routeId){
 
 function stopEditRedrawBus(){
   const route = getActiveNewRoute();
-  if(route && !route.finished && !route.stops.length){
-    // 빈 미완성 노선 제거
+  if(route && !route.finished && nonAcademyStops(route.stops).length === 0){
+    // 학원만 남은 미완성 노선 제거
     state.redrawNewRoutes = state.redrawNewRoutes.filter(r => r.id !== route.id);
   }
   state.redrawActiveRouteId = null;
@@ -1313,7 +1338,7 @@ function stopEditRedrawBus(){
 function clearRedrawOrderOnly(){
   const route = getActiveNewRoute();
   if(!route) return;
-  route.stops = [];
+  route.stops = normalizeAcademyEndpoint([]);
   route.path = [];
   route.meters = 0;
   route.minutes = 0;
@@ -1326,33 +1351,19 @@ function clearRedrawOrderOnly(){
 
 function undoRedrawClick(){
   const route = getActiveNewRoute();
-  if(!route || !route.stops.length) return;
-  route.stops.pop();
+  if(!route) return;
+  const mid = nonAcademyStops(route.stops);
+  if(!mid.length) return;
+  mid.pop();
+  route.stops = normalizeAcademyEndpoint(mid);
   route.finished = false;
   renderRedrawSide();
   renderRedrawMap(false);
   refreshRedrawStats();
 }
 
-function clearRedrawSelection(){
-  state.redrawSourceBusIds = [];
-  state.redrawStopPool = [];
-  state.redrawActiveRouteId = null;
-  state.redrawNewRoutes = [];
-  state.redrawActiveSetId = null;
-  state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
-  state.redrawColorIdx = 0;
-  const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '정류장 풀이 준비되면 <b>새 노선 그리기</b>를 누르세요.';
-  const nameInput = document.getElementById('redrawRouteName');
-  if(nameInput) nameInput.value = '';
-  renderRedrawSide();
-  renderRedrawMap(true);
-  updateRedrawStatsUi();
-}
-
 function pickPoolStop(stop){
-  if(!state.redrawStopPool.length) return;
+  if(!state.redrawStopPool.length && !isJanganAcademyStop(stop)) return;
   let route = getActiveNewRoute();
   if(!route){
     startNewRedrawRoute();
@@ -1360,15 +1371,27 @@ function pickPoolStop(stop){
   }
   if(!route) return;
   route.finished = false;
-  const idx = route.stops.findIndex(d => String(d.id) === String(stop.id));
-  if(idx >= 0) route.stops.splice(idx, 1);
-  else route.stops.push({
+
+  // 학원은 항상 끝점 — 클릭해도 제거하지 않고 위치만 유지/재고정
+  if(isJanganAcademyStop(stop)){
+    route.stops = normalizeAcademyEndpoint(route.stops);
+    renderRedrawSide();
+    renderRedrawMap(false);
+    refreshRedrawStats();
+    return;
+  }
+
+  const mid = nonAcademyStops(route.stops);
+  const idx = mid.findIndex(d => String(d.id) === String(stop.id));
+  if(idx >= 0) mid.splice(idx, 1);
+  else mid.push({
     id: stop.id,
     name: stop.name,
     lat: stop.lat,
     lng: stop.lng,
     passengers: stop.passengers || 0
   });
+  route.stops = normalizeAcademyEndpoint(mid);
   renderRedrawSide();
   renderRedrawMap(false);
   refreshRedrawStats();
@@ -1376,8 +1399,10 @@ function pickPoolStop(stop){
 
 async function finishRedrawRoute(){
   const route = getActiveNewRoute();
-  if(!route || route.stops.length < 2){
-    alert('정류장을 2개 이상 연결한 뒤 마무리하세요.');
+  if(!route) return;
+  route.stops = normalizeAcademyEndpoint(route.stops);
+  if(nonAcademyStops(route.stops).length < 1 || route.stops.length < 2){
+    alert('정류장을 1개 이상 선택하고(학원 끝점 포함) 마무리하세요.');
     return;
   }
   const nameInput = document.getElementById('redrawRouteName');
@@ -1400,15 +1425,34 @@ async function finishRedrawRoute(){
   if(nameInput) nameInput.value = '';
   const sum = document.getElementById('redrawSelectionSummary');
   if(sum){
-    sum.innerHTML = '<b>'+esc(name)+'</b> 저장됨. 「새 노선 그리기」로 다음을 만들거나, 전체 세트를 저장하세요.';
+    sum.innerHTML = '<b>'+esc(name)+'</b> 저장됨 · '+esc(academyEndpointLabel())+' 고정. 「새 노선 그리기」로 다음을 만들거나, 전체 세트를 저장하세요.';
   }
   renderRedrawSide();
   renderRedrawMap(true);
   updateRedrawStatsUi();
 }
 
+function clearRedrawSelection(){
+  state.redrawSourceBusIds = [];
+  state.redrawStopPool = [];
+  state.redrawActiveRouteId = null;
+  state.redrawNewRoutes = [];
+  state.redrawActiveSetId = null;
+  state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
+  state.redrawColorIdx = 0;
+  const sum = document.getElementById('redrawSelectionSummary');
+  if(sum) sum.innerHTML = '정류장 풀이 준비되면 <b>새 노선 그리기</b>를 누르세요.';
+  const nameInput = document.getElementById('redrawRouteName');
+  if(nameInput) nameInput.value = '';
+  renderRedrawSide();
+  renderRedrawMap(true);
+  updateRedrawStatsUi();
+}
+
 async function saveRedrawSet(){
-  const routes = state.redrawNewRoutes.filter(r => r.finished && (r.stops||[]).length >= 2);
+  // 저장 전 학원 끝점 재고정
+  state.redrawNewRoutes.forEach(r => { if(r.finished) r.stops = normalizeAcademyEndpoint(r.stops); });
+  const routes = state.redrawNewRoutes.filter(r => r.finished && nonAcademyStops(r.stops).length >= 1 && (r.stops||[]).length >= 2);
   if(!routes.length){
     alert('마무리된 새 노선이 하나 이상 있어야 세트를 저장할 수 있습니다.');
     return;
@@ -1542,7 +1586,14 @@ function renderRedrawSide(){
     orderRow.querySelectorAll('[data-redraw-tab]').forEach(btn => {
       btn.onclick = () => {
         state.redrawTab = btn.getAttribute('data-redraw-tab');
+        // 등원/하원 전환 시 학원 끝점(첫/마지막) 재배치
+        state.redrawNewRoutes.forEach(r => {
+          r.stops = normalizeAcademyEndpoint(r.stops);
+          r.path = [];
+        });
         renderRedrawSide();
+        renderRedrawMap(false);
+        refreshRedrawStats();
       };
     });
   }
@@ -1579,23 +1630,27 @@ function renderRedrawSide(){
   const route = getActiveNewRoute();
   if(stopList){
     if(!route || !route.stops.length){
-      stopList.innerHTML = `<div class="map-tip">새 노선 그리기를 시작한 뒤 지도에서 정류장을 클릭하세요.</div>`;
+      stopList.innerHTML = `<div class="map-tip">새 노선 그리기를 시작한 뒤 지도에서 정류장을 클릭하세요.<br>학원(${esc(academyEndpointLabel())})은 자동 고정됩니다.</div>`;
     } else {
       const col = route.color || 'var(--navy)';
-      stopList.innerHTML = route.stops.map((s, i) => `
-        <div class="stop-list-item" style="cursor:pointer" data-redraw-stop-idx="${i}">
-          <span class="dot" style="background:${col}"></span>
+      stopList.innerHTML = route.stops.map((s, i) => {
+        const isAc = isJanganAcademyStop(s);
+        return `<div class="stop-list-item" style="cursor:${isAc?'default':'pointer'}" ${isAc?'':'data-redraw-stop-idx="'+i+'"'}>
+          <span class="dot" style="background:${isAc?'#C0392B':col}"></span>
           <div style="flex:1;min-width:0">
-            <div style="font-weight:700">${i+1}. ${esc(s.name || ('정류장 '+s.id))}</div>
-            <div class="meta">${Number(s.passengers)||0}명 · 클릭 시 제외</div>
+            <div style="font-weight:700">${i+1}. ${esc(s.name || ('정류장 '+s.id))}${isAc?' · '+esc(academyEndpointLabel()):''}</div>
+            <div class="meta">${isAc ? '고정 끝점 (제거 불가)' : ((Number(s.passengers)||0)+'명 · 클릭 시 제외')}</div>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       stopList.querySelectorAll('[data-redraw-stop-idx]').forEach(el => {
         el.onclick = () => {
           const i = Number(el.getAttribute('data-redraw-stop-idx'));
           const r = getActiveNewRoute();
-          if(r && Number.isFinite(i)){
-            r.stops.splice(i, 1);
+          if(r && Number.isFinite(i) && r.stops[i] && !isJanganAcademyStop(r.stops[i])){
+            const target = r.stops[i];
+            const nextMid = nonAcademyStops(r.stops).filter(s => String(s.id) !== String(target.id));
+            r.stops = normalizeAcademyEndpoint(nextMid);
             r.finished = false;
             renderRedrawSide();
             renderRedrawMap(false);
@@ -2493,7 +2548,8 @@ function autoRecommendOrder(){
 }
 
 function reverseOrderDraft(){
-  state.orderDraft = state.orderDraft.slice().reverse();
+  state.orderDraft = nonAcademyStops(state.orderDraft).slice().reverse();
+  // 학원은 저장 시/표시 시 끝점으로 붙이므로 draft에는 중간 정류장만
   updateOrderPickBanner();
   renderOrderList();
   renderKakaoMap(false);
@@ -2504,24 +2560,29 @@ async function renderOrderList(){
   const hint = document.getElementById('orderTravelHint');
   if(!list) return;
   const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
-  const academy = bus ? academyPointForBus(bus) : { name: '학원 도착' };
-  list.innerHTML = state.orderDraft.map((s, i) =>
-    '<div class="order-item" draggable="false" data-order-idx="'+i+'">'
-    + '<span class="ord">'+(i+1)+'</span>'
-    + '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.name || ('정류장 '+s.id))+'</div>'
-    + '<div class="meta">'+(Number(s.passengers)||0)+'명</div></div></div>'
-  ).join('') + '<div class="order-item academy"><span class="ord">'+(state.orderDraft.length+1)+'</span><div>학원 도착 · '+esc(academy.name)+'</div></div>';
+  const academy = bus ? academyPointForBus(bus) : { ...JANGAN_ACADEMY };
+  const mid = nonAcademyStops(state.orderDraft);
+  const mode = academyEndpointMode(state.orderTab);
+  const academyHtml = '<div class="order-item academy"><span class="ord">'+(mode==='first'?1:(mid.length+1))+'</span><div>'+esc(academyEndpointLabel(state.orderTab))+' · '+esc(academy.name||JANGAN_ACADEMY.name)+'</div></div>';
+  const midHtml = mid.map((s, i) => {
+    const ord = mode === 'first' ? (i + 2) : (i + 1);
+    return '<div class="order-item" draggable="false" data-order-idx="'+i+'">'
+      + '<span class="ord">'+ord+'</span>'
+      + '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.name || ('정류장 '+s.id))+'</div>'
+      + '<div class="meta">'+(Number(s.passengers)||0)+'명</div></div></div>';
+  }).join('');
+  list.innerHTML = mode === 'first' ? (academyHtml + midHtml) : (midHtml + academyHtml);
 
   list.querySelectorAll('.order-item[data-order-idx]').forEach(el => bindOrderItemDrag(el));
 
   if(hint && bus){
     hint.textContent = '예상 총 운행시간 계산 중…';
-    const pts = [...state.orderDraft, academy];
+    const pts = normalizeAcademyEndpoint(mid, state.orderTab);
     const est = await estimateOrderedRouteMinutes(pts);
     const mins = Math.round(est.minutes || 0);
     const km = ((est.meters || 0) / 1000).toFixed(1);
     hint.textContent = '예상 총 운행: 약 ' + mins + '분 · ' + km + 'km (' +
-      ((est.source === 'osrm') ? '도로(OSRM)' : ('도로근사 ×' + ROAD_APPROX_FACTOR)) + ')';
+      ((est.source === 'osrm') ? '도로(OSRM)' : ('도로근사 ×' + ROAD_APPROX_FACTOR)) + ') · ' + academyEndpointLabel(state.orderTab);
   }
 }
 
@@ -2584,15 +2645,28 @@ async function saveRouteOrder(){
       });
     }
   }
+  state.orderDraft = nonAcademyStops(state.orderDraft);
   saveOrderDraftToStateMemory();
+  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+  const academy = bus ? academyPointForBus(bus) : { ...JANGAN_ACADEMY };
+  const ordered = normalizeAcademyEndpoint(state.orderDraft, state.orderTab).map(s => {
+    // 학원은 호차 원본 학원 id가 있으면 그걸 씀
+    if(isJanganAcademyStop(s) && bus){
+      const orig = (bus.stops || []).find(x => isJanganAcademyStop(x));
+      if(orig) return String(orig.id);
+    }
+    return String(s.id);
+  });
   const entry = state.routeOrders[state.orderBusId] || {};
   const curKey = state.orderTab === '등원' ? '등원순서' : '하원순서';
-  entry[curKey] = state.orderDraft.map(s => String(s.id));
-  // also flush other tab draft if present
-  if(entry._draft등원) entry['등원순서'] = entry._draft등원.map(s => String(s.id));
-  if(entry._draft하원) entry['하원순서'] = entry._draft하원.map(s => String(s.id));
-  // ensure current tab saved from orderDraft
-  entry[curKey] = state.orderDraft.map(s => String(s.id));
+  entry[curKey] = ordered;
+  if(entry._draft등원){
+    entry['등원순서'] = normalizeAcademyEndpoint(entry._draft등원, '등원').map(s => String(isJanganAcademyStop(s) && bus && (bus.stops||[]).find(x=>isJanganAcademyStop(x)) ? (bus.stops||[]).find(x=>isJanganAcademyStop(x)).id : s.id));
+  }
+  if(entry._draft하원){
+    entry['하원순서'] = normalizeAcademyEndpoint(entry._draft하원, '하원').map(s => String(isJanganAcademyStop(s) && bus && (bus.stops||[]).find(x=>isJanganAcademyStop(x)) ? (bus.stops||[]).find(x=>isJanganAcademyStop(x)).id : s.id));
+  }
+  entry[curKey] = ordered;
   entry.updatedAt = new Date().toISOString();
   delete entry._draft등원;
   delete entry._draft하원;
@@ -2604,7 +2678,7 @@ async function saveRouteOrder(){
     }, { merge: true });
     state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
     await persistRouteCache();
-    alert('순서를 저장했습니다. (route_orders 문서 · 원본 호차/정류장 시트 미변경)');
+    alert('순서를 저장했습니다. ('+academyEndpointLabel(state.orderTab)+' 고정 · route_orders · 원본 시트 미변경)');
     closeOrderPanel();
     renderMapSide();
     renderKakaoMap(false);

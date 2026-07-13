@@ -7,6 +7,7 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!-- 장안 셔틀앱과 동일 앱키 · 카카오 콘솔 JavaScript SDK 도메인에 https://solie62418.github.io 등록 필요 -->
 <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=8a3a366186ca2e7f70a53a60e624b719&autoload=false"></script>
 <style>
@@ -242,10 +243,26 @@ main.map-mode{max-width:none}
 .sim-compare-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
 .attempt-item.starred{border-color:var(--busyellow)}
 .attempt-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
-.map-bus-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
-.map-bus-stats .cell{background:#F8FAFD;border:1px solid var(--border);border-radius:8px;padding:6px 4px;text-align:center}
-.map-bus-stats .cell .n{font-size:13px;font-weight:800;color:var(--navy)}
-.map-bus-stats .cell .l{font-size:9px;color:var(--muted);margin-top:1px}
+.map-bus-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:8px}
+.map-bus-stats .cell{
+  background:#F8FAFD;border:1px solid var(--border);border-radius:8px;
+  padding:5px 1px 4px;text-align:center;min-width:0;overflow:hidden;
+}
+.map-bus-stats .cell .n{
+  font-size:11px;font-weight:800;color:var(--navy);line-height:1.1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;
+}
+.map-bus-stats .cell .l{
+  font-size:9px;color:var(--muted);margin-top:2px;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.04em;
+}
+.roster-upload{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:12px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+}
+.roster-upload .meta{font-size:12px;color:var(--muted);line-height:1.45;flex:1;min-width:200px}
+.roster-upload input[type=file]{display:none}
 .map-only-toolbar{
   position:absolute;top:12px;right:12px;z-index:20;display:flex;gap:6px;flex-wrap:wrap;align-items:center;
   background:rgba(27,31,39,.88);padding:8px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.28);
@@ -402,7 +419,17 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
 
   <section class="view active" id="view-dash">
     <div class="stat-row" id="dashStats"></div>
-    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금 1–4부 / 화목 1–2부) · 고유이용자/정원. <b>부 행을 클릭</b>하면 정류장별 탑승인원을 볼 수 있습니다. 상단 요일그룹 칩으로 필터하세요.</p>
+    <div class="roster-upload" id="rosterUploadBox">
+      <div class="meta">
+        <b>탑승명단 엑셀 업로드</b> · 파일명/학원명으로 분원 인식 · 수업타임으로 부(월수금 1–4 / 화목 1–2) 판별<br>
+        <span id="rosterUploadStatus">예: 정상어학원 장안_6월4주차 탑승명단.xlsx</span>
+      </div>
+      <label class="btn btn-navy btn-sm" style="cursor:pointer;margin:0">
+        엑셀 선택
+        <input type="file" id="rosterFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+      </label>
+    </div>
+    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금 1–4부 / 화목 1–2부) · 고유이용자/정원. <b>부 행을 클릭</b>하면 정류장별 탑승인원. 상단 요일그룹 칩으로 필터.</p>
     <div class="filter-row">
       <button class="chip active" data-dash-filter="all" type="button">전체 호차</button>
       <button class="chip" data-dash-filter="candidate" type="button">감차 후보만</button>
@@ -781,6 +808,7 @@ const state = {
   branchFilter: '전체',
   dashFilter: 'all',
   dashDetail: null, // { busId, group, period } — 현황 정류장별 탑승 펼침
+  rosterMeta: null, // { branch, fileName, rows, appliedAt, buses }
   activeTab: 'dash',
   adminUnlocked: false,
   dataSources: [],
@@ -3319,9 +3347,9 @@ function renderMapSide(){
       const pax = Number(b.passengers) || 0;
       const spare = (b.seatSlots || b.capacity) - pax - state.rules.capacityBufferSeats;
       const travel = state.mapTravelByBus[b.id];
-      const travelTxt = travel && travel.minutes != null ? Math.round(travel.minutes) + '분' : '…';
+      const travelTxt = travel && travel.minutes != null ? String(Math.round(travel.minutes)) : '…';
       const distTxt = travel && travel.meters != null
-        ? ((Number(travel.meters)||0)/1000).toFixed(1) + 'km'
+        ? ((Number(travel.meters)||0)/1000).toFixed(1)
         : '…';
       const isRem = state.reassignMode && state.reassignRemoveId === b.id;
       const isAbs = state.reassignMode && state.reassignAbsorbIds.includes(b.id);
@@ -3354,7 +3382,7 @@ function renderMapSide(){
               <div class="cell"><div class="n">${pax}</div><div class="l">탑승</div></div>
               <div class="cell"><div class="n">${spare}</div><div class="l">여유석</div></div>
               <div class="cell"><div class="n" data-map-stat="km">${distTxt}</div><div class="l">거리</div></div>
-              <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행시간</div></div>
+              <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행</div></div>
             </div>
           </div>
         </div>
@@ -3780,8 +3808,8 @@ function renderMapSideTravelOnly(){
     if(!travel) return;
     const kmEl = card.querySelector('[data-map-stat="km"]');
     const minEl = card.querySelector('[data-map-stat="min"]');
-    if(kmEl && travel.meters != null) kmEl.textContent = ((Number(travel.meters)||0)/1000).toFixed(1) + 'km';
-    if(minEl && travel.minutes != null) minEl.textContent = Math.round(travel.minutes) + '분';
+    if(kmEl && travel.meters != null) kmEl.textContent = ((Number(travel.meters)||0)/1000).toFixed(1);
+    if(minEl && travel.minutes != null) minEl.textContent = String(Math.round(travel.minutes));
   });
 }
 
@@ -4927,7 +4955,8 @@ function buildBuses(hydrations){
     let source = 'none';
     let seatSlotsOverride = null;
 
-    const fromStudents = passengersFromStudents(branch, no, stopBusMap);
+    const preferRoster = !!(state.rosterMeta && state.rosterMeta.branch === branch && hydrated && hydrated.full);
+    const fromStudents = preferRoster ? { count: 0, stops: [] } : passengersFromStudents(branch, no, stopBusMap);
     if(fromStudents.count > 0){
       passengers = fromStudents.count;
       stops = fromStudents.stops;
@@ -4938,7 +4967,9 @@ function buildBuses(hydrations){
       stops = (dayRide.stops || []).filter(s => s.passengers > 0 || (s.lat != null && s.lng != null));
       if(!stops.length) stops = dayRide.stops || hydrated.stops || [];
       seatSlotsOverride = dayRide.seatSlots;
-      source = BRANCH_APPS[branch] ? `branch-app:${BRANCH_APPS[branch]}` : 'shuttle_backup';
+      source = preferRoster
+        ? ('roster-xlsx:' + branch)
+        : (BRANCH_APPS[branch] ? `branch-app:${BRANCH_APPS[branch]}` : 'shuttle_backup');
     }
 
     stops = fillMissingStopCoords(stops);
@@ -5107,6 +5138,373 @@ function rebuildBusesForDayMode(){
 function periodsForDayGroup(gName){
   if(gName === '화목') return [1, 2];
   return [1, 2, 3, 4];
+}
+
+/** 수업 시작 시각 → 셔틀은 10분 전 학원 도착. 하원 시각은 자료 최빈값 기준 앵커 */
+function hmToMin(h, m){ return h * 60 + m; }
+const ROSTER_PERIOD_ANCHORS = {
+  '월수금': [
+    { period: 1, classMin: hmToMin(14,30), arriveMin: hmToMin(14,20), leaveMin: hmToMin(16,10) },
+    { period: 2, classMin: hmToMin(16,0),  arriveMin: hmToMin(15,50), leaveMin: hmToMin(18,10) },
+    { period: 3, classMin: hmToMin(18,0),  arriveMin: hmToMin(17,50), leaveMin: hmToMin(20,10) },
+    { period: 4, classMin: hmToMin(20,0),  arriveMin: hmToMin(19,50), leaveMin: hmToMin(22,10) }
+  ],
+  '화목': [
+    { period: 1, classMin: hmToMin(15,30), arriveMin: hmToMin(15,20), leaveMin: hmToMin(18,40) },
+    { period: 2, classMin: hmToMin(18,30), arriveMin: hmToMin(18,20), leaveMin: hmToMin(21,40) }
+  ]
+};
+
+function parseTimeToMinutes(v){
+  if(v == null || v === '') return null;
+  if(typeof v === 'number' && Number.isFinite(v)){
+    // Excel time fraction
+    if(v >= 0 && v < 1) return Math.round(v * 24 * 60);
+    return null;
+  }
+  if(v instanceof Date && !isNaN(v)) return v.getHours() * 60 + v.getMinutes();
+  const s = String(v).trim();
+  const m = s.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})/);
+  if(m) return Number(m[1]) * 60 + Number(m[2]);
+  const m2 = s.match(/^(\d{1,2})$/);
+  if(m2) return Number(m2[1]) * 60;
+  return null;
+}
+
+function dayGroupFromWeekday(v){
+  const s = String(v || '').trim();
+  if(/월|수|금/.test(s)) return '월수금';
+  if(/화|목/.test(s)) return '화목';
+  if(s === '월수금' || s === '화목') return s;
+  return null;
+}
+
+function branchFromRosterText(...parts){
+  const s = parts.filter(Boolean).join(' ');
+  if(/남동탄/.test(s)) return '남동탄';
+  if(/운정\s*2|운정2/.test(s)) return '운정2';
+  if(/운정\s*1|운정1/.test(s)) return '운정1';
+  if(/운정/.test(s)) return '운정1';
+  if(/서수원/.test(s)) return '서수원';
+  if(/장안/.test(s)) return '장안';
+  if(/수원/.test(s)) return '수원';
+  return null;
+}
+
+function busNoFromRosterHo(v){
+  const s = String(v || '');
+  const m = s.match(/_?\s*(\d+)\s*호/);
+  return m ? busNo(m[1]) : busNo(s);
+}
+
+function isAcademyStopName(name){
+  const n = String(name || '');
+  return /정상어학원|학원\s*\(|학원$/.test(n);
+}
+
+function periodFromRosterTime(dayGroup, timeMin, runType){
+  const anchors = ROSTER_PERIOD_ANCHORS[dayGroup];
+  if(!anchors || timeMin == null) return null;
+  let best = null, bestDist = Infinity;
+  anchors.forEach(a => {
+    const candidates = [a.classMin, a.arriveMin, a.leaveMin];
+    candidates.forEach(c => {
+      const d = Math.abs(timeMin - c);
+      if(d < bestDist){ bestDist = d; best = a.period; }
+    });
+  });
+  // 50분 이상 벗어나면 미매칭
+  return bestDist <= 50 ? best : null;
+}
+
+function ensurePeriodBucket(fullBus, group, period){
+  if(!fullBus[group]) fullBus[group] = {};
+  const key = String(period);
+  if(!fullBus[group][key]){
+    fullBus[group][key] = {
+      unique: 0,
+      boarded: 0,
+      total: 0,
+      rate: 0,
+      board_stops: {},
+      alight_stops: {},
+      _students: new Set(),
+      _boardStudents: {},
+      _alightStudents: {}
+    };
+  }
+  return fullBus[group][key];
+}
+
+function addUniqueNameCount(map, key, student){
+  if(!key) return;
+  if(!map[key]) map[key] = new Set();
+  map[key].add(student);
+}
+
+function finalizeNameSets(map){
+  const out = {};
+  Object.keys(map || {}).forEach(k => {
+    out[k] = map[k] instanceof Set ? map[k].size : Number(map[k]) || 0;
+  });
+  return out;
+}
+
+function syncRosterHydrationEntry(entry, fullBus, groups, bubble){
+  const cap = Number(entry.capacity) || 25;
+  const g = groups || {};
+  Object.keys(g).forEach(gName => {
+    const periods = g[gName].periods || [];
+    periods.forEach(p => {
+      p.capacity = cap;
+      p.rate = cap > 0 ? Math.round((p.unique / cap) * 1000) / 10 : 0;
+    });
+    g[gName].capacity = periods.length * cap;
+    g[gName].rate = g[gName].capacity > 0
+      ? Math.round((g[gName].unique / g[gName].capacity) * 1000) / 10
+      : 0;
+  });
+  const stopPax = {};
+  Object.values(fullBus || {}).forEach(gObj => {
+    Object.values(gObj || {}).forEach(p => {
+      Object.entries(p.board_stops || {}).forEach(([name, n]) => {
+        stopPax[name] = (stopPax[name] || 0) + (Number(n) || 0);
+      });
+    });
+  });
+  (entry.stops || []).forEach(s => {
+    if(s && s.name && stopPax[s.name] != null) s.passengers = stopPax[s.name];
+  });
+  let seatSlots = 0;
+  Object.values(g).forEach(x => { seatSlots += Number(x.capacity) || 0; });
+  entry.full = fullBus;
+  entry.groups = g;
+  entry.bubble = bubble;
+  entry.passengers = bubble;
+  if(seatSlots > 0) entry.seatSlots = seatSlots;
+  return entry;
+}
+
+function buildRosterPayloadFromRows(rows, fileName){
+  if(!rows || !rows.length) throw new Error('시트가 비어 있습니다.');
+  const header = rows[0].map(h => String(h == null ? '' : h).trim());
+  const col = (...cands) => {
+    for(const c of cands){
+      const i = header.findIndex(h => h === c || h.replace(/\s/g,'') === c.replace(/\s/g,''));
+      if(i >= 0) return i;
+    }
+    return -1;
+  };
+  const iAcademy = col('학원명');
+  const iStudent = col('학생명');
+  const iDay = col('요일');
+  const iStatus = col('탑승상태');
+  const iRun = col('운행');
+  const iClass = col('수업타임');
+  const iBus = col('호차');
+  const iBoardStop = col('탑승 정류장', '탑승정류장');
+  const iAlightStop = col('하차 정류장', '하차정류장');
+  if(iStudent < 0 || iBus < 0 || iClass < 0){
+    throw new Error('필수 열(학생명·호차·수업타임)을 찾지 못했습니다.');
+  }
+
+  let branch = branchFromRosterText(fileName);
+  const fullByBus = {};
+  let used = 0, skipped = 0;
+  const dayHit = {};
+
+  for(let r = 1; r < rows.length; r++){
+    const row = rows[r] || [];
+    const student = String(row[iStudent] == null ? '' : row[iStudent]).trim();
+    if(!student) continue;
+    const status = iStatus >= 0 ? String(row[iStatus] || '').trim() : '타요';
+    if(status && status !== '타요'){ skipped++; continue; }
+
+    const academy = iAcademy >= 0 ? String(row[iAcademy] || '') : '';
+    if(!branch) branch = branchFromRosterText(academy, fileName);
+
+    const dayGroup = dayGroupFromWeekday(iDay >= 0 ? row[iDay] : '');
+    if(!dayGroup){ skipped++; continue; }
+    dayHit[dayGroup] = (dayHit[dayGroup] || 0) + 1;
+
+    const no = busNoFromRosterHo(row[iBus]);
+    if(!no){ skipped++; continue; }
+
+    const timeMin = parseTimeToMinutes(row[iClass]);
+    const runType = iRun >= 0 ? String(row[iRun] || '').trim() : '';
+    const period = periodFromRosterTime(dayGroup, timeMin, runType);
+    if(!period){ skipped++; continue; }
+
+    if(!fullByBus[no]) fullByBus[no] = {};
+    const bucket = ensurePeriodBucket(fullByBus[no], dayGroup, period);
+    bucket._students.add(student);
+    bucket.boarded += 1;
+
+    const boardStop = iBoardStop >= 0 ? String(row[iBoardStop] || '').trim() : '';
+    const alightStop = iAlightStop >= 0 ? String(row[iAlightStop] || '').trim() : '';
+    // 동네 정류장 기준: 등원=탑승정류장, 하원=하차정류장
+    let neighborhood = '';
+    if(runType === '하원') neighborhood = alightStop;
+    else neighborhood = boardStop;
+    if(!neighborhood || isAcademyStopName(neighborhood)){
+      neighborhood = (!isAcademyStopName(boardStop) && boardStop) || (!isAcademyStopName(alightStop) && alightStop) || '';
+    }
+    addUniqueNameCount(bucket._boardStudents, neighborhood, student);
+    if(alightStop && !isAcademyStopName(alightStop)){
+      addUniqueNameCount(bucket._alightStudents, alightStop, student);
+    }
+    used++;
+  }
+
+  if(!branch) throw new Error('분원을 인식하지 못했습니다. 파일명 또는 학원명에 분원(예: 장안)을 포함해 주세요.');
+  if(!used) throw new Error('반영할 탑승(타요) 행이 없습니다.');
+
+  const groupsByBus = {};
+  Object.keys(fullByBus).forEach(no => {
+    const fullBus = fullByBus[no];
+    const groups = {};
+    let bubble = 0;
+    Object.keys(fullBus).forEach(gName => {
+      const periods = [];
+      let gUnique = 0;
+      Object.keys(fullBus[gName]).forEach(pk => {
+        const b = fullBus[gName][pk];
+        const unique = b._students.size;
+        b.unique = unique;
+        b.total = unique; // 등록 대비가 없으면 unique로 맞춤
+        b.rate = unique > 0 ? Math.round((b.boarded / Math.max(unique, 1)) * 10) / 10 : 0;
+        b.board_stops = finalizeNameSets(b._boardStudents);
+        b.alight_stops = finalizeNameSets(b._alightStudents);
+        delete b._students;
+        delete b._boardStudents;
+        delete b._alightStudents;
+        periods.push({
+          period: Number(pk),
+          both: 0,
+          eng_only: 0,
+          haw_only: 0,
+          unique,
+          rate: 0,
+          capacity: 0
+        });
+        gUnique += unique;
+      });
+      periods.sort((a,b) => a.period - b.period);
+      const capacity = periods.length * 25; // 이후 bus capacity로 보정
+      periods.forEach(p => {
+        p.capacity = 25;
+        p.rate = p.capacity > 0 ? Math.round((p.unique / p.capacity) * 1000) / 10 : 0;
+      });
+      groups[gName] = {
+        unique: gUnique,
+        rate: capacity > 0 ? Math.round((gUnique / capacity) * 1000) / 10 : 0,
+        capacity,
+        periods
+      };
+      bubble += gUnique;
+    });
+    groupsByBus[no] = groups;
+    fullByBus[no].__bubble = bubble;
+  });
+
+  return { branch, fullByBus, groupsByBus, used, skipped, dayHit, fileName: fileName || '' };
+}
+
+function applyRosterPayload(payload){
+  const branch = payload.branch;
+  if(!state.hydrations[branch]) state.hydrations[branch] = {};
+  const hyd = state.hydrations[branch];
+
+  Object.keys(payload.fullByBus).forEach(no => {
+    const fullBus = payload.fullByBus[no];
+    const bubble = fullBus.__bubble || 0;
+    delete fullBus.__bubble;
+    if(!hyd[no]){
+      hyd[no] = {
+        passengers: bubble,
+        capacity: 25,
+        seatSlots: 25,
+        stops: [],
+        groups: {},
+        full: {},
+        bubble
+      };
+    }
+    syncRosterHydrationEntry(hyd[no], fullBus, payload.groupsByBus[no] || {}, bubble);
+  });
+
+  state.rosterMeta = {
+    branch,
+    fileName: payload.fileName,
+    rows: payload.used,
+    skipped: payload.skipped,
+    buses: Object.keys(payload.fullByBus).length,
+    dayHit: payload.dayHit,
+    appliedAt: new Date().toISOString()
+  };
+  if(!state.dataSources.includes('roster-xlsx:' + branch)){
+    state.dataSources.push('roster-xlsx:' + branch);
+  }
+  state.dayGroups = discoverDayGroups();
+  buildBuses(state.hydrations);
+  state.mapWorking = [];
+  state.mapMoves = [];
+  state.dashDetail = null;
+  if(state.branchFilter === '전체') state.branchFilter = branch;
+  renderBranches();
+  renderDayGroupRow();
+  renderDashboard();
+  renderSimSelect();
+  renderIncStopSelect();
+  updateRosterUploadStatus();
+  const status = document.getElementById('loadStatus');
+  if(status){
+    status.textContent = `탑승명단 반영 · ${branch} · 호차 ${state.rosterMeta.buses}대 · 타요 ${state.rosterMeta.rows}건`;
+  }
+  if(state.activeTab === 'map'){
+    resetMapPreview();
+  }
+}
+
+function updateRosterUploadStatus(){
+  const el = document.getElementById('rosterUploadStatus');
+  if(!el) return;
+  const m = state.rosterMeta;
+  if(!m){
+    el.textContent = '예: 정상어학원 장안_6월4주차 탑승명단.xlsx';
+    return;
+  }
+  el.textContent = `반영됨 · ${m.branch} · 호차 ${m.buses}대 · 타요 ${m.rows}건`
+    + (m.skipped ? ` · 제외 ${m.skipped}` : '')
+    + ` · ${m.fileName || ''}`;
+}
+
+async function handleRosterFile(file){
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 네트워크 후 새로고침해 주세요.');
+    return;
+  }
+  const status = document.getElementById('rosterUploadStatus');
+  if(status) status.textContent = '읽는 중… ' + file.name;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const preferred = wb.SheetNames.find(n => String(n).trim().toLowerCase() === 'result')
+      || wb.SheetNames.find(n => /result|결과|명단|탑승/.test(String(n)))
+      || wb.SheetNames[0];
+    const sheet = wb.Sheets[preferred];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+    const payload = buildRosterPayloadFromRows(rows, file.name);
+    applyRosterPayload(payload);
+    alert(`${payload.branch} 분원 탑승명단을 반영했습니다.\n호차 ${Object.keys(payload.fullByBus).length}대 · 타요 ${payload.used}건`
+      + (payload.skipped ? `\n제외 ${payload.skipped}건(안타요·요일/시간 미매칭 등)` : '')
+      + '\n현황에서 부 행을 눌러 정류장별 탑승을 확인하세요.');
+  }catch(err){
+    console.error(err);
+    if(status) status.textContent = '업로드 실패: ' + (err && err.message || err);
+    alert('탑승명단 반영 실패: ' + (err && err.message || err));
+  }
 }
 
 /** FULL_DATA 기준: 호차·요일그룹·부 → 정류장별 탑승 */
@@ -5946,6 +6344,8 @@ async function loadAll(){
   const status = document.getElementById('loadStatus');
   status.textContent = 'Firestore 불러오는 중…';
   state.dataSources = [];
+  state.rosterMeta = null;
+  updateRosterUploadStatus();
 
   await ensureRules();
   await loadRouteOrders();
@@ -6024,6 +6424,15 @@ document.getElementById('reloadBtn').onclick = () => loadAll().catch(err => {
   console.error(err);
   document.getElementById('loadStatus').textContent = '불러오기 실패';
 });
+(function wireRosterUpload(){
+  const inp = document.getElementById('rosterFileInput');
+  if(!inp || inp.__rosterWired) return;
+  inp.__rosterWired = true;
+  inp.addEventListener('change', () => {
+    const file = inp.files && inp.files[0];
+    if(file) handleRosterFile(file).finally(() => { inp.value = ''; });
+  });
+})();
 document.querySelectorAll('[data-dash-filter]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('[data-dash-filter]').forEach(b => b.classList.remove('active'));

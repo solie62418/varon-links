@@ -252,50 +252,50 @@ main.map-mode{max-width:none}
   <section class="view" id="view-redraw">
     <div class="map-layout">
       <aside class="map-side">
-        <div class="map-banner">1) 여러 노선(또는 전체) 선택 → 2) 그릴 노선 클릭 → 3) 정류장 순서 클릭 → 4) 이름으로 마무리 → 5) 전체 세트 저장</div>
+        <div class="map-banner">1) 원본 노선 여러 개/전체 선택 → 2) 정류장이 구분 없이 표시 → 3) 새 노선 그리기 → 4) 이름 붙여 마무리 → 5) 반복 후 전체 세트 저장</div>
         <div class="filter-row" style="margin:0" id="redrawLineOrderRow"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-          <button class="btn btn-navy btn-sm" type="button" id="redrawSelectAllBtn">전체 선택</button>
-          <button class="btn btn-outline btn-sm" type="button" id="redrawClearPoolBtn">선택 해제</button>
+          <button class="btn btn-navy btn-sm" type="button" id="redrawSelectAllBtn">원본 전체 선택</button>
+          <button class="btn btn-outline btn-sm" type="button" id="redrawClearPoolBtn">원본 선택 해제</button>
         </div>
+        <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0 0 4px">원본 노선 (정류장 풀 만들기)</div>
         <div id="redrawBusList"></div>
         <div class="reassign-panel" id="redrawPanel">
-          <div class="redraw-progress" id="redrawProgress">노선을 하나 이상 선택하세요.</div>
-          <div class="map-tip" style="margin:0" id="redrawSelectionSummary">풀에 담은 노선 중 <b>편집할 노선</b>을 지도/목록에서 클릭하세요.</div>
+          <div class="redraw-progress" id="redrawProgress">원본 노선을 선택하면 정류장이 지도에 구분 없이 모입니다.</div>
+          <div class="map-tip" style="margin:0" id="redrawSelectionSummary">정류장 풀이 준비되면 <b>새 노선 그리기</b>를 누르세요.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-navy btn-sm" type="button" id="redrawStartNewBtn" disabled>새 노선 그리기</button>
             <button class="btn btn-outline btn-sm" type="button" id="redrawClearOrderBtn" disabled>순서만 지우기</button>
             <button class="btn btn-outline btn-sm" type="button" id="redrawUndoBtn" disabled>마지막 클릭 취소</button>
-            <button class="btn btn-outline btn-sm" type="button" id="redrawStopEditBtn" disabled>편집 종료</button>
+            <button class="btn btn-outline btn-sm" type="button" id="redrawStopEditBtn" disabled>그리기 종료</button>
           </div>
           <div class="redraw-stats" id="redrawStats">
-            <div class="redraw-stat"><div class="num" id="redrawStopCount">0</div><div class="label">선택 정류장</div></div>
+            <div class="redraw-stat"><div class="num" id="redrawPoolCount">0</div><div class="label">풀 정류장</div></div>
+            <div class="redraw-stat"><div class="num" id="redrawStopCount">0</div><div class="label">이번 노선</div></div>
             <div class="redraw-stat"><div class="num" id="redrawKm">-</div><div class="label">도로 km</div></div>
             <div class="redraw-stat"><div class="num" id="redrawMin">-</div><div class="label">예상 분</div></div>
           </div>
           <div class="field">
-            <label>이 노선 이름 (마무리 시)</label>
-            <input type="text" id="redrawRouteName" placeholder="예: 11호 우회안">
+            <label>새 노선 이름 (마무리 시)</label>
+            <input type="text" id="redrawRouteName" placeholder="예: A노선 · 북부순환">
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-yellow btn-sm" type="button" id="redrawFinishBtn" disabled>이 노선 마무리</button>
-            <button class="btn btn-outline btn-sm" type="button" id="redrawApplyOfficialBtn" disabled>공식 순서로 적용</button>
-          </div>
-          <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">마무리된 노선 (클릭하면 다시 편집)</div>
+          <button class="btn btn-yellow btn-sm" type="button" id="redrawFinishBtn" disabled>이 노선 마무리·라벨링</button>
+          <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">만든 새 노선 (클릭하면 다시 편집)</div>
           <div id="redrawFinishedList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow:auto"></div>
           <div class="field" style="margin-top:4px">
             <label>전체 세트 이름</label>
             <input type="text" id="redrawSetName" placeholder="예: 장안 등원 재편 A안">
           </div>
-          <button class="btn btn-navy btn-sm" type="button" id="redrawSaveSetBtn" disabled>전체 세트 저장</button>
+          <button class="btn btn-navy btn-sm" type="button" id="redrawSaveSetBtn" disabled>전체 노선 세트 저장</button>
           <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">저장된 세트 비교</div>
           <div id="redrawAttemptList" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto"></div>
         </div>
-        <div class="map-tip" style="font-weight:700;color:var(--navy)">편집 중 정류장 순서</div>
+        <div class="map-tip" style="font-weight:700;color:var(--navy)">그리는 중 정류장 순서</div>
         <div id="redrawStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
       </aside>
       <div class="map-main">
         <div class="redraw-guide" id="redrawGuide">
-          <span id="redrawGuideText">먼저 왼쪽에서 노선을 여러 개(또는 전체) 선택하세요.</span>
+          <span id="redrawGuideText">왼쪽에서 원본 노선을 여러 개(또는 전체) 선택하세요.</span>
           <button class="btn btn-yellow btn-sm" type="button" id="redrawGuideSaveBtn" disabled>마무리</button>
         </div>
         <div id="redrawMap"></div>
@@ -545,14 +545,16 @@ const state = {
   routeOrdersOriginal: {},
   mapLineOrder: '등원', // 지도 점선에 쓸 순서: 등원 | 하원
   routeCache: {},
-  redrawPoolIds: [], // 작업 대상 노선(복수/전체)
-  redrawEditBusId: null, // 지금 그리는 노선
-  redrawDrafts: {}, // busId -> { stops, name, finished, meters, minutes, source, path }
+  redrawSourceBusIds: [], // 원본 호차 → 정류장 풀
+  redrawStopPool: [], // 미구분 정류장 풀
+  redrawActiveRouteId: null, // 지금 그리는 새 노선 id
+  redrawNewRoutes: [], // [{ id, name, stops, finished, meters, minutes, source, path, color }]
   redrawTab: '등원',
-  redrawSets: {}, // 전체 세트 저장본
+  redrawSets: {},
   redrawActiveSetId: null,
-  redrawAttempts: {}, // 하위 호환(구 단일 시도)
-  redrawStats: { meters: 0, minutes: 0, source: 'osrm' }
+  redrawAttempts: {},
+  redrawStats: { meters: 0, minutes: 0, source: 'osrm' },
+  redrawColorIdx: 0
 };
 
 let lmap = null;
@@ -1007,61 +1009,60 @@ function redrawBuses(){
   return busesForMap();
 }
 
-function redrawPoolBuses(){
-  const all = redrawBuses();
-  if(!state.redrawPoolIds.length) return all;
-  const set = new Set(state.redrawPoolIds);
-  return all.filter(b => set.has(b.id));
+function nextRedrawColor(){
+  const c = BUS_PALETTE[state.redrawColorIdx % BUS_PALETTE.length];
+  state.redrawColorIdx++;
+  return c;
 }
 
-function editableStopsOf(bus){
-  return (bus.stops || []).filter(s => !isAcademyStop(s) && s.lat != null && s.lng != null);
-}
-
-function ensureRedrawDraft(busId){
-  if(!state.redrawDrafts[busId]){
-    state.redrawDrafts[busId] = {
-      stops: [],
-      name: '',
-      finished: false,
-      meters: 0,
-      minutes: 0,
-      source: 'osrm',
-      path: []
-    };
-  }
-  return state.redrawDrafts[busId];
-}
-
-function currentRedrawDraft(){
-  if(!state.redrawEditBusId) return null;
-  return ensureRedrawDraft(state.redrawEditBusId);
-}
-
-function isPoolComplete(){
-  if(!state.redrawPoolIds.length) return false;
-  return state.redrawPoolIds.every(id => {
-    const d = state.redrawDrafts[id];
-    const bus = redrawBuses().find(b => b.id === id);
-    if(!d || !d.finished || !bus) return false;
-    const need = editableStopsOf(bus).length;
-    return need === 0 || (d.stops || []).length >= need;
+function rebuildStopPool(){
+  const set = new Set(state.redrawSourceBusIds);
+  const buses = redrawBuses().filter(b => set.has(b.id));
+  const byKey = new Map();
+  buses.forEach(bus => {
+    (bus.stops || []).forEach(s => {
+      if(isAcademyStop(s) || s.lat == null || s.lng == null) return;
+      const key = Number(s.lat).toFixed(5) + ',' + Number(s.lng).toFixed(5);
+      if(!byKey.has(key)){
+        byKey.set(key, {
+          id: key,
+          name: s.name || ('정류장 ' + s.id),
+          lat: Number(s.lat),
+          lng: Number(s.lng),
+          passengers: Number(s.passengers) || 0,
+          sourceBusIds: [bus.id],
+          originalIds: [String(s.id)]
+        });
+      } else {
+        const e = byKey.get(key);
+        e.passengers += Number(s.passengers) || 0;
+        if(!e.sourceBusIds.includes(bus.id)) e.sourceBusIds.push(bus.id);
+        if(!e.originalIds.includes(String(s.id))) e.originalIds.push(String(s.id));
+        if((s.name || '').length > (e.name || '').length) e.name = s.name;
+      }
+    });
   });
+  state.redrawStopPool = Array.from(byKey.values());
+}
+
+function getActiveNewRoute(){
+  if(!state.redrawActiveRouteId) return null;
+  return state.redrawNewRoutes.find(r => r.id === state.redrawActiveRouteId) || null;
+}
+
+function canSaveRedrawSet(){
+  return state.redrawNewRoutes.some(r => r.finished && (r.stops || []).length >= 2);
 }
 
 function redrawProgressText(){
-  const pool = state.redrawPoolIds;
-  if(!pool.length) return '노선을 하나 이상 선택하세요. (전체 선택 가능)';
-  let finished = 0, completeStops = 0;
-  pool.forEach(id => {
-    const d = state.redrawDrafts[id];
-    const bus = redrawBuses().find(b => b.id === id);
-    if(d && d.finished) finished++;
-    if(d && bus && (d.stops||[]).length >= editableStopsOf(bus).length) completeStops++;
-  });
-  return '선택 '+pool.length+'노선 · 마무리 '+finished+'/'+pool.length+
-    ' · 정류장 완료 '+completeStops+'/'+pool.length +
-    (isPoolComplete() ? ' · 전체 세트 저장 가능' : '');
+  const srcN = state.redrawSourceBusIds.length;
+  const poolN = state.redrawStopPool.length;
+  const made = state.redrawNewRoutes.filter(r => r.finished).length;
+  const drawing = getActiveNewRoute();
+  if(!srcN) return '원본 노선을 선택하면 정류장이 지도에 구분 없이 모입니다.';
+  return '원본 '+srcN+'노선 · 풀 정류장 '+poolN+'개 · 만든 새 노선 '+made+'개' +
+    (drawing ? ' · 그리는 중' : '') +
+    (canSaveRedrawSet() ? ' · 전체 세트 저장 가능' : '');
 }
 
 function clearRedrawLayers(){
@@ -1079,44 +1080,46 @@ function setRedrawEmpty(show, html){
 function updateRedrawGuide(){
   const text = document.getElementById('redrawGuideText');
   const saveBtn = document.getElementById('redrawGuideSaveBtn');
-  const bus = state.redrawEditBusId && redrawBuses().find(b => b.id === state.redrawEditBusId);
-  const draft = currentRedrawDraft();
+  const route = getActiveNewRoute();
   if(!text) return;
-  if(!state.redrawPoolIds.length){
-    text.textContent = '먼저 왼쪽에서 노선을 여러 개(또는 전체) 선택하세요.';
-  } else if(!bus){
-    text.textContent = '풀에 담긴 노선 중 그릴 노선을 지도/목록에서 클릭하세요.';
-  } else if(!(draft && draft.stops.length)){
-    text.textContent = bus.label + ' 편집 중 · 정류장을 순서대로 클릭 · 같은 정류장 재클릭=취소 · 끝나면 마무리';
+  if(!state.redrawSourceBusIds.length){
+    text.textContent = '왼쪽에서 원본 노선을 여러 개(또는 전체) 선택하세요.';
+  } else if(!state.redrawStopPool.length){
+    text.textContent = '선택한 원본에 좌표 있는 정류장이 없습니다.';
+  } else if(!route){
+    text.textContent = '정류장이 구분 없이 표시됩니다. 「새 노선 그리기」를 누른 뒤 순서대로 클릭하세요.';
+  } else if(!route.stops.length){
+    text.textContent = '새 노선 그리는 중 · 정류장을 순서대로 클릭 · 같은 정류장 재클릭=취소';
   } else {
-    const total = editableStopsOf(bus).length;
-    const src = (state.redrawStats.source === 'osrm') ? '도로' : '도로근사';
-    text.textContent = bus.label + ' · '+draft.stops.length+'/'+total+' · '+src+' '+
-      ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분';
+    const src = state.redrawStats.source === 'osrm' ? '도로' : '도로근사';
+    text.textContent = '새 노선 · 정류장 '+route.stops.length+' · '+src+' '+
+      ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분 · 끝나면 마무리';
   }
-  if(saveBtn) saveBtn.disabled = !(draft && draft.stops.length);
+  if(saveBtn) saveBtn.disabled = !(route && route.stops.length >= 2);
+  const startBtn = document.getElementById('redrawStartNewBtn');
   const clearBtn = document.getElementById('redrawClearOrderBtn');
   const undoBtn = document.getElementById('redrawUndoBtn');
   const stopEdit = document.getElementById('redrawStopEditBtn');
   const finishBtn = document.getElementById('redrawFinishBtn');
-  const applyBtn = document.getElementById('redrawApplyOfficialBtn');
   const saveSetBtn = document.getElementById('redrawSaveSetBtn');
-  if(clearBtn) clearBtn.disabled = !state.redrawEditBusId;
-  if(undoBtn) undoBtn.disabled = !(draft && draft.stops.length);
-  if(stopEdit) stopEdit.disabled = !state.redrawEditBusId;
-  if(finishBtn) finishBtn.disabled = !(draft && draft.stops.length);
-  if(applyBtn) applyBtn.disabled = !(draft && draft.stops.length && state.redrawEditBusId);
-  if(saveSetBtn) saveSetBtn.disabled = !isPoolComplete();
+  if(startBtn) startBtn.disabled = !state.redrawStopPool.length;
+  if(clearBtn) clearBtn.disabled = !route;
+  if(undoBtn) undoBtn.disabled = !(route && route.stops.length);
+  if(stopEdit) stopEdit.disabled = !route;
+  if(finishBtn) finishBtn.disabled = !(route && route.stops.length >= 2);
+  if(saveSetBtn) saveSetBtn.disabled = !canSaveRedrawSet();
   const prog = document.getElementById('redrawProgress');
   if(prog) prog.textContent = redrawProgressText();
 }
 
 function updateRedrawStatsUi(){
-  const draft = currentRedrawDraft();
+  const route = getActiveNewRoute();
+  const poolEl = document.getElementById('redrawPoolCount');
   const n = document.getElementById('redrawStopCount');
   const km = document.getElementById('redrawKm');
   const min = document.getElementById('redrawMin');
-  const count = draft ? draft.stops.length : 0;
+  const count = route ? route.stops.length : 0;
+  if(poolEl) poolEl.textContent = String(state.redrawStopPool.length);
   if(n) n.textContent = String(count);
   if(km) km.textContent = count > 1 ? ((state.redrawStats.meters||0)/1000).toFixed(1) : '-';
   if(min) min.textContent = count > 1 ? String(Math.round(state.redrawStats.minutes||0)) : '-';
@@ -1124,89 +1127,128 @@ function updateRedrawStatsUi(){
 }
 
 async function refreshRedrawStats(){
-  const draft = currentRedrawDraft();
-  if(!draft || draft.stops.length < 2){
+  const route = getActiveNewRoute();
+  if(!route || route.stops.length < 2){
     state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
-    if(draft){ draft.meters = 0; draft.minutes = 0; draft.path = []; }
+    if(route){ route.meters = 0; route.minutes = 0; route.path = []; }
     updateRedrawStatsUi();
     return state.redrawStats;
   }
-  const built = await buildRoadPath(draft.stops);
+  const built = await buildRoadPath(route.stops);
   state.redrawStats = { meters: built.meters, minutes: built.minutes, source: built.source };
-  draft.meters = built.meters;
-  draft.minutes = built.minutes;
-  draft.source = built.source;
-  draft.path = built.path || [];
+  route.meters = built.meters;
+  route.minutes = built.minutes;
+  route.source = built.source;
+  route.path = built.path || [];
   updateRedrawStatsUi();
   return built;
 }
 
-function toggleRedrawPool(busId, on){
-  const set = new Set(state.redrawPoolIds);
-  if(on) set.add(busId);
-  else {
-    set.delete(busId);
-    if(state.redrawEditBusId === busId) state.redrawEditBusId = null;
-  }
-  state.redrawPoolIds = Array.from(set);
+function toggleRedrawSource(busId, on){
+  const set = new Set(state.redrawSourceBusIds);
+  if(on) set.add(busId); else set.delete(busId);
+  state.redrawSourceBusIds = Array.from(set);
+  rebuildStopPool();
   renderRedrawSide();
   renderRedrawMap(true);
 }
 
 function selectAllRedrawPool(){
-  state.redrawPoolIds = redrawBuses().map(b => b.id);
+  state.redrawSourceBusIds = redrawBuses().map(b => b.id);
+  rebuildStopPool();
   renderRedrawSide();
   renderRedrawMap(true);
 }
 
 function clearRedrawPool(){
-  state.redrawPoolIds = [];
-  state.redrawEditBusId = null;
+  state.redrawSourceBusIds = [];
+  state.redrawStopPool = [];
+  // 새 노선 작업은 유지할지? 원본 해제 시 풀만 비우고 만든 노선은 유지
   renderRedrawSide();
   renderRedrawMap(true);
   updateRedrawStatsUi();
 }
 
-function beginEditRedrawBus(busId){
-  const bus = redrawBuses().find(b => b.id === busId);
-  if(!bus) return;
-  if(!state.redrawPoolIds.includes(busId)){
-    state.redrawPoolIds = state.redrawPoolIds.concat([busId]);
+function startNewRedrawRoute(){
+  if(!state.redrawStopPool.length){
+    alert('먼저 원본 노선을 선택해 정류장 풀을 만드세요.');
+    return;
   }
-  const draft = ensureRedrawDraft(busId);
-  // 마무리된 노선도 다시 편집 가능
-  draft.finished = false;
-  state.redrawEditBusId = busId;
+  // 진행 중 미마무리 노선이 있으면 그걸 이어서
+  const unfinished = state.redrawNewRoutes.find(r => !r.finished);
+  if(unfinished){
+    state.redrawActiveRouteId = unfinished.id;
+    const nameInput = document.getElementById('redrawRouteName');
+    if(nameInput) nameInput.value = unfinished.name || '';
+    state.redrawStats = { meters: unfinished.meters||0, minutes: unfinished.minutes||0, source: unfinished.source||'osrm' };
+    const sum = document.getElementById('redrawSelectionSummary');
+    if(sum) sum.innerHTML = '그리는 중: <b>'+esc(unfinished.name || '새 노선')+'</b> · 정류장을 순서대로 클릭하세요.';
+    renderRedrawSide();
+    renderRedrawMap(false);
+    refreshRedrawStats();
+    return;
+  }
+  const id = 'nr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  const route = {
+    id,
+    name: '',
+    stops: [],
+    finished: false,
+    meters: 0,
+    minutes: 0,
+    source: 'osrm',
+    path: [],
+    color: nextRedrawColor()
+  };
+  state.redrawNewRoutes.push(route);
+  state.redrawActiveRouteId = id;
+  state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
   const nameInput = document.getElementById('redrawRouteName');
-  if(nameInput) nameInput.value = draft.name || '';
+  if(nameInput) nameInput.value = '';
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum){
-    sum.innerHTML = '편집 중: <b>'+esc(bus.label)+'</b> · 정류장 '+editableStopsOf(bus).length+
-      '개 · 순서대로 클릭 / 재클릭 취소 / 마무리 시 이름 저장';
-  }
-  state.redrawStats = { meters: draft.meters||0, minutes: draft.minutes||0, source: draft.source||'osrm' };
+  if(sum) sum.innerHTML = '<b>새 노선</b> 그리는 중 · 풀 정류장을 순서대로 클릭 · 끝나면 이름 붙여 마무리';
+  renderRedrawSide();
+  renderRedrawMap(false);
+  updateRedrawStatsUi();
+}
+
+function beginEditNewRoute(routeId){
+  const route = state.redrawNewRoutes.find(r => r.id === routeId);
+  if(!route) return;
+  route.finished = false;
+  state.redrawActiveRouteId = routeId;
+  const nameInput = document.getElementById('redrawRouteName');
+  if(nameInput) nameInput.value = route.name || '';
+  state.redrawStats = { meters: route.meters||0, minutes: route.minutes||0, source: route.source||'osrm' };
+  const sum = document.getElementById('redrawSelectionSummary');
+  if(sum) sum.innerHTML = '재편집: <b>'+esc(route.name || '새 노선')+'</b> · 정류장 추가/삭제 후 다시 마무리';
   renderRedrawSide();
   renderRedrawMap(true);
   refreshRedrawStats();
 }
 
 function stopEditRedrawBus(){
-  state.redrawEditBusId = null;
+  const route = getActiveNewRoute();
+  if(route && !route.finished && !route.stops.length){
+    // 빈 미완성 노선 제거
+    state.redrawNewRoutes = state.redrawNewRoutes.filter(r => r.id !== route.id);
+  }
+  state.redrawActiveRouteId = null;
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '풀에 담은 노선 중 <b>편집할 노선</b>을 지도/목록에서 클릭하세요.';
+  if(sum) sum.innerHTML = '「새 노선 그리기」로 다음 노선을 만들거나, 만든 노선을 클릭해 수정하세요.';
   renderRedrawSide();
   renderRedrawMap(false);
   updateRedrawStatsUi();
 }
 
 function clearRedrawOrderOnly(){
-  const draft = currentRedrawDraft();
-  if(!draft) return;
-  draft.stops = [];
-  draft.path = [];
-  draft.meters = 0;
-  draft.minutes = 0;
-  draft.finished = false;
+  const route = getActiveNewRoute();
+  if(!route) return;
+  route.stops = [];
+  route.path = [];
+  route.meters = 0;
+  route.minutes = 0;
+  route.finished = false;
   state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
   renderRedrawSide();
   renderRedrawMap(false);
@@ -1214,23 +1256,25 @@ function clearRedrawOrderOnly(){
 }
 
 function undoRedrawClick(){
-  const draft = currentRedrawDraft();
-  if(!draft || !draft.stops.length) return;
-  draft.stops.pop();
-  draft.finished = false;
+  const route = getActiveNewRoute();
+  if(!route || !route.stops.length) return;
+  route.stops.pop();
+  route.finished = false;
   renderRedrawSide();
   renderRedrawMap(false);
   refreshRedrawStats();
 }
 
 function clearRedrawSelection(){
-  state.redrawPoolIds = [];
-  state.redrawEditBusId = null;
-  state.redrawDrafts = {};
+  state.redrawSourceBusIds = [];
+  state.redrawStopPool = [];
+  state.redrawActiveRouteId = null;
+  state.redrawNewRoutes = [];
   state.redrawActiveSetId = null;
   state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
+  state.redrawColorIdx = 0;
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '풀에 담은 노선 중 <b>편집할 노선</b>을 지도/목록에서 클릭하세요.';
+  if(sum) sum.innerHTML = '정류장 풀이 준비되면 <b>새 노선 그리기</b>를 누르세요.';
   const nameInput = document.getElementById('redrawRouteName');
   if(nameInput) nameInput.value = '';
   renderRedrawSide();
@@ -1238,21 +1282,18 @@ function clearRedrawSelection(){
   updateRedrawStatsUi();
 }
 
-function pickRedrawStop(busId, stop){
-  // 풀에 없으면 추가 후 편집 시작
-  if(!state.redrawPoolIds.includes(busId)){
-    state.redrawPoolIds = state.redrawPoolIds.concat([busId]);
+function pickPoolStop(stop){
+  if(!state.redrawStopPool.length) return;
+  let route = getActiveNewRoute();
+  if(!route){
+    startNewRedrawRoute();
+    route = getActiveNewRoute();
   }
-  if(state.redrawEditBusId !== busId){
-    beginEditRedrawBus(busId);
-  }
-  if(isAcademyStop(stop)) return;
-  if(stop.lat == null || stop.lng == null) return;
-  const draft = ensureRedrawDraft(busId);
-  draft.finished = false;
-  const idx = draft.stops.findIndex(d => String(d.id) === String(stop.id));
-  if(idx >= 0) draft.stops.splice(idx, 1);
-  else draft.stops.push({
+  if(!route) return;
+  route.finished = false;
+  const idx = route.stops.findIndex(d => String(d.id) === String(stop.id));
+  if(idx >= 0) route.stops.splice(idx, 1);
+  else route.stops.push({
     id: stop.id,
     name: stop.name,
     lat: stop.lat,
@@ -1265,17 +1306,15 @@ function pickRedrawStop(busId, stop){
 }
 
 async function finishRedrawRoute(){
-  const busId = state.redrawEditBusId;
-  const draft = currentRedrawDraft();
-  const bus = busId && redrawBuses().find(b => b.id === busId);
-  if(!draft || !bus || !draft.stops.length){
-    alert('정류장 순서를 만든 뒤 마무리하세요.');
+  const route = getActiveNewRoute();
+  if(!route || route.stops.length < 2){
+    alert('정류장을 2개 이상 연결한 뒤 마무리하세요.');
     return;
   }
   const nameInput = document.getElementById('redrawRouteName');
   let name = nameInput && nameInput.value.trim();
   if(!name){
-    name = prompt('이 노선 이름을 입력하세요', bus.label + ' 재편') || '';
+    name = prompt('새 노선 이름을 입력하세요', '새 노선 ' + (state.redrawNewRoutes.filter(r=>r.finished).length + 1)) || '';
     name = name.trim();
   }
   if(!name){
@@ -1283,29 +1322,31 @@ async function finishRedrawRoute(){
     return;
   }
   await refreshRedrawStats();
-  draft.name = name;
-  draft.finished = true;
-  draft.meters = state.redrawStats.meters || 0;
-  draft.minutes = state.redrawStats.minutes || 0;
-  draft.source = state.redrawStats.source || 'osrm';
+  route.name = name;
+  route.finished = true;
+  route.meters = state.redrawStats.meters || 0;
+  route.minutes = state.redrawStats.minutes || 0;
+  route.source = state.redrawStats.source || 'osrm';
+  state.redrawActiveRouteId = null;
   if(nameInput) nameInput.value = '';
-  state.redrawEditBusId = null;
   const sum = document.getElementById('redrawSelectionSummary');
   if(sum){
-    sum.innerHTML = '<b>'+esc(name)+'</b> 마무리됨. 다음 노선을 클릭해 이어서 그리거나, 완료된 노선을 다시 눌러 수정하세요.';
+    sum.innerHTML = '<b>'+esc(name)+'</b> 저장됨. 「새 노선 그리기」로 다음을 만들거나, 전체 세트를 저장하세요.';
   }
   renderRedrawSide();
   renderRedrawMap(true);
   updateRedrawStatsUi();
-  if(isPoolComplete()){
-    alert('선택 노선의 정류장 선택이 모두 완료되었습니다. 전체 세트 이름으로 저장할 수 있습니다.');
-  }
 }
 
 async function saveRedrawSet(){
-  if(!isPoolComplete()){
-    alert('선택 노선마다 정류장을 모두 선택하고 마무리한 뒤 세트를 저장하세요.');
+  const routes = state.redrawNewRoutes.filter(r => r.finished && (r.stops||[]).length >= 2);
+  if(!routes.length){
+    alert('마무리된 새 노선이 하나 이상 있어야 세트를 저장할 수 있습니다.');
     return;
+  }
+  // 그리는 중 미완성 있으면 안내
+  if(state.redrawNewRoutes.some(r => !r.finished && r.stops.length)){
+    if(!confirm('마무리되지 않은 노선이 있습니다. 마무리된 노선만 세트로 저장할까요?')) return;
   }
   const setInput = document.getElementById('redrawSetName');
   let setName = setInput && setInput.value.trim();
@@ -1318,32 +1359,32 @@ async function saveRedrawSet(){
     return;
   }
   const id = 'set_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-  const routes = {};
-  state.redrawPoolIds.forEach(busId => {
-    const d = state.redrawDrafts[busId];
-    const bus = redrawBuses().find(b => b.id === busId);
-    if(!d || !bus) return;
-    routes[busId] = {
-      busId,
-      busLabel: bus.label,
-      branch: bus.branch,
-      name: d.name,
-      stopIds: d.stops.map(s => String(s.id)),
-      stopNames: d.stops.map(s => s.name || String(s.id)),
-      meters: d.meters || 0,
-      minutes: d.minutes || 0,
-      source: d.source || 'osrm'
+  const routeMap = {};
+  routes.forEach(r => {
+    routeMap[r.id] = {
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      stopIds: r.stops.map(s => String(s.id)),
+      stopNames: r.stops.map(s => s.name || String(s.id)),
+      stops: r.stops.map(s => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, passengers: s.passengers||0 })),
+      meters: r.meters || 0,
+      minutes: r.minutes || 0,
+      source: r.source || 'osrm'
     };
   });
-  const totalMeters = Object.values(routes).reduce((a,r)=>a+(r.meters||0),0);
-  const totalMinutes = Object.values(routes).reduce((a,r)=>a+(r.minutes||0),0);
+  const totalMeters = routes.reduce((a,r)=>a+(r.meters||0),0);
+  const totalMinutes = routes.reduce((a,r)=>a+(r.minutes||0),0);
   const setDoc = {
     id,
     name: setName,
+    kind: 'new-route-set',
     tab: state.redrawTab,
     branch: effectiveMapBranch(),
-    busIds: state.redrawPoolIds.slice(),
-    routes,
+    sourceBusIds: state.redrawSourceBusIds.slice(),
+    poolStopCount: state.redrawStopPool.length,
+    routeIds: routes.map(r => r.id),
+    routes: routeMap,
     totalMeters,
     totalMinutes,
     createdAt: new Date().toISOString()
@@ -1359,7 +1400,7 @@ async function saveRedrawSet(){
     await persistRouteCache();
     if(setInput) setInput.value = '';
     renderRedrawAttempts();
-    alert('전체 세트를 저장했습니다. (route_attempts.sets)');
+    alert('전체 노선 세트를 저장했습니다. (route_attempts.sets · '+routes.length+'개 노선)');
   }catch(e){
     delete state.redrawSets[id];
     alert('세트 저장 실패: ' + e.message);
@@ -1371,27 +1412,24 @@ function loadRedrawSet(id){
   if(!setDoc) return;
   state.redrawActiveSetId = id;
   state.redrawTab = setDoc.tab || '등원';
-  state.redrawPoolIds = (setDoc.busIds || Object.keys(setDoc.routes || {})).slice();
-  state.redrawDrafts = {};
-  state.redrawEditBusId = null;
-  Object.keys(setDoc.routes || {}).forEach(busId => {
-    const r = setDoc.routes[busId];
-    const bus = redrawBuses().find(b => b.id === busId) || state.buses.find(b => b.id === busId);
-    const byId = Object.fromEntries(((bus && bus.stops) || []).map(s => [String(s.id), s]));
-    const stops = (r.stopIds || []).map(sid => {
-      const s = byId[String(sid)];
-      return s ? { id: s.id, name: s.name, lat: s.lat, lng: s.lng, passengers: s.passengers||0 } : null;
-    }).filter(Boolean);
-    state.redrawDrafts[busId] = {
-      stops,
-      name: r.name || '',
-      finished: true,
-      meters: r.meters || 0,
-      minutes: r.minutes || 0,
-      source: r.source || 'osrm',
-      path: []
-    };
-  });
+  state.redrawSourceBusIds = (setDoc.sourceBusIds || []).slice();
+  rebuildStopPool();
+  state.redrawActiveRouteId = null;
+  state.redrawNewRoutes = Object.values(setDoc.routes || {}).map(r => ({
+    id: r.id,
+    name: r.name || '',
+    stops: (r.stops && r.stops.length) ? r.stops.slice() : (r.stopIds || []).map((sid, i) => {
+      const pool = state.redrawStopPool.find(p => String(p.id) === String(sid));
+      if(pool) return { id: pool.id, name: pool.name, lat: pool.lat, lng: pool.lng, passengers: pool.passengers||0 };
+      return { id: sid, name: (r.stopNames && r.stopNames[i]) || sid, lat: null, lng: null, passengers: 0 };
+    }).filter(s => s.lat != null),
+    finished: true,
+    meters: r.meters || 0,
+    minutes: r.minutes || 0,
+    source: r.source || 'osrm',
+    path: [],
+    color: r.color || nextRedrawColor()
+  }));
   const setInput = document.getElementById('redrawSetName');
   if(setInput) setInput.value = setDoc.name || '';
   renderRedrawSide();
@@ -1415,26 +1453,13 @@ async function deleteRedrawSet(id){
   }
 }
 
-async function applyRedrawAsOfficialOrder(){
-  const busId = state.redrawEditBusId;
-  const draft = currentRedrawDraft();
-  if(!busId || !draft || !draft.stops.length) return;
-  const key = state.redrawTab === '하원' ? '하원순서' : '등원순서';
-  const entry = state.routeOrders[busId] || {};
-  entry[key] = draft.stops.map(s => String(s.id));
-  entry.updatedAt = new Date().toISOString();
-  state.routeOrders[busId] = entry;
-  try{
-    await db.collection('shuttle_data').doc('route_orders').set({
-      orders: state.routeOrders,
-      updatedAt: entry.updatedAt
-    }, { merge: true });
-    state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
-    await persistRouteCache();
-    alert('공식 노선 순서로 적용했습니다. (route_orders · 원본 시트 미변경)');
-  }catch(e){
-    alert('적용 실패: ' + e.message);
-  }
+function deleteNewRoute(routeId){
+  if(!confirm('이 새 노선을 삭제할까요?')) return;
+  state.redrawNewRoutes = state.redrawNewRoutes.filter(r => r.id !== routeId);
+  if(state.redrawActiveRouteId === routeId) state.redrawActiveRouteId = null;
+  renderRedrawSide();
+  renderRedrawMap(false);
+  updateRedrawStatsUi();
 }
 
 function renderRedrawSide(){
@@ -1449,13 +1474,12 @@ function renderRedrawSide(){
       btn.onclick = () => {
         state.redrawTab = btn.getAttribute('data-redraw-tab');
         renderRedrawSide();
-        renderRedrawMap(false);
       };
     });
   }
 
   const buses = redrawBuses();
-  const pool = new Set(state.redrawPoolIds);
+  const src = new Set(state.redrawSourceBusIds);
   const list = document.getElementById('redrawBusList');
   if(list){
     if(!buses.length){
@@ -1463,50 +1487,33 @@ function renderRedrawSide(){
     } else {
       list.innerHTML = buses.map(b => {
         const col = busColor(b);
-        const inPool = pool.has(b.id);
-        const editing = state.redrawEditBusId === b.id;
-        const draft = state.redrawDrafts[b.id];
-        const done = !!(draft && draft.finished);
-        let cls = 'map-bus-item';
-        if(editing) cls += ' redraw-editing';
-        else if(done) cls += ' redraw-done';
-        else if(inPool) cls += ' redraw-pool';
-        const tags = (done ? '<span class="reassign-tag absorb">'+esc(draft.name||'완료')+'</span>' : '')
-          + (editing ? '<span class="badge gold">편집중</span>' : '')
-          + (inPool && !done && !editing ? '<span class="badge gray">선택</span>' : '');
-        const need = editableStopsOf(b).length;
-        const got = draft ? draft.stops.length : 0;
-        return `<div class="${cls}" data-redraw-bus="${esc(b.id)}">
-          <div class="row">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer" data-pool-label="${esc(b.id)}">
-              <input type="checkbox" data-redraw-pool="${esc(b.id)}" ${inPool?'checked':''}>
-              <span class="map-swatch" style="background:${col}"></span>
-            </label>
-            <div style="flex:1;min-width:0" data-redraw-edit="${esc(b.id)}">
-              <div style="font-weight:800;font-size:13px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${esc(b.label)} ${tags}</div>
-              <div class="meta">정류장 ${got}/${need}`+(done?` · ${((draft.meters||0)/1000).toFixed(1)}km / ${Math.round(draft.minutes||0)}분`:'')+`</div>
+        const on = src.has(b.id);
+        const stopN = (b.stops||[]).filter(s => !isAcademyStop(s) && s.lat != null).length;
+        return `<div class="map-bus-item${on?' redraw-pool':''}">
+          <label class="row" style="cursor:pointer;margin:0">
+            <input type="checkbox" data-redraw-source="${esc(b.id)}" ${on?'checked':''}>
+            <span class="map-swatch" style="background:${col}"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:800;font-size:13px">${esc(b.label)}</div>
+              <div class="meta">원본 정류장 ${stopN}개</div>
             </div>
-          </div>
+          </label>
         </div>`;
       }).join('');
-      list.querySelectorAll('[data-redraw-pool]').forEach(inp => {
-        inp.addEventListener('click', ev => ev.stopPropagation());
-        inp.addEventListener('change', () => toggleRedrawPool(inp.getAttribute('data-redraw-pool'), inp.checked));
-      });
-      list.querySelectorAll('[data-redraw-edit]').forEach(el => {
-        el.onclick = () => beginEditRedrawBus(el.getAttribute('data-redraw-edit'));
+      list.querySelectorAll('[data-redraw-source]').forEach(inp => {
+        inp.addEventListener('change', () => toggleRedrawSource(inp.getAttribute('data-redraw-source'), inp.checked));
       });
     }
   }
 
   const stopList = document.getElementById('redrawStopList');
-  const draft = currentRedrawDraft();
+  const route = getActiveNewRoute();
   if(stopList){
-    if(!draft || !draft.stops.length){
-      stopList.innerHTML = `<div class="map-tip">편집할 노선을 고른 뒤 지도에서 정류장을 클릭하세요.</div>`;
+    if(!route || !route.stops.length){
+      stopList.innerHTML = `<div class="map-tip">새 노선 그리기를 시작한 뒤 지도에서 정류장을 클릭하세요.</div>`;
     } else {
-      const col = busColor(redrawBuses().find(b => b.id === state.redrawEditBusId) || {});
-      stopList.innerHTML = draft.stops.map((s, i) => `
+      const col = route.color || 'var(--navy)';
+      stopList.innerHTML = route.stops.map((s, i) => `
         <div class="stop-list-item" style="cursor:pointer" data-redraw-stop-idx="${i}">
           <span class="dot" style="background:${col}"></span>
           <div style="flex:1;min-width:0">
@@ -1517,10 +1524,10 @@ function renderRedrawSide(){
       stopList.querySelectorAll('[data-redraw-stop-idx]').forEach(el => {
         el.onclick = () => {
           const i = Number(el.getAttribute('data-redraw-stop-idx'));
-          const d = currentRedrawDraft();
-          if(d && Number.isFinite(i)){
-            d.stops.splice(i, 1);
-            d.finished = false;
+          const r = getActiveNewRoute();
+          if(r && Number.isFinite(i)){
+            r.stops.splice(i, 1);
+            r.finished = false;
             renderRedrawSide();
             renderRedrawMap(false);
             refreshRedrawStats();
@@ -1538,34 +1545,36 @@ function renderRedrawSide(){
 function renderRedrawFinishedList(){
   const box = document.getElementById('redrawFinishedList');
   if(!box) return;
-  const items = state.redrawPoolIds.map(id => {
-    const d = state.redrawDrafts[id];
-    const bus = redrawBuses().find(b => b.id === id);
-    if(!d || !d.finished || !bus) return null;
-    return { id, d, bus };
-  }).filter(Boolean);
+  const items = state.redrawNewRoutes.filter(r => r.finished || (r.stops && r.stops.length));
   if(!items.length){
-    box.innerHTML = `<div class="map-tip">아직 마무리된 노선이 없습니다.</div>`;
+    box.innerHTML = `<div class="map-tip">아직 만든 새 노선이 없습니다.</div>`;
     return;
   }
-  box.innerHTML = items.map(({id, d, bus}) => `
-    <div class="attempt-item" data-finished-bus="${esc(id)}" style="cursor:pointer">
+  box.innerHTML = items.map(r => `
+    <div class="attempt-item${state.redrawActiveRouteId===r.id?' active':''}" style="cursor:pointer">
       <div class="row">
-        <div style="font-weight:800;font-size:13px">${esc(d.name || bus.label)}</div>
-        <span class="map-swatch" style="background:${busColor(bus)}"></span>
+        <div style="font-weight:800;font-size:13px">${esc(r.name || (r.finished ? '이름없음' : '그리는 중…'))}</div>
+        <span class="map-swatch" style="background:${r.color||'#24467D'}"></span>
       </div>
-      <div class="meta">${esc(bus.label)} · 정류장 ${d.stops.length} · ${((d.meters||0)/1000).toFixed(1)}km / ${Math.round(d.minutes||0)}분</div>
-      <div class="meta">클릭하면 다시 편집(추가·삭제)할 수 있습니다</div>
+      <div class="meta">정류장 ${(r.stops||[]).length} · ${((r.meters||0)/1000).toFixed(1)}km / ${Math.round(r.minutes||0)}분
+        ${r.finished ? ' · 완료' : ' · 편집중'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-navy btn-sm" data-edit-route="${esc(r.id)}">편집</button>
+        <button type="button" class="btn btn-outline btn-sm" data-del-route="${esc(r.id)}">삭제</button>
+      </div>
     </div>`).join('');
-  box.querySelectorAll('[data-finished-bus]').forEach(el => {
-    el.onclick = () => beginEditRedrawBus(el.getAttribute('data-finished-bus'));
+  box.querySelectorAll('[data-edit-route]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); beginEditNewRoute(btn.getAttribute('data-edit-route')); };
+  });
+  box.querySelectorAll('[data-del-route]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); deleteNewRoute(btn.getAttribute('data-del-route')); };
   });
 }
 
 function renderRedrawAttempts(){
   const box = document.getElementById('redrawAttemptList');
   if(!box) return;
-  let list = Object.values(state.redrawSets || {});
+  let list = Object.values(state.redrawSets || {}).filter(a => a.kind === 'new-route-set' || a.routes);
   const branch = effectiveMapBranch();
   if(branch) list = list.filter(a => !a.branch || a.branch === branch || a.branch === '전체');
   list.sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
@@ -1573,19 +1582,21 @@ function renderRedrawAttempts(){
     box.innerHTML = `<div class="map-tip">저장된 전체 세트가 없습니다.</div>`;
     return;
   }
-  box.innerHTML = list.map(a => `
-    <div class="attempt-item${state.redrawActiveSetId===a.id?' active':''}">
+  box.innerHTML = list.map(a => {
+    const n = (a.routeIds || Object.keys(a.routes||{})).length;
+    return `<div class="attempt-item${state.redrawActiveSetId===a.id?' active':''}">
       <div class="row">
         <div style="font-weight:800;font-size:13px">${esc(a.name || a.id)}</div>
         <span class="badge gray">${esc(a.tab || '')}</span>
       </div>
-      <div class="meta">노선 ${(a.busIds||Object.keys(a.routes||{})).length}개 · ${((a.totalMeters||0)/1000).toFixed(1)}km / ${Math.round(a.totalMinutes||0)}분</div>
+      <div class="meta">새 노선 ${n}개 · ${((a.totalMeters||0)/1000).toFixed(1)}km / ${Math.round(a.totalMinutes||0)}분</div>
       <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" class="btn btn-navy btn-sm" data-set-load="${esc(a.id)}">불러오기</button>
         <button type="button" class="btn btn-outline btn-sm" data-set-del="${esc(a.id)}">삭제</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   box.querySelectorAll('[data-set-load]').forEach(btn => {
     btn.onclick = (ev) => { ev.stopPropagation(); loadRedrawSet(btn.getAttribute('data-set-load')); };
   });
@@ -1604,13 +1615,14 @@ function forceRedrawRelayout(){
 
 async function renderRedrawMap(fitBounds){
   const seq = ++redrawRenderSeq;
-  const allBuses = redrawBuses();
-  const pool = new Set(state.redrawPoolIds);
-  const focusBuses = pool.size ? allBuses.filter(b => pool.has(b.id)) : allBuses;
-  const hasGeo = focusBuses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null));
-  if(!hasGeo){
+  const pool = state.redrawStopPool;
+  if(!pool.length && !state.redrawNewRoutes.some(r => (r.stops||[]).length)){
     clearRedrawLayers();
-    setRedrawEmpty(true, null);
+    if(!state.redrawSourceBusIds.length){
+      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>원본 노선을 선택하세요.</b></p><p class="map-tip">선택한 노선의 정류장이 구분 없이 지도에 모입니다.</p></div>`);
+    } else {
+      setRedrawEmpty(true, null);
+    }
     return;
   }
   if(!rmap){
@@ -1621,111 +1633,126 @@ async function renderRedrawMap(fitBounds){
   clearRedrawLayers();
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
+  const active = getActiveNewRoute();
 
-  for(const bus of focusBuses){
+  // 1) 미구분 정류장 풀 (원본 노선 색/선 없음)
+  pool.forEach(s => {
+    const inActive = active && active.stops.some(d => String(d.id) === String(s.id));
+    const inAnyFinished = state.redrawNewRoutes.some(r => r.finished && r.stops.some(d => String(d.id) === String(s.id)));
+    // 활성 노선에 포함된 건 아래에서 번호 핀으로 그림
+    if(inActive) return;
+    const id = 'pool-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sz = 18;
+    const bg = inAnyFinished ? '#94A3B8' : '#2F9E44';
+    const tip = (s.name||'') + ' · 클릭하여 새 노선에 추가';
+    const html = '<div id="'+id+'" class="stop-bubble redraw-idle" title="'+esc(tip)+'"'
+      + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+bg+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.28);cursor:pointer;opacity:'+(inAnyFinished?0.55:0.95)+'"></div>';
+    const pos = new kakao.maps.LatLng(s.lat, s.lng);
+    const overlay = new kakao.maps.CustomOverlay({
+      position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 5
+    });
+    overlay.setMap(rmap);
+    rLayers.push(overlay);
+    bounds.extend(pos);
+    boundCount++;
+    setTimeout(() => {
+      if(seq !== redrawRenderSeq) return;
+      const el = document.getElementById(id);
+      if(el) el.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        pickPoolStop(s);
+      };
+    }, 0);
+  });
+
+  // 2) 만든 새 노선들 (도로 경로 + 번호)
+  for(const route of state.redrawNewRoutes){
     if(seq !== redrawRenderSeq) return;
-    const col = busColor(bus);
-    const editing = state.redrawEditBusId === bus.id;
-    const draft = state.redrawDrafts[bus.id];
-    const done = !!(draft && draft.finished);
-    const dim = state.redrawEditBusId && !editing && !done;
-    const op = dim ? 0.2 : (editing ? 0.95 : (done ? 0.85 : 0.65));
-
-    // 경로 그리기: 편집중/완료 draft 우선, 없으면 저장 순서
-    let pathStops = null;
-    let roadPath = null;
-    if(draft && draft.stops.length > 1){
-      if(draft.path && draft.path.length > 1 && !editing){
-        roadPath = draft.path;
-      } else {
-        const built = await buildRoadPath(draft.stops);
+    if(!(route.stops && route.stops.length)) continue;
+    const col = route.color || '#24467D';
+    const isActive = active && active.id === route.id;
+    if(route.stops.length > 1){
+      let path = route.path;
+      if(!path || path.length < 2 || isActive){
+        const built = await buildRoadPath(route.stops);
         if(seq !== redrawRenderSeq) return;
-        roadPath = built.path;
-        draft.path = built.path;
-        draft.meters = built.meters;
-        draft.minutes = built.minutes;
-        draft.source = built.source;
-        if(editing){
+        path = built.path;
+        route.path = built.path;
+        route.meters = built.meters;
+        route.minutes = built.minutes;
+        route.source = built.source;
+        if(isActive){
           state.redrawStats = { meters: built.meters, minutes: built.minutes, source: built.source };
           updateRedrawStatsUi();
         }
       }
-    } else if(!editing){
-      const saved = state.routeOrders[bus.id];
-      const preferKey = state.redrawTab === '하원' ? '하원순서' : '등원순서';
-      const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
-      const orderIds = saved && ((saved[preferKey] && saved[preferKey].length) ? saved[preferKey] : saved[altKey]);
-      let stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
-      if(orderIds && orderIds.length){
-        const byId = new Map(stops.map(s => [String(s.id), s]));
-        const ordered = [];
-        orderIds.forEach(id => { const s = byId.get(String(id)); if(s){ ordered.push(s); byId.delete(String(id)); } });
-        byId.forEach(s => ordered.push(s));
-        stops = ordered;
+      if(path && path.length > 1){
+        const pl = new kakao.maps.Polyline({
+          path: path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+          strokeWeight: isActive ? 6 : 5,
+          strokeColor: col,
+          strokeOpacity: isActive ? 0.95 : 0.75,
+          strokeStyle: 'solid'
+        });
+        pl.setMap(rmap);
+        rLayers.push(pl);
+        kakao.maps.event.addListener(pl, 'click', () => beginEditNewRoute(route.id));
       }
-      pathStops = stops;
     }
 
-    if(roadPath && roadPath.length > 1){
-      const pl = new kakao.maps.Polyline({
-        path: roadPath.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
-        strokeWeight: editing ? 6 : (done ? 5 : 4),
-        strokeColor: col,
-        strokeOpacity: op,
-        strokeStyle: 'solid'
+    // 활성 노선만 번호 핀 (클릭으로 토글)
+    if(isActive){
+      route.stops.forEach((s, ordIdx) => {
+        if(s.lat == null) return;
+        const id = 'nr-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const sz = 28;
+        const html = '<div id="'+id+'" class="stop-bubble redraw-num" title="'+esc((s.name||'')+' · 순서 '+(ordIdx+1)+' · 재클릭 취소')+'"'
+          + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer">'+(ordIdx+1)+'</div>';
+        const pos = new kakao.maps.LatLng(s.lat, s.lng);
+        const overlay = new kakao.maps.CustomOverlay({
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 30
+        });
+        overlay.setMap(rmap);
+        rLayers.push(overlay);
+        bounds.extend(pos);
+        boundCount++;
+        setTimeout(() => {
+          if(seq !== redrawRenderSeq) return;
+          const el = document.getElementById(id);
+          if(el) el.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            pickPoolStop(s);
+          };
+        }, 0);
       });
-      pl.setMap(rmap);
-      rLayers.push(pl);
-      kakao.maps.event.addListener(pl, 'click', () => beginEditRedrawBus(bus.id));
-    } else if(pathStops && pathStops.length > 1){
-      // 배경(미편집) 노선은 직선 표시 — 편집/완료 노선만 OSRM 도로경로
-      const pl = new kakao.maps.Polyline({
-        path: pathStops.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
-        strokeWeight: 3,
-        strokeColor: col,
-        strokeOpacity: op,
-        strokeStyle: 'shortdash'
+    } else if(route.finished){
+      // 완료 노선: 작은 번호 핀
+      route.stops.forEach((s, ordIdx) => {
+        if(s.lat == null) return;
+        const id = 'done-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const html = '<div id="'+id+'" class="stop-bubble" title="'+esc((route.name||'')+' · '+(ordIdx+1)+'. '+(s.name||''))+'"'
+          + ' style="width:20px;height:20px;border-radius:50%;background:'+col+';border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer;opacity:.9">'+(ordIdx+1)+'</div>';
+        const pos = new kakao.maps.LatLng(s.lat, s.lng);
+        const overlay = new kakao.maps.CustomOverlay({
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 15
+        });
+        overlay.setMap(rmap);
+        rLayers.push(overlay);
+        bounds.extend(pos);
+        boundCount++;
+        setTimeout(() => {
+          if(seq !== redrawRenderSeq) return;
+          const el = document.getElementById(id);
+          if(el) el.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            beginEditNewRoute(route.id);
+          };
+        }, 0);
       });
-      pl.setMap(rmap);
-      rLayers.push(pl);
-      kakao.maps.event.addListener(pl, 'click', () => beginEditRedrawBus(bus.id));
     }
-
-    const pinStops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
-    const draftStops = (draft && draft.stops) || [];
-    pinStops.forEach(s => {
-      const ordIdx = draftStops.findIndex(d => String(d.id) === String(s.id));
-      const picked = ordIdx >= 0;
-      const showBig = editing || done;
-      const sz = picked ? (editing ? 28 : 24) : (showBig ? 18 : 12);
-      const id = 'rd-' + bus.id.replace(/__/g,'-') + '-' + s.id + (editing?'-e':'');
-      const label = picked ? String(ordIdx + 1) : (isAcademyStop(s) ? '학' : '');
-      const cls = 'stop-bubble ' + (picked ? 'redraw-num' : 'redraw-idle');
-      const tip = editing
-        ? (picked ? ((s.name||'')+' · 순서 '+(ordIdx+1)+' · 재클릭 취소') : ((s.name||'')+' · 클릭하여 다음 순서'))
-        : ((s.name||'')+' · 클릭하여 이 노선 편집');
-      const html = '<div id="'+id+'" class="'+cls+'" title="'+esc(tip)+'"'
-        + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+(picked?12:9)+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:'+(dim?0.35:1)+';cursor:pointer">'+label+'</div>';
-      const pos = new kakao.maps.LatLng(s.lat, s.lng);
-      const overlay = new kakao.maps.CustomOverlay({
-        position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: editing ? (picked?30:20) : (picked?15:5)
-      });
-      overlay.setMap(rmap);
-      rLayers.push(overlay);
-      bounds.extend(pos);
-      boundCount++;
-      setTimeout(() => {
-        if(seq !== redrawRenderSeq) return;
-        const el = document.getElementById(id);
-        if(!el) return;
-        el.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if(editing) pickRedrawStop(bus.id, s);
-          else beginEditRedrawBus(bus.id);
-        };
-      }, 0);
-    });
   }
 
   if(seq !== redrawRenderSeq) return;
@@ -1790,6 +1817,7 @@ function initRedrawMap(){
 function showRedrawView(){
   document.querySelector('main').classList.add('map-mode');
   ensureMapWorking();
+  rebuildStopPool();
   renderRedrawSide();
   requestAnimationFrame(() => {
     setTimeout(() => {

@@ -168,6 +168,7 @@ main.map-mode{max-width:none}
 .academy-fixed{
   position:relative;display:flex;flex-direction:column;align-items:center;pointer-events:none;
 }
+.academy-fixed.is-clickable{pointer-events:auto;cursor:pointer}
 .academy-fixed .academy-pin{
   width:34px;height:34px;border-radius:50%;background:#C0392B;border:3px solid #fff;
   display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;
@@ -178,6 +179,21 @@ main.map-mode{max-width:none}
   font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.28);
   max-width:180px;overflow:hidden;text-overflow:ellipsis;
 }
+.redraw-route-legend{
+  position:absolute;left:12px;bottom:12px;z-index:18;
+  display:flex;flex-direction:column;gap:6px;align-items:stretch;
+  max-width:min(260px,48%);max-height:42%;overflow:auto;
+  pointer-events:none;
+}
+.redraw-legend-btn{
+  pointer-events:auto;display:block;width:100%;text-align:left;
+  background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:10px;
+  padding:8px 10px 8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.14);
+  cursor:pointer;font-family:inherit;line-height:1.35;
+}
+.redraw-legend-btn:hover{border-color:var(--slate);background:#fff}
+.redraw-legend-btn .nm{font-size:12px;font-weight:800;color:var(--navy);margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.redraw-legend-btn .meta{font-size:11px;color:var(--muted);margin:0}
 #redrawMap{width:100%;height:480px;min-height:480px}
 @media (min-width:901px){
   #redrawMap{height:100%;min-height:480px}
@@ -225,7 +241,7 @@ main.map-mode{max-width:none}
   background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.28);
 }
 .map-zoom-group .btn:hover{background:rgba(255,255,255,.28)}
-#kakaoMap,#redrawMap{transform-origin:center center}
+#kakaoMap,#redrawMap{/* zoom uses Kakao level only */}
 body.map-only .topbar,
 body.map-only .tabs,
 body.map-only #coordMissingBanner,
@@ -370,7 +386,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
 
   <section class="view active" id="view-dash">
     <div class="stat-row" id="dashStats"></div>
-    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금/화목) × 부(1~4) 현황입니다. 상단 요일그룹 칩으로 특정 그룹만 볼 수 있습니다.</p>
+    <p class="hint" style="margin:0 0 10px">호차 × 요일그룹(월수금 1–4부 / 화목 1–2부) · 고유이용자/정원. 상단 요일그룹 칩으로 필터할 수 있습니다.</p>
     <div class="filter-row">
       <button class="chip active" data-dash-filter="all" type="button">전체 호차</button>
       <button class="chip" data-dash-filter="candidate" type="button">감차 후보만</button>
@@ -416,6 +432,9 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
         <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
         <div id="mapBusList"></div>
         <div class="map-tip" style="font-weight:700;color:var(--navy)">정류장 목록 (호차별 현황)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px">
+          <button class="btn btn-outline btn-sm" type="button" id="mapPruneEmptyBtn">탑승 0명 정류장 지우기</button>
+        </div>
         <div id="mapStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
         <div class="map-preview-log" id="mapPreviewLog">재배정·감차 미리보기 이동이 있으면 여기에 표시됩니다.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -425,9 +444,9 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
       </aside>
       <div class="map-main">
         <div class="map-only-toolbar" aria-label="지도 보기 도구">
-          <div class="map-zoom-group" title="세밀 확대/축소">
-            <button class="btn btn-sm" type="button" data-fine-zoom="out" data-map-target="map" aria-label="축소">−</button>
-            <button class="btn btn-sm" type="button" data-fine-zoom="in" data-map-target="map" aria-label="확대">+</button>
+          <div class="map-zoom-group" title="확대/축소">
+            <button class="btn btn-sm" type="button" data-map-zoom="out" data-map-target="map" aria-label="축소">−</button>
+            <button class="btn btn-sm" type="button" data-map-zoom="in" data-map-target="map" aria-label="확대">+</button>
           </div>
           <button class="btn btn-yellow btn-sm" type="button" data-map-only-enter data-map-target="map">지도만 보기</button>
           <button class="btn btn-ghost btn-sm" type="button" data-map-only-exit style="background:rgba(255,255,255,.18);color:#fff">화면으로 돌아가기</button>
@@ -455,6 +474,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
           <button class="btn btn-navy btn-sm" type="button" id="redrawSelectAllBtn">원본 전체 선택</button>
           <button class="btn btn-outline btn-sm" type="button" id="redrawClearPoolBtn">원본 선택 해제</button>
+          <button class="btn btn-outline btn-sm" type="button" id="redrawPruneEmptyBtn">풀에서 탑승 0 지우기</button>
         </div>
         <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0 0 4px">원본 노선 (정류장 풀 만들기)</div>
         <div id="redrawBusList"></div>
@@ -494,9 +514,9 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
       </aside>
       <div class="map-main">
         <div class="map-only-toolbar" aria-label="지도 보기 도구">
-          <div class="map-zoom-group" title="세밀 확대/축소">
-            <button class="btn btn-sm" type="button" data-fine-zoom="out" data-map-target="redraw" aria-label="축소">−</button>
-            <button class="btn btn-sm" type="button" data-fine-zoom="in" data-map-target="redraw" aria-label="확대">+</button>
+          <div class="map-zoom-group" title="확대/축소">
+            <button class="btn btn-sm" type="button" data-map-zoom="out" data-map-target="redraw" aria-label="축소">−</button>
+            <button class="btn btn-sm" type="button" data-map-zoom="in" data-map-target="redraw" aria-label="확대">+</button>
           </div>
           <button class="btn btn-yellow btn-sm" type="button" data-map-only-enter data-map-target="redraw">지도만 보기</button>
           <button class="btn btn-ghost btn-sm" type="button" data-map-only-exit style="background:rgba(255,255,255,.18);color:#fff">화면으로 돌아가기</button>
@@ -507,6 +527,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
           <button class="btn btn-yellow btn-sm" type="button" id="redrawGuideSaveBtn" disabled>마무리</button>
         </div>
         <div id="redrawMap"></div>
+        <div class="redraw-route-legend" id="redrawRouteLegend" aria-label="저장 노선 요약"></div>
         <div class="map-empty" id="redrawMapEmpty"><div>
           <div style="font-size:32px;margin-bottom:8px">🗺️</div>
           <p><b>지도에 표시할 좌표가 없습니다.</b></p>
@@ -788,8 +809,6 @@ const state = {
   preferredSetByBranch: {},
   mapOnlyMode: false,
   mapOnlyTarget: null, // 'map' | 'redraw'
-  mapSoftZoom: 1,
-  redrawSoftZoom: 1
 };
 
 let lmap = null;
@@ -801,16 +820,7 @@ let rmap = null;
 let rLayers = [];
 let rmapReady = false;
 let redrawRenderSeq = 0;
-const FINE_ZOOM = {
-  // soft scale로 레벨 사이를 보간. 카카오 level 1단계는 약 2배이므로
-  // snap 임계도 2배에 맞춰야 +/− 클릭 시 급점프가 없다.
-  wheelStep: 0.04,
-  buttonStep: 0.055,
-  snapUp: 2,
-  snapDown: 0.5,
-  minLevel: 1,
-  maxLevel: 14
-};
+const MAP_ZOOM = { minLevel: 1, maxLevel: 14 };
 
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1071,8 +1081,10 @@ function drawFixedAcademyMarker(map, layerArr, opts){
   if(!map || typeof kakao === 'undefined' || !kakao.maps) return null;
   const clickable = !!(opts && opts.clickable);
   const uid = (opts && opts.domId) || ('fixed-academy-' + Math.random().toString(36).slice(2, 8));
-  const html = '<div class="academy-fixed" id="'+uid+'" title="'+esc(JANGAN_ACADEMY.name)+' · 고정 표시"'
-    + (clickable ? ' style="pointer-events:auto;cursor:pointer"' : '') + '>'
+  const tip = clickable
+    ? (JANGAN_ACADEMY.name + ' · 클릭하여 노선 끝점으로 포함 (거리·시간 계산에 포함)')
+    : (JANGAN_ACADEMY.name + ' · 고정 표시');
+  const html = '<div class="academy-fixed'+(clickable?' is-clickable':'')+'" id="'+uid+'" title="'+esc(tip)+'">'
     + '<div class="academy-pin">학</div>'
     + '<div class="academy-label">'+esc(JANGAN_ACADEMY.name)+'</div>'
     + '</div>';
@@ -1642,9 +1654,16 @@ function pickPoolStop(stop){
   if(!route) return;
   route.finished = false;
 
-  // 학원은 항상 끝점 — 클릭해도 제거하지 않고 위치만 유지/재고정
+  // 학원: 클릭 시 끝점으로 재고정 + 거리/시간에 포함됨을 안내
   if(isJanganAcademyStop(stop)){
     route.stops = normalizeAcademyEndpoint(route.stops);
+    const midN = nonAcademyStops(route.stops).length;
+    const sum = document.getElementById('redrawSelectionSummary');
+    if(sum){
+      sum.innerHTML = '<b>'+esc(JANGAN_ACADEMY.name)+'</b> 끝점 포함 · '+esc(academyEndpointLabel())+
+        (midN ? ' · 중간 정류장 '+midN+'개' : ' · 중간 정류장을 이어서 클릭하세요')+
+        ' · 거리·시간은 학원까지 포함해 계산합니다.';
+    }
     renderRedrawSide();
     renderRedrawMap(false);
     refreshRedrawStats();
@@ -2200,6 +2219,7 @@ async function renderRedrawMap(fitBounds){
         rmap.setLevel(5);
       }catch(e){}
     }
+    renderRedrawRouteLegend();
     forceRedrawRelayout();
     return;
   }
@@ -2409,6 +2429,7 @@ async function renderRedrawMap(fitBounds){
   }
 
   if(seq !== redrawRenderSeq) return;
+  renderRedrawRouteLegend();
   if(fitBounds && boundCount){
     try{
       if(boundCount === 1){
@@ -2446,7 +2467,7 @@ function initRedrawMap(){
         level: c.level
       });
       rmapReady = true;
-      attachFineZoom(rmap, 'redraw');
+      attachMapZoomControls(rmap);
       setRedrawEmpty(false);
       renderRedrawSide();
       renderRedrawMap(true);
@@ -3348,14 +3369,33 @@ function renderMapSide(){
   if(!rows.length){
     stopList.innerHTML = `<div class="map-tip">표시할 정류장이 없습니다.</div>`;
   } else {
-    stopList.innerHTML = rows.slice(0, 40).map(({bus, stop}) => `
-      <div class="stop-list-item" data-from-bus="${esc(bus.id)}" data-stop-id="${esc(stop.id)}" data-stop-name="${esc(stop.name || ('정류장 '+stop.id))}" data-stop-pax="${Number(stop.passengers)||0}">
+    stopList.innerHTML = rows.slice(0, 60).map(({bus, stop}) => {
+      const pax = Number(stop.passengers)||0;
+      const canDel = !isAcademyStop(stop) && pax <= 0;
+      return `<div class="stop-list-item" data-from-bus="${esc(bus.id)}" data-stop-id="${esc(stop.id)}" data-stop-name="${esc(stop.name || ('정류장 '+stop.id))}" data-stop-pax="${pax}">
         <span class="dot" style="background:${busColor(bus)}"></span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(stop.name || ('정류장 '+stop.id))}</div>
-          <div class="meta">${esc(bus.label)} · ${Number(stop.passengers)||0}명</div>
+          <div class="meta">${esc(bus.label)} · ${pax}명</div>
         </div>
-      </div>`).join('');
+        ${canDel ? `<button type="button" class="btn btn-outline btn-sm" data-del-empty-stop="${esc(bus.id)}" data-del-stop-id="${esc(stop.id)}">삭제</button>` : ''}
+      </div>`;
+    }).join('');
+    stopList.querySelectorAll('[data-del-empty-stop]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const busId = btn.getAttribute('data-del-empty-stop');
+        const stopId = btn.getAttribute('data-del-stop-id');
+        ensureMapWorking();
+        const bus = state.mapWorking.find(b => b.id === busId);
+        if(!bus) return;
+        bus.stops = (bus.stops || []).filter(s => String(s.id) !== String(stopId));
+        recalcMapPassengers(bus);
+        renderMapSide();
+        renderKakaoMap(false);
+      });
+    });
     stopList.querySelectorAll('.stop-list-item').forEach(el => {
       bindStopDrag(el, el.getAttribute('data-from-bus'), {
         id: el.getAttribute('data-stop-id'),
@@ -3442,101 +3482,81 @@ function getMapByTarget(target){
   return target === 'redraw' ? rmap : lmap;
 }
 
-function getSoftZoom(target){
-  return target === 'redraw' ? (state.redrawSoftZoom || 1) : (state.mapSoftZoom || 1);
-}
-
-function setSoftZoom(target, value){
-  if(target === 'redraw') state.redrawSoftZoom = value;
-  else state.mapSoftZoom = value;
-}
-
 function mapElByTarget(target){
   return document.getElementById(target === 'redraw' ? 'redrawMap' : 'kakaoMap');
 }
 
-function applySoftZoomCss(target){
-  const el = mapElByTarget(target);
-  if(!el) return;
-  const soft = getSoftZoom(target);
-  if(!soft || Math.abs(soft - 1) < 0.001){
-    el.style.transform = '';
-  } else {
-    el.style.transform = 'scale(' + soft + ')';
-  }
-}
-
-/** 세밀 줌: CSS soft scale + 임계값(~2배)에서 카카오 level 스냅 */
-function fineZoomBy(target, direction, step){
+/** +/− : 카카오 지도 level 1단계 (세밀 soft-scale 제거 — 조작감 복구) */
+function mapZoomBy(target, direction){
   const map = getMapByTarget(target);
   if(!map) return;
-  const s = step == null ? FINE_ZOOM.buttonStep : step;
-  let soft = getSoftZoom(target) * (direction > 0 ? (1 + s) : (1 / (1 + s)));
   let level = map.getLevel();
-  while(soft >= FINE_ZOOM.snapUp && level > FINE_ZOOM.minLevel){
-    soft /= FINE_ZOOM.snapUp;
-    level -= 1;
-  }
-  while(soft <= FINE_ZOOM.snapDown && level < FINE_ZOOM.maxLevel){
-    soft /= FINE_ZOOM.snapDown;
-    level += 1;
-  }
-  soft = Math.min(FINE_ZOOM.snapUp - 0.001, Math.max(FINE_ZOOM.snapDown + 0.001, soft));
-  // soft를 먼저 맞춘 뒤 level을 바꿔 시각적 연속성 유지
-  setSoftZoom(target, soft);
-  applySoftZoomCss(target);
-  if(level !== map.getLevel()){
-    try{ map.setLevel(level); }catch(e){}
-  }
-}
-
-function commitSoftZoom(target){
-  // 드래그/클릭 전 soft zoom을 정수 level에 가깝게 정리해 좌표 오프셋 방지
-  const map = getMapByTarget(target);
-  if(!map) return;
-  let soft = getSoftZoom(target);
-  let level = map.getLevel();
-  // √2 기준으로 가까운 정수 level로 흡수 (레벨 비 ≈ 2)
-  if(soft >= 1.414 && level > FINE_ZOOM.minLevel){
-    level -= 1;
-    soft = 1;
-  } else if(soft <= 0.707 && level < FINE_ZOOM.maxLevel){
-    level += 1;
-    soft = 1;
-  } else {
-    soft = 1;
-  }
-  setSoftZoom(target, soft);
-  applySoftZoomCss(target);
-  if(level !== map.getLevel()){
-    try{ map.setLevel(level); }catch(e){}
-  }
-}
-
-function attachFineZoom(map, target){
-  if(!map || map.__fineZoomAttached) return;
-  map.__fineZoomAttached = true;
-  try{ map.setZoomable(false); }catch(e){}
+  // 카카오: level 작을수록 확대
+  level = direction > 0 ? (level - 1) : (level + 1);
+  level = Math.max(MAP_ZOOM.minLevel, Math.min(MAP_ZOOM.maxLevel, level));
+  try{ map.setLevel(level); }catch(e){}
   const el = mapElByTarget(target);
-  if(el && !el.__fineZoomWheel){
-    el.__fineZoomWheel = true;
-    el.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const raw = e.deltaY;
-      const unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 40 : 1);
-      const dy = raw * unit;
-      const dir = dy > 0 ? -1 : 1;
-      const mag = Math.min(2.2, Math.max(0.35, Math.abs(dy) / 120));
-      fineZoomBy(target, dir, FINE_ZOOM.wheelStep * mag);
-    }, { passive: false });
-    // 카카오가 좌표 계산하기 전에 soft scale을 풀어 클릭/드래그 오프셋 방지
-    const commit = () => commitSoftZoom(target);
-    el.addEventListener('mousedown', commit, true);
-    el.addEventListener('touchstart', commit, { capture: true, passive: true });
+  if(el) el.style.transform = '';
+}
+
+function attachMapZoomControls(map){
+  if(!map) return;
+  try{ map.setZoomable(true); }catch(e){}
+  const target = map === rmap ? 'redraw' : 'map';
+  const el = mapElByTarget(target);
+  if(el) el.style.transform = '';
+}
+
+function renderRedrawRouteLegend(){
+  const box = document.getElementById('redrawRouteLegend');
+  if(!box) return;
+  const finished = (state.redrawNewRoutes || []).filter(r => r.finished && (r.stops||[]).length);
+  if(!finished.length){
+    box.innerHTML = '';
+    return;
   }
-  setSoftZoom(target, 1);
-  applySoftZoomCss(target);
+  box.innerHTML = finished.map(r => {
+    const stops = r.stops || [];
+    const pax = stops.reduce((a,s) => a + (Number(s.passengers)||0), 0);
+    const min = Math.round(r.minutes || 0);
+    const col = r.color || '#24467D';
+    return `<button type="button" class="redraw-legend-btn" data-legend-route="${esc(r.id)}" style="border-left:4px solid ${col}">
+      <div class="nm">${esc(r.name || '이름없음')}</div>
+      <p class="meta">정류장 ${stops.length} · 탑승 ${pax}명 · ${min}분</p>
+    </button>`;
+  }).join('');
+  box.querySelectorAll('[data-legend-route]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      beginEditNewRoute(btn.getAttribute('data-legend-route'));
+    };
+  });
+}
+
+function pruneEmptyStopsFromRedrawPool(){
+  const before = state.redrawStopPool.length;
+  state.redrawStopPool = state.redrawStopPool.filter(s => isJanganAcademyStop(s) || (Number(s.passengers)||0) > 0);
+  // 그리는 중/완료 노선에서도 0명 중간정류장 제거 (학원 유지)
+  state.redrawNewRoutes.forEach(r => {
+    const mid = nonAcademyStops(r.stops).filter(s => (Number(s.passengers)||0) > 0);
+    r.stops = normalizeAcademyEndpoint(mid);
+    r.path = [];
+  });
+  const removed = before - state.redrawStopPool.length;
+  renderRedrawSide();
+  renderRedrawMap(true);
+  if(removed <= 0) alert('풀에 탑승 0명 정류장이 없습니다.');
+  else alert('탑승 0명 정류장 '+removed+'개를 풀·노선에서 지웠습니다. (학원은 유지)');
+}
+
+function pruneEmptyStopsFromMapPreview(){
+  ensureMapWorking();
+  const n = pruneAllEmptyStopsFromMapWorking();
+  renderMapSide();
+  renderKakaoMap(false);
+  if(n <= 0) alert('지울 탑승 0명 정류장이 없습니다.');
+  else alert('탑승 0명 정류장 '+n+'개를 미리보기 노선에서 지웠습니다. (학원·원본 시트는 유지)');
 }
 
 async function renderKakaoMap(fitBounds){
@@ -3742,7 +3762,7 @@ function initKakaoMap(){
         level: c.level
       });
       state.mapReady = true;
-      attachFineZoom(lmap, 'map');
+      attachMapZoomControls(lmap);
       setMapEmptyMessage(null, false);
       ensureMapWorking();
       renderMapSide();
@@ -3841,10 +3861,10 @@ function enterMapOnlyMode(target){
   state.mapOnlyTarget = t;
   document.body.classList.add('map-only');
   document.querySelector('main').classList.add('map-mode');
-  // 레이아웃 전환 후 지도 맞춤 · soft zoom 배율 유지
+  // 레이아웃 전환 후 지도 맞춤
   requestAnimationFrame(() => {
-    setTimeout(() => { refreshActiveMapLayout(true); applySoftZoomCss(t); }, 80);
-    setTimeout(() => { refreshActiveMapLayout(true); applySoftZoomCss(t); }, 320);
+    setTimeout(() => refreshActiveMapLayout(true), 80);
+    setTimeout(() => refreshActiveMapLayout(true), 320);
   });
 }
 
@@ -3865,9 +3885,8 @@ function exitMapOnlyMode(opts){
 
 function prepareMapForPrint(target){
   const t = target || state.mapOnlyTarget || (state.activeTab === 'redraw' ? 'redraw' : 'map');
-  // soft scale이 있으면 인쇄 시 중앙에 작게 떠 보이므로 정수 level로 정리
-  commitSoftZoom(t);
-  applySoftZoomCss(t);
+  const el = mapElByTarget(t);
+  if(el) el.style.transform = '';
   document.body.classList.add('map-only');
   document.body.classList.add('map-printing');
   document.querySelector('main').classList.add('map-mode');
@@ -3924,13 +3943,13 @@ function wireMapOnlyControls(){
       printActiveMap();
     };
   });
-  document.querySelectorAll('[data-fine-zoom]').forEach(btn => {
+  document.querySelectorAll('[data-map-zoom]').forEach(btn => {
     btn.onclick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       const target = btn.getAttribute('data-map-target') || 'map';
-      const dir = btn.getAttribute('data-fine-zoom') === 'in' ? 1 : -1;
-      fineZoomBy(target, dir, FINE_ZOOM.buttonStep);
+      const dir = btn.getAttribute('data-map-zoom') === 'in' ? 1 : -1;
+      mapZoomBy(target, dir);
     };
   });
 }
@@ -5026,60 +5045,47 @@ function rebuildBusesForDayMode(){
   }
 }
 
-/** 호차×요일그룹×부 현황 행 데이터 (FULL boarded/total 우선, 없으면 DASH unique/capacity) */
+/** 요일그룹별 부 슬롯: 월수금 1–4, 화목 1–2 */
+function periodsForDayGroup(gName){
+  if(gName === '화목') return [1, 2];
+  return [1, 2, 3, 4];
+}
+
+/** 호차×요일그룹×부 현황 — 고유이용자/정원(DASH) 기준 */
 function periodStatusRows(bus){
   const groupsObj = bus.groups || {};
   const fullObj = bus.full || {};
-  let groupNames = Object.keys(groupsObj);
-  if(!groupNames.length) groupNames = Object.keys(fullObj);
-  // 월수금 → 화목 순서 선호
   const order = ['월수금', '화목'];
-  groupNames = [
-    ...order.filter(g => groupNames.includes(g)),
-    ...groupNames.filter(g => !order.includes(g)).sort((a,b)=>a.localeCompare(b,'ko'))
-  ];
+  const known = new Set([...Object.keys(groupsObj), ...Object.keys(fullObj)]);
+  const extras = [...known].filter(g => !order.includes(g)).sort((a,b)=>a.localeCompare(b,'ko'));
+  let groupNames = [...order, ...extras];
   if(state.dayMode === 'group' && state.dayGroupFilter && state.dayGroupFilter !== '전체'){
     groupNames = groupNames.filter(g => g === state.dayGroupFilter);
   }
   const out = [];
   groupNames.forEach(gName => {
     const dashG = groupsObj[gName] || null;
-    const fullG = fullObj[gName] || {};
-    const periodKeys = new Set();
-    if(dashG && Array.isArray(dashG.periods)){
-      dashG.periods.forEach(p => periodKeys.add(String(p.period)));
-    }
-    Object.keys(fullG).forEach(k => periodKeys.add(String(k)));
-    const periods = Array.from(periodKeys).sort((a,b) => Number(a) - Number(b));
+    const periods = periodsForDayGroup(gName);
     const rows = periods.map(pk => {
-      const fullP = fullG[pk] || fullG[Number(pk)] || null;
       const dashP = (dashG && dashG.periods || []).find(p => String(p.period) === String(pk));
-      let num = null, den = null, rate01 = null, kind = '';
-      if(fullP && (fullP.total != null || fullP.boarded != null)){
-        num = Number(fullP.boarded) || 0;
-        den = Number(fullP.total) || 0;
-        rate01 = den > 0 ? num / den : (fullP.rate != null ? Number(fullP.rate) / 100 : null);
-        kind = 'boarded';
-      } else if(dashP){
+      let num = null, den = null, rate01 = null;
+      if(dashP){
         num = Number(dashP.unique) || 0;
         den = Number(dashP.capacity != null ? dashP.capacity : bus.capacity) || 0;
         rate01 = den > 0 ? num / den : (dashP.rate != null ? Number(dashP.rate) / 100 : null);
-        kind = 'unique';
       }
       return {
-        period: Number(pk) || pk,
-        num, den, rate01, kind,
+        period: pk,
+        num, den, rate01,
         barPct: rate01 == null ? 0 : Math.min(100, Math.round(rate01 * 100))
       };
-    }).filter(r => r.num != null || r.den != null);
-    if(rows.length){
-      out.push({
-        name: gName,
-        groupUnique: dashG ? Number(dashG.unique) || 0 : null,
-        groupCap: dashG ? Number(dashG.capacity) || 0 : null,
-        rows
-      });
-    }
+    });
+    out.push({
+      name: gName,
+      groupUnique: dashG ? Number(dashG.unique) || 0 : null,
+      groupCap: dashG ? Number(dashG.capacity) || 0 : null,
+      rows
+    });
   });
   return out;
 }
@@ -5904,6 +5910,7 @@ document.getElementById('runIncBtn').onclick = () => {
   renderIncResult(simulateIncrease(demand, lat, lng, preferBranch));
 };
 document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
+document.getElementById('mapPruneEmptyBtn').onclick = () => pruneEmptyStopsFromMapPreview();
 document.getElementById('mapUndoBtn').onclick = () => undoLastMapMove();
 document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
 document.getElementById('reassignSkipEmptyChk').onchange = (e) => setReassignSkipEmpty(e.target.checked);
@@ -5927,6 +5934,7 @@ document.getElementById('redrawGuideSaveBtn').onclick = () => finishRedrawRoute(
 })();
 document.getElementById('redrawSelectAllBtn').onclick = () => selectAllRedrawPool();
 document.getElementById('redrawClearPoolBtn').onclick = () => clearRedrawPool();
+document.getElementById('redrawPruneEmptyBtn').onclick = () => pruneEmptyStopsFromRedrawPool();
 document.getElementById('redrawSaveSetBtn').onclick = () => saveRedrawSet().catch(err => alert(err.message));
 document.getElementById('coordMissingOpenBtn').onclick = () => openCoordMissingModal();
 document.getElementById('coordMissingCloseBtn').onclick = () => closeCoordMissingModal();

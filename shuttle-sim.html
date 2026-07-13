@@ -182,6 +182,23 @@ main.map-mode{max-width:none}
   #redrawMap{height:100%;min-height:480px}
 }
 .redraw-progress{font-size:12px;font-weight:700;color:var(--navy);background:#EEF3FA;border-radius:8px;padding:8px 10px;line-height:1.45}
+.coord-banner{background:#FFF8E1;border:1px solid #F0D78C;color:#7A5B00;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:600;line-height:1.5;display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.coord-banner.show{display:flex}
+.coord-banner .coord-banner-text{flex:1;min-width:200px}
+.coord-banner .coord-banner-warn{display:block;font-size:11px;font-weight:700;color:#922B21;margin-top:4px}
+.modal-card.wide{max-width:720px;max-height:calc(100vh - 40px);overflow:auto}
+.coord-save-notice{background:#FDEDEC;border:1px solid #F5C2C0;color:#922B21;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;line-height:1.45;margin:0 0 14px}
+.coord-missing-list{display:flex;flex-direction:column;gap:10px;max-height:min(52vh,420px);overflow:auto;margin-bottom:12px}
+.coord-missing-item{border:1px solid var(--border);border-radius:12px;padding:12px;background:#F8FAFD;display:flex;flex-direction:column;gap:8px}
+.coord-missing-item .name{font-weight:800;color:var(--navy);font-size:14px}
+.coord-missing-item .coord-row{display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end}
+@media (max-width:640px){
+  .coord-missing-item .coord-row{grid-template-columns:1fr 1fr}
+  .coord-missing-item .coord-row .btn{grid-column:1 / -1}
+}
+.coord-missing-item input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit}
+.coord-missing-item label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.coord-missing-item.saved{border-color:#A8D5B5;background:#F4FBF6}
 </style>
 </head>
 <body>
@@ -190,7 +207,7 @@ main.map-mode{max-width:none}
     <div class="brand-badge">🚌</div>
     <div>
       <h1>셔틀 노선조정·감차 시뮬레이션</h1>
-      <p>의사결정 지원 · 원본 데이터 읽기 전용 · <a href="index.html" style="color:#FFC72C">바론링크</a> · <a href="shuttle-dashboard.html" style="color:#FFC72C">운영 대시보드</a></p>
+      <p>의사결정 지원 · 원본 읽기 전용(좌표 입력 예외) · <a href="index.html" style="color:#FFC72C">바론링크</a> · <a href="shuttle-dashboard.html" style="color:#FFC72C">운영 대시보드</a></p>
     </div>
   </div>
   <div class="top-actions">
@@ -203,6 +220,13 @@ main.map-mode{max-width:none}
 
 <main>
   <div id="alertBanner" class="alert-banner" style="display:none"></div>
+  <div id="coordMissingBanner" class="coord-banner" role="status">
+    <div class="coord-banner-text">
+      <span id="coordMissingBannerText">이 분원은 좌표가 없는 정류장이 있습니다.</span>
+      <span class="coord-banner-warn">※ 좌표 저장은 미리보기가 아니라 Firestore 원본 정류장 시트에 실제로 반영됩니다.</span>
+    </div>
+    <button class="btn btn-navy btn-sm" type="button" id="coordMissingOpenBtn">좌표 입력하기</button>
+  </div>
   <div class="branch-row" id="branchRow"></div>
   <div class="filter-row" id="dayGroupRow" style="margin-top:-6px"></div>
 
@@ -256,7 +280,7 @@ main.map-mode{max-width:none}
         <div class="map-empty" id="mapEmpty"><div>
           <div style="font-size:32px;margin-bottom:8px">🗺️</div>
           <p><b>지도에 표시할 좌표가 없습니다.</b></p>
-          <p class="map-tip">장안·남동탄처럼 분원 노선앱 좌표가 있는 분원을 선택해주세요.</p>
+          <p class="map-tip">분원을 선택하고, 좌표가 없는 정류장은 「좌표 입력하기」로 채워주세요.</p>
         </div></div>
       </div>
     </div>
@@ -315,7 +339,7 @@ main.map-mode{max-width:none}
         <div class="map-empty" id="redrawMapEmpty"><div>
           <div style="font-size:32px;margin-bottom:8px">🗺️</div>
           <p><b>지도에 표시할 좌표가 없습니다.</b></p>
-          <p class="map-tip">상단에서 장안·남동탄 등 좌표가 있는 분원을 선택해주세요.</p>
+          <p class="map-tip">상단에서 분원을 선택하고, 필요하면 좌표를 입력해주세요.</p>
         </div></div>
       </div>
     </div>
@@ -422,7 +446,7 @@ main.map-mode{max-width:none}
   </section>
 </main>
 
-<footer>바론네트웍스(주) 총무팀 · 원본 shuttle_data 읽기 전용 · 시뮬레이션 결과는 별도 계산</footer>
+<footer>바론네트웍스(주) 총무팀 · 원본 shuttle_data 읽기 전용(좌표 수동 입력만 예외) · 시뮬레이션 결과는 별도 계산</footer>
 
 <div class="modal-overlay" id="pwOverlay">
   <div class="modal-card">
@@ -432,6 +456,24 @@ main.map-mode{max-width:none}
     <div class="modal-actions">
       <button class="btn btn-outline" type="button" id="pwCancel">취소</button>
       <button class="btn btn-navy" type="button" id="pwOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="coordMissingOverlay">
+  <div class="modal-card wide">
+    <h3 id="coordMissingTitle">정류장 좌표 입력</h3>
+    <div class="coord-save-notice">
+      이 화면에서 저장하면 <b>미리보기가 아니라</b> Firestore <code>shuttle_data/정류장</code> 원본 시트에 위도·경도가 실제로 기록됩니다.
+      다른 시뮬레이션(감차·재배정 미리보기)과 달리 원본이 바뀌니 좌표를 확인한 뒤 저장하세요.
+    </div>
+    <p class="desc" style="font-size:13px;color:var(--muted);margin:0 0 12px" id="coordMissingDesc">카카오맵에서 찾아 좌표를 확인한 뒤 입력하세요.</p>
+    <div class="coord-missing-list" id="coordMissingList"></div>
+    <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-outline" type="button" id="coordMissingCloseBtn">닫기</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-navy" type="button" id="coordMissingSaveAllBtn">입력한 좌표 전체 저장</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1603,7 +1645,8 @@ function renderRedrawSide(){
   const list = document.getElementById('redrawBusList');
   if(list){
     if(!buses.length){
-      list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>`;
+      list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>` + coordMissingEmptyHint();
+      wireCoordMissingEmptyBtn();
     } else {
       list.innerHTML = buses.map(b => {
         const col = busColor(b);
@@ -1753,9 +1796,11 @@ async function renderRedrawMap(fitBounds){
       onClick: (stop) => pickPoolStop(stop)
     });
     if(!state.redrawSourceBusIds.length){
-      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>원본 노선을 선택하세요.</b></p><p class="map-tip">선택한 노선의 정류장이 구분 없이 지도에 모입니다.<br>빨간 <b>학</b> 마커 = 정상어학원 (장안분원) 고정</p></div>`);
+      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>원본 노선을 선택하세요.</b></p><p class="map-tip">선택한 노선의 정류장이 구분 없이 지도에 모입니다.<br>빨간 <b>학</b> 마커 = 정상어학원 (장안분원) 고정</p>${coordMissingEmptyHint()}</div>`);
+      wireCoordMissingEmptyBtn();
     } else {
-      setRedrawEmpty(true, null);
+      setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>선택한 원본에 좌표 있는 정류장이 없습니다.</b></p>${coordMissingEmptyHint()}</div>`);
+      wireCoordMissingEmptyBtn();
     }
     if(academyOnly && fitBounds){
       try{
@@ -2808,7 +2853,8 @@ function renderMapSide(){
 
   const list = document.getElementById('mapBusList');
   if(!buses.length){
-    list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>`;
+    list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>` + coordMissingEmptyHint();
+    wireCoordMissingEmptyBtn();
   } else {
     const selected = new Set([state.reassignRemoveId, ...state.reassignAbsorbIds].filter(Boolean));
     list.innerHTML = buses.map(b => {
@@ -3072,11 +3118,14 @@ function renderKakaoMap(fitBounds){
 
   if(!hasGeo){
     clearMapLayers();
+    const branch = state.branchFilter !== '전체' ? state.branchFilter : effectiveMapBranch();
     setMapEmptyMessage(`<div>
       <div style="font-size:32px;margin-bottom:8px">🗺️</div>
       <p><b>지도에 표시할 좌표가 없습니다.</b></p>
-      <p class="map-tip">상단에서 <b>장안</b> 또는 <b>남동탄</b> 분원을 선택한 뒤, 데이터가 로드될 때까지 기다려주세요.</p>
+      <p class="map-tip">상단에서 분원을 선택한 뒤, 좌표가 있는 정류장이 있으면 지도에 표시됩니다.</p>
+      ${coordMissingEmptyHint(branch)}
     </div>`, true);
+    wireCoordMissingEmptyBtn();
     return;
   }
 
@@ -3561,6 +3610,305 @@ function attachStopCoords(stopAgg){
   });
 }
 
+function isValidLatLng(lat, lng){
+  const a = Number(lat); const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && a !== 0 && b !== 0
+    && a >= -90 && a <= 90 && b >= -180 && b <= 180;
+}
+
+function stopSheetBranch(row){
+  return String((row && (row['소속분원'] || row['분원명'])) || '').trim();
+}
+
+function findStopSheetRow(name){
+  const key = String(name || '').trim();
+  if(!key) return null;
+  return realRows(state.sheets['정류장']).find(st => String(st['정류장명']||'').trim() === key) || null;
+}
+
+/** 시트 좌표로 정류장 lat/lng 보강 (이미 있으면 유지) */
+function fillMissingStopCoords(stops){
+  return (stops || []).map(s => {
+    if(isValidLatLng(s.lat, s.lng)) return s;
+    const name = String(s.name || '').trim();
+    if(!name) return s;
+    const row = findStopSheetRow(name);
+    if(!row) return s;
+    const lat = Number(row['위도']); const lng = Number(row['경도']);
+    if(!isValidLatLng(lat, lng)) return s;
+    return { ...s, lat, lng };
+  });
+}
+
+/** 분원과 관련된 정류장명 합집합 */
+function collectBranchStopNames(branch){
+  const names = new Set();
+  if(!branch || branch === '전체') return names;
+
+  realRows(state.sheets['학생_기본정보']).forEach(s => {
+    if(String(s['소속분원']||'').trim() !== branch) return;
+    [s['기본등원정류장'], s['기본하원정류장']].forEach(n => {
+      const t = String(n || '').trim();
+      if(t) names.add(t);
+    });
+  });
+
+  realRows(state.sheets['배정이력_정류장']).forEach(r => {
+    const bus = r['호차'] || r['배정호차'] || r['현재배정호차'];
+    if(branchFromRef(bus) !== branch) return;
+    const stop = r['정류장명'] || r['정류장'] || r['stop'];
+    const t = String(stop || '').trim();
+    if(t) names.add(t);
+  });
+
+  realRows(state.sheets['정류장']).forEach(st => {
+    if(stopSheetBranch(st) !== branch) return;
+    const t = String(st['정류장명']||'').trim();
+    if(t) names.add(t);
+  });
+
+  // 호차 집계에 이미 올라온 이름도 포함 (시트에만 빠진 경우)
+  state.buses.filter(b => b.branch === branch).forEach(b => {
+    (b.stops || []).forEach(s => {
+      const t = String(s.name || '').trim();
+      if(t) names.add(t);
+    });
+  });
+
+  return names;
+}
+
+/** 좌표가 없거나 잘못된 정류장 목록 (시트 기준, 이미 지도에 좌표 있는 이름은 제외) */
+function findMissingCoordStops(branch){
+  if(!branch || branch === '전체') return [];
+  const names = collectBranchStopNames(branch);
+  const alreadyOnMap = new Set();
+  state.buses.filter(b => b.branch === branch).forEach(b => {
+    (b.stops || []).forEach(s => {
+      const t = String(s.name || '').trim();
+      if(t && isValidLatLng(s.lat, s.lng)) alreadyOnMap.add(t);
+    });
+  });
+  const missing = [];
+  names.forEach(name => {
+    if(alreadyOnMap.has(name)) return;
+    const row = findStopSheetRow(name);
+    if(!row){
+      missing.push({ name, exists: false, lat: '', lng: '', branch });
+      return;
+    }
+    const lat = row['위도']; const lng = row['경도'];
+    if(!isValidLatLng(lat, lng)){
+      missing.push({
+        name,
+        exists: true,
+        lat: (lat == null || lat === '') ? '' : String(lat),
+        lng: (lng == null || lng === '') ? '' : String(lng),
+        branch: stopSheetBranch(row) || branch
+      });
+    }
+  });
+  missing.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+  return missing;
+}
+
+function renderCoordMissingBanner(){
+  const banner = document.getElementById('coordMissingBanner');
+  const text = document.getElementById('coordMissingBannerText');
+  if(!banner || !text) return;
+  const branch = state.branchFilter;
+  if(!branch || branch === '전체'){
+    banner.classList.remove('show');
+    return;
+  }
+  const missing = findMissingCoordStops(branch);
+  state.coordMissingCount = missing.length;
+  if(!missing.length){
+    banner.classList.remove('show');
+    return;
+  }
+  text.textContent = '이 분원(' + branch + ')은 좌표가 없는 정류장이 ' + missing.length + '개 있습니다. 좌표를 입력하면 지도에 표시됩니다.';
+  banner.classList.add('show');
+}
+
+function openCoordMissingModal(){
+  const branch = state.branchFilter;
+  if(!branch || branch === '전체'){
+    alert('먼저 상단에서 분원을 선택하세요.');
+    return;
+  }
+  const missing = findMissingCoordStops(branch);
+  const overlay = document.getElementById('coordMissingOverlay');
+  const list = document.getElementById('coordMissingList');
+  const title = document.getElementById('coordMissingTitle');
+  const desc = document.getElementById('coordMissingDesc');
+  if(!overlay || !list) return;
+  if(title) title.textContent = branch + ' · 정류장 좌표 입력';
+  if(desc){
+    desc.innerHTML = missing.length
+      ? '좌표 없는 정류장 <b>'+missing.length+'</b>개 · 카카오맵에서 찾아 위도·경도를 확인한 뒤 입력하세요.'
+      : '이 분원에 좌표가 비어 있는 정류장이 없습니다.';
+  }
+  if(!missing.length){
+    list.innerHTML = '<div class="map-tip">입력할 항목이 없습니다.</div>';
+  } else {
+    list.innerHTML = missing.map((item, idx) => {
+      const q = encodeURIComponent(item.name);
+      const kakaoUrl = 'https://map.kakao.com/?q=' + q;
+      return `<div class="coord-missing-item" data-coord-idx="${idx}" data-stop-name="${esc(item.name)}">
+        <div class="name">${esc(item.name)}${item.exists ? '' : ' <span class="badge gray">시트에 없음 · 저장 시 새 행</span>'}</div>
+        <div class="coord-row">
+          <div>
+            <label>위도</label>
+            <input type="number" step="0.000001" data-coord-lat value="${esc(item.lat)}" placeholder="예: 37.263">
+          </div>
+          <div>
+            <label>경도</label>
+            <input type="number" step="0.000001" data-coord-lng value="${esc(item.lng)}" placeholder="예: 127.028">
+          </div>
+          <a class="btn btn-outline btn-sm" href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오맵에서 찾기</a>
+          <button class="btn btn-navy btn-sm" type="button" data-coord-save-one>저장</button>
+        </div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-coord-save-one]').forEach(btn => {
+      btn.onclick = () => {
+        const item = btn.closest('.coord-missing-item');
+        if(!item) return;
+        const name = item.getAttribute('data-stop-name');
+        const lat = item.querySelector('[data-coord-lat]').value;
+        const lng = item.querySelector('[data-coord-lng]').value;
+        saveStopCoordinates([{ name, lat, lng, branch, itemEl: item }], { single: true }).catch(err => {
+          console.error(err);
+          alert('저장 실패: ' + (err && err.message || err));
+        });
+      };
+    });
+  }
+  overlay.classList.add('active');
+}
+
+function closeCoordMissingModal(){
+  const overlay = document.getElementById('coordMissingOverlay');
+  if(overlay) overlay.classList.remove('active');
+}
+
+function readCoordInputsFromModal(){
+  const list = document.getElementById('coordMissingList');
+  if(!list) return [];
+  const branch = state.branchFilter;
+  const out = [];
+  list.querySelectorAll('.coord-missing-item').forEach(item => {
+    const name = String(item.getAttribute('data-stop-name') || '').trim();
+    const latEl = item.querySelector('[data-coord-lat]');
+    const lngEl = item.querySelector('[data-coord-lng]');
+    const lat = latEl ? latEl.value : '';
+    const lng = lngEl ? lngEl.value : '';
+    if(!name) return;
+    if(String(lat).trim() === '' && String(lng).trim() === '') return;
+    out.push({ name, lat, lng, branch, itemEl: item });
+  });
+  return out;
+}
+
+async function saveStopCoordinates(entries, opts){
+  opts = opts || {};
+  const branch = (opts.branch || state.branchFilter || '').trim();
+  if(!branch || branch === '전체'){
+    alert('분원을 선택한 뒤 저장하세요.');
+    return;
+  }
+  const valid = [];
+  for(const e of entries){
+    const name = String(e.name || '').trim();
+    const lat = Number(e.lat); const lng = Number(e.lng);
+    if(!name) continue;
+    if(!isValidLatLng(lat, lng)){
+      alert('「'+name+'」의 위도·경도를 올바른 숫자로 입력하세요.');
+      return;
+    }
+    valid.push({ name, lat, lng, branch: e.branch || branch, itemEl: e.itemEl });
+  }
+  if(!valid.length){
+    alert('저장할 좌표가 없습니다. 위도·경도를 입력하세요.');
+    return;
+  }
+
+  const saveAllBtn = document.getElementById('coordMissingSaveAllBtn');
+  if(saveAllBtn) saveAllBtn.disabled = true;
+
+  try{
+    const rows = (state.sheets['정류장'] || []).slice();
+    let updated = 0; let created = 0;
+    valid.forEach(v => {
+      const idx = rows.findIndex(r => r && String(r['정류장명']||'').trim() === v.name);
+      if(idx >= 0){
+        rows[idx] = {
+          ...rows[idx],
+          '위도': v.lat,
+          '경도': v.lng,
+          '소속분원': stopSheetBranch(rows[idx]) || v.branch
+        };
+        updated++;
+      } else {
+        rows.push({
+          '정류장명': v.name,
+          '소속분원': v.branch,
+          '위도': v.lat,
+          '경도': v.lng,
+          '사용상태': '사용중',
+          '출처': '수동좌표입력'
+        });
+        created++;
+      }
+    });
+
+    const updatedAt = new Date().toISOString();
+    await db.collection('shuttle_data').doc('정류장').set({
+      rows,
+      updatedAt
+    }, { merge: true });
+
+    state.sheets['정류장'] = rows;
+    buildBuses(state.hydrations || {});
+    state.mapWorking = [];
+    state.mapMoves = [];
+    renderDashboard();
+    renderSimSelect();
+    renderIncStopSelect();
+    renderCoordMissingBanner();
+    if(state.activeTab === 'map') showMapView();
+    if(state.activeTab === 'redraw') showRedrawView();
+
+    if(opts.single && valid[0] && valid[0].itemEl){
+      valid[0].itemEl.classList.add('saved');
+    }
+
+    const left = findMissingCoordStops(branch).length;
+    alert('원본 정류장 시트에 저장했습니다. (수정 '+updated+' · 신규 '+created+')' +
+      (left ? '\n남은 좌표 없음: '+left+'개' : '\n이 분원 좌표 입력이 완료되었습니다.'));
+
+    if(!left) closeCoordMissingModal();
+    else if(!opts.single) openCoordMissingModal();
+  } finally {
+    if(saveAllBtn) saveAllBtn.disabled = false;
+  }
+}
+
+function coordMissingEmptyHint(branch){
+  const b = branch || state.branchFilter;
+  if(!b || b === '전체') return '';
+  const n = findMissingCoordStops(b).length;
+  if(!n) return '';
+  return `<p class="map-tip" style="margin-top:10px">이 분원에 좌표 없는 정류장이 <b>${n}</b>개 있습니다.<br>
+    <button type="button" class="btn btn-navy btn-sm" id="coordMissingEmptyBtn" style="margin-top:8px">좌표 입력하기</button></p>`;
+}
+
+function wireCoordMissingEmptyBtn(){
+  const btn = document.getElementById('coordMissingEmptyBtn');
+  if(btn) btn.onclick = () => openCoordMissingModal();
+}
+
 function aggregateBoardStops(fullBus, dayGroup){
   const stopAgg = {};
   const periods = (fullBus && fullBus[dayGroup]) || {};
@@ -3730,6 +4078,8 @@ function buildBuses(hydrations){
       source = BRANCH_APPS[branch] ? `branch-app:${BRANCH_APPS[branch]}` : 'shuttle_backup';
     }
 
+    stops = fillMissingStopCoords(stops);
+
     const capacity = resolveCapacity(branch, no, vehicle, contract, hydrated);
     // 감차 판정용 이용률: (분원앱 DASH seatSlots) 또는 단일반 정원 — 요일 모드면 해당 그룹 정원
     const seatSlots = seatSlotsOverride || (hydrated && hydrated.seatSlots) || capacity;
@@ -3813,6 +4163,7 @@ function renderBranches(){
       renderSimSelect();
       renderIncStopSelect();
       renderAlertBanner();
+      renderCoordMissingBanner();
       if(state.activeTab === 'map'){
         resetMapPreview();
       }
@@ -3877,6 +4228,7 @@ function rebuildBusesForDayMode(){
   renderSimSelect();
   renderIncStopSelect();
   renderAlertBanner();
+  renderCoordMissingBanner();
   if(state.activeTab === 'map') showMapView();
   if(state.activeTab === 'redraw') showRedrawView();
   if(state.activeTab === 'alerts') renderAlerts();
@@ -4616,6 +4968,7 @@ async function loadAll(){
   renderSimSelect();
   renderIncStopSelect();
   renderAlertBanner();
+  renderCoordMissingBanner();
   fillRulesForm();
   if(state.activeTab === 'map') showMapView();
   if(state.activeTab === 'redraw') showRedrawView();
@@ -4691,6 +5044,18 @@ document.getElementById('redrawGuideSaveBtn').onclick = () => finishRedrawRoute(
 document.getElementById('redrawSelectAllBtn').onclick = () => selectAllRedrawPool();
 document.getElementById('redrawClearPoolBtn').onclick = () => clearRedrawPool();
 document.getElementById('redrawSaveSetBtn').onclick = () => saveRedrawSet().catch(err => alert(err.message));
+document.getElementById('coordMissingOpenBtn').onclick = () => openCoordMissingModal();
+document.getElementById('coordMissingCloseBtn').onclick = () => closeCoordMissingModal();
+document.getElementById('coordMissingSaveAllBtn').onclick = () => {
+  const entries = readCoordInputsFromModal();
+  saveStopCoordinates(entries, { single: false }).catch(err => {
+    console.error(err);
+    alert('저장 실패: ' + (err && err.message || err));
+  });
+};
+document.getElementById('coordMissingOverlay').addEventListener('click', (e) => {
+  if(e.target === e.currentTarget) closeCoordMissingModal();
+});
 document.querySelectorAll('[data-order-tab]').forEach(btn => {
   btn.addEventListener('click', () => switchOrderTab(btn.getAttribute('data-order-tab')));
 });

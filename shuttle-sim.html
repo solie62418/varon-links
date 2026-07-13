@@ -1791,14 +1791,15 @@ async function renderRedrawMap(fitBounds){
     // 활성 노선에 포함된 건 아래에서 번호 핀으로 그림
     if(inActive) return;
     const id = 'pool-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const sz = 18;
+    const sz = drawing ? 16 : 18;
     const bg = inAnyFinished ? '#94A3B8' : '#2F9E44';
+    const op = drawing ? (inAnyFinished ? 0.2 : 0.85) : (inAnyFinished ? 0.55 : 0.95);
     const tip = (s.name||'') + ' · 클릭하여 새 노선에 추가';
     const html = '<div id="'+id+'" class="stop-bubble redraw-idle" title="'+esc(tip)+'"'
-      + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+bg+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.28);cursor:pointer;opacity:'+(inAnyFinished?0.55:0.95)+'"></div>';
+      + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+bg+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.28);cursor:pointer;opacity:'+op+'"></div>';
     const pos = new kakao.maps.LatLng(s.lat, s.lng);
     const overlay = new kakao.maps.CustomOverlay({
-      position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 5
+      position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: drawing ? 6 : 5
     });
     overlay.setMap(rmap);
     rLayers.push(overlay);
@@ -1816,51 +1817,82 @@ async function renderRedrawMap(fitBounds){
   });
 
   // 2) 만든 새 노선들 (도로 경로 + 번호)
+  //    - 그리는 중: 다른(확정) 노선은 옅게
+  //    - 활성 노선: 선택 구간은 진하게, 마지막 선택↔학원 연결은 옅은 점선
+  const drawing = !!active;
   for(const route of state.redrawNewRoutes){
     if(seq !== redrawRenderSeq) return;
     if(!(route.stops && route.stops.length)) continue;
     const col = route.color || '#24467D';
     const isActive = active && active.id === route.id;
-    if(route.stops.length > 1){
-      let path = route.path;
-      if(!path || path.length < 2 || isActive){
-        const built = await buildRoadPath(route.stops);
+
+    if(isActive){
+      const mid = nonAcademyStops(route.stops);
+      const academy = { ...JANGAN_ACADEMY };
+      const mode = academyEndpointMode();
+
+      // 선택 정류장 사이 본선 (진하게)
+      if(mid.length > 1){
+        const body = await buildRoadPath(mid);
         if(seq !== redrawRenderSeq) return;
-        path = built.path;
-        route.path = built.path;
-        route.meters = built.meters;
-        route.minutes = built.minutes;
-        route.source = built.source;
-        if(isActive){
-          state.redrawStats = { meters: built.meters, minutes: built.minutes, source: built.source };
-          updateRedrawStatsUi();
+        if(body.path && body.path.length > 1){
+          const pl = new kakao.maps.Polyline({
+            path: body.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+            strokeWeight: 7,
+            strokeColor: col,
+            strokeOpacity: 0.98,
+            strokeStyle: 'solid'
+          });
+          pl.setMap(rmap);
+          rLayers.push(pl);
         }
       }
-      if(path && path.length > 1){
-        const pl = new kakao.maps.Polyline({
-          path: path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
-          strokeWeight: isActive ? 6 : 5,
-          strokeColor: col,
-          strokeOpacity: isActive ? 0.95 : 0.75,
-          strokeStyle: 'solid'
-        });
-        pl.setMap(rmap);
-        rLayers.push(pl);
-        kakao.maps.event.addListener(pl, 'click', () => beginEditNewRoute(route.id));
-      }
-    }
 
-    // 활성 노선만 번호 핀 (클릭으로 토글)
-    if(isActive){
-      route.stops.forEach((s, ordIdx) => {
+      // 마지막 선택 ↔ 학원 미리보기 (옅은 점선)
+      if(mid.length >= 1){
+        const tipStops = mode === 'first'
+          ? [academy, mid[0]]
+          : [mid[mid.length - 1], academy];
+        const tip = await buildRoadPath(tipStops);
+        if(seq !== redrawRenderSeq) return;
+        if(tip.path && tip.path.length > 1){
+          const pl = new kakao.maps.Polyline({
+            path: tip.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+            strokeWeight: 4,
+            strokeColor: col,
+            strokeOpacity: 0.28,
+            strokeStyle: 'shortdash'
+          });
+          pl.setMap(rmap);
+          rLayers.push(pl);
+        }
+      }
+
+      // 통계는 학원 포함 전체 기준
+      const fullStops = normalizeAcademyEndpoint(mid);
+      if(fullStops.length > 1){
+        const full = await buildRoadPath(fullStops);
+        if(seq !== redrawRenderSeq) return;
+        route.path = full.path;
+        route.meters = full.meters;
+        route.minutes = full.minutes;
+        route.source = full.source;
+        state.redrawStats = { meters: full.meters, minutes: full.minutes, source: full.source };
+        updateRedrawStatsUi();
+      }
+
+      // 활성 노선 번호 핀 (학원은 고정 마커로 대체)
+      mid.forEach((s, i) => {
         if(s.lat == null) return;
+        const ordIdx = mode === 'first' ? (i + 1) : i; // 표시용: 하원이면 학원이 1번
+        const displayOrd = mode === 'first' ? (i + 2) : (i + 1);
         const id = 'nr-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const sz = 28;
-        const html = '<div id="'+id+'" class="stop-bubble redraw-num" title="'+esc((s.name||'')+' · 순서 '+(ordIdx+1)+' · 재클릭 취소')+'"'
-          + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer">'+(ordIdx+1)+'</div>';
+        const sz = 30;
+        const html = '<div id="'+id+'" class="stop-bubble redraw-num" title="'+esc((s.name||'')+' · 순서 '+displayOrd+' · 재클릭 취소')+'"'
+          + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:3px solid #FFC72C;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.35);cursor:pointer">'+displayOrd+'</div>';
         const pos = new kakao.maps.LatLng(s.lat, s.lng);
         const overlay = new kakao.maps.CustomOverlay({
-          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 30
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 40
         });
         overlay.setMap(rmap);
         rLayers.push(overlay);
@@ -1876,30 +1908,64 @@ async function renderRedrawMap(fitBounds){
           };
         }, 0);
       });
-    } else if(route.finished){
-      // 완료 노선: 작은 번호 핀
+      continue;
+    }
+
+    // 확정/비활성 노선 — 그리는 중이면 옅게
+    const dimOp = drawing ? 0.16 : 0.78;
+    const dimPin = drawing ? 0.22 : 0.9;
+    if(route.stops.length > 1){
+      let path = route.path;
+      if(!path || path.length < 2){
+        const built = await buildRoadPath(route.stops);
+        if(seq !== redrawRenderSeq) return;
+        path = built.path;
+        route.path = built.path;
+        route.meters = built.meters;
+        route.minutes = built.minutes;
+        route.source = built.source;
+      }
+      if(path && path.length > 1){
+        const pl = new kakao.maps.Polyline({
+          path: path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+          strokeWeight: drawing ? 3 : 5,
+          strokeColor: col,
+          strokeOpacity: dimOp,
+          strokeStyle: drawing ? 'shortdash' : 'solid'
+        });
+        pl.setMap(rmap);
+        rLayers.push(pl);
+        if(!drawing){
+          kakao.maps.event.addListener(pl, 'click', () => beginEditNewRoute(route.id));
+        }
+      }
+    }
+
+    if(route.finished){
       route.stops.forEach((s, ordIdx) => {
-        if(s.lat == null) return;
+        if(s.lat == null || isJanganAcademyStop(s)) return;
         const id = 'done-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
         const html = '<div id="'+id+'" class="stop-bubble" title="'+esc((route.name||'')+' · '+(ordIdx+1)+'. '+(s.name||''))+'"'
-          + ' style="width:20px;height:20px;border-radius:50%;background:'+col+';border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer;opacity:.9">'+(ordIdx+1)+'</div>';
+          + ' style="width:18px;height:18px;border-radius:50%;background:'+col+';border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:'+(drawing?'default':'pointer')+';opacity:'+dimPin+'">'+(ordIdx+1)+'</div>';
         const pos = new kakao.maps.LatLng(s.lat, s.lng);
         const overlay = new kakao.maps.CustomOverlay({
-          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 15
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: drawing ? 4 : 15
         });
         overlay.setMap(rmap);
         rLayers.push(overlay);
         bounds.extend(pos);
         boundCount++;
-        setTimeout(() => {
-          if(seq !== redrawRenderSeq) return;
-          const el = document.getElementById(id);
-          if(el) el.onclick = (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            beginEditNewRoute(route.id);
-          };
-        }, 0);
+        if(!drawing){
+          setTimeout(() => {
+            if(seq !== redrawRenderSeq) return;
+            const el = document.getElementById(id);
+            if(el) el.onclick = (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              beginEditNewRoute(route.id);
+            };
+          }, 0);
+        }
       });
     }
   }

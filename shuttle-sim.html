@@ -149,6 +149,22 @@ main.map-mode{max-width:none}
 .stop-bubble.order-target{box-shadow:0 0 0 3px rgba(26,58,107,.35)}
 .btn-sm{padding:6px 10px;font-size:11px;border-radius:999px}
 .map-order-banner{background:#E8F0FE;border:1px solid #A8C5F0;color:var(--navy);font-size:12px;font-weight:700;padding:8px 10px;border-radius:10px;line-height:1.4}
+.redraw-guide{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;background:rgba(27,31,39,.88);color:#fff;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:700;line-height:1.45;display:flex;gap:10px;align-items:center;max-width:min(560px,calc(100% - 24px));box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.redraw-guide .btn{flex-shrink:0}
+.redraw-stats{display:flex;gap:10px;flex-wrap:wrap}
+.redraw-stat{flex:1;min-width:90px;background:#F8FAFD;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.redraw-stat .num{font-size:18px;font-weight:800;color:var(--navy)}
+.redraw-stat .label{font-size:11px;color:var(--muted);margin-top:2px}
+.attempt-item{border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.attempt-item.active{border-color:var(--navy);box-shadow:inset 0 0 0 1px var(--navy)}
+.attempt-item .row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.map-bus-item.redraw-selected{border-color:var(--navy);box-shadow:inset 0 0 0 1px var(--navy)}
+.stop-bubble.redraw-idle{opacity:.92}
+.stop-bubble.redraw-num{outline:2px solid #FFC72C;outline-offset:2px}
+#redrawMap{width:100%;height:480px;min-height:480px}
+@media (min-width:901px){
+  #redrawMap{height:100%;min-height:480px}
+}
 </style>
 </head>
 <body>
@@ -186,8 +202,8 @@ main.map-mode{max-width:none}
   <section class="view" id="view-map">
     <div class="map-layout">
       <aside class="map-side">
-        <div class="map-banner">시뮬레이션 모드 · 정류장 드래그는 미리보기만 반영합니다 (Firestore 원본 변경 없음)</div>
-        <p class="map-tip">정류장 원을 <b>다른 호차 카드</b>로 드래그하거나, 다른 호차 정류장 근처에 놓으면 해당 호차로 학생 이동이 미리보기로 표시됩니다.</p>
+        <div class="map-banner">감차·재배정 미리보기 · 정류장 드래그는 호차 이동 시뮬레이션만 (원본 미변경)</div>
+        <p class="map-tip">노선을 <b>클릭해서 다시 그리는</b> 작업은 <b>노선 다시 그리기</b> 탭에서 합니다. 이 탭은 감차·흡수 재배정용입니다.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
         </div>
@@ -224,6 +240,53 @@ main.map-mode{max-width:none}
           <div style="font-size:32px;margin-bottom:8px">🗺️</div>
           <p><b>지도에 표시할 좌표가 없습니다.</b></p>
           <p class="map-tip">장안·남동탄처럼 분원 노선앱 좌표가 있는 분원을 선택해주세요.</p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-redraw">
+    <div class="map-layout">
+      <aside class="map-side">
+        <div class="map-banner">노선 다시 그리기 · 지도에서 색 노선을 고른 뒤, 정류장을 순서대로 클릭하세요</div>
+        <div class="filter-row" style="margin:0" id="redrawLineOrderRow"></div>
+        <div id="redrawBusList"></div>
+        <div class="reassign-panel" id="redrawPanel">
+          <div class="map-tip" style="margin:0" id="redrawSelectionSummary">전체 노선 중 조정할 호차를 지도(또는 왼쪽 목록)에서 선택하세요.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" type="button" id="redrawClearOrderBtn" disabled>순서만 지우기</button>
+            <button class="btn btn-outline btn-sm" type="button" id="redrawUndoBtn" disabled>마지막 클릭 취소</button>
+            <button class="btn btn-outline btn-sm" type="button" id="redrawClearSelBtn" disabled>선택 해제</button>
+          </div>
+          <div class="redraw-stats" id="redrawStats">
+            <div class="redraw-stat"><div class="num" id="redrawStopCount">0</div><div class="label">선택 정류장</div></div>
+            <div class="redraw-stat"><div class="num" id="redrawKm">-</div><div class="label">도로근사 km</div></div>
+            <div class="redraw-stat"><div class="num" id="redrawMin">-</div><div class="label">예상 분</div></div>
+          </div>
+          <div class="field">
+            <label>시도 이름</label>
+            <input type="text" id="redrawAttemptName" placeholder="예: 장안 11호 우회안 A">
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-yellow btn-sm" type="button" id="redrawSaveBtn" disabled>이 시도 저장</button>
+            <button class="btn btn-outline btn-sm" type="button" id="redrawApplyOfficialBtn" disabled>공식 순서로 적용</button>
+          </div>
+          <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">저장된 시도 비교</div>
+          <div id="redrawAttemptList" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto"></div>
+        </div>
+        <div class="map-tip" style="font-weight:700;color:var(--navy)">선택 노선 정류장 순서</div>
+        <div id="redrawStopList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
+      </aside>
+      <div class="map-main">
+        <div class="redraw-guide" id="redrawGuide">
+          <span id="redrawGuideText">원하는 색 노선(또는 정류장)을 클릭해 선택하세요.</span>
+          <button class="btn btn-yellow btn-sm" type="button" id="redrawGuideSaveBtn" disabled>저장</button>
+        </div>
+        <div id="redrawMap"></div>
+        <div class="map-empty" id="redrawMapEmpty"><div>
+          <div style="font-size:32px;margin-bottom:8px">🗺️</div>
+          <p><b>지도에 표시할 좌표가 없습니다.</b></p>
+          <p class="map-tip">상단에서 장안·남동탄 등 좌표가 있는 분원을 선택해주세요.</p>
         </div></div>
       </div>
     </div>
@@ -388,6 +451,7 @@ const BRANCH_APPS = {
 const BACKUP_DOCS = { '장안': 'jangan' };
 const ADMIN_PASSWORD = '2026';
 const AVG_SPEED_KMH = 25;
+const ROAD_APPROX_FACTOR = 1.4; // 직선거리 → 도로근사 배율 (네비 API 전 임시)
 const CONTRACT_EXPIRY_DAYS = 60;
 const DOC_ALERT_DAYS = 60;
 const TOP_DOCS = ['범죄경력조회','안전교육확인증','통학버스신고필증'];
@@ -395,7 +459,8 @@ const STAFF_DOC_STALE_DAYS = 365;
 
 const TABS = [
   { key:'dash', label:'대시보드', view:'view-dash' },
-  { key:'map', label:'지도', view:'view-map' },
+  { key:'map', label:'재배정 지도', view:'view-map' },
+  { key:'redraw', label:'노선 다시 그리기', view:'view-redraw' },
   { key:'sim', label:'시뮬레이션', view:'view-sim' },
   { key:'alerts', label:'알림함', view:'view-alerts' },
   { key:'settings', label:'설정', view:'view-settings' }
@@ -462,12 +527,22 @@ const state = {
   routeOrders: {},
   routeOrdersOriginal: {},
   mapLineOrder: '등원', // 지도 점선에 쓸 순서: 등원 | 하원
-  routeCache: {}
+  routeCache: {},
+  redrawBusId: null,
+  redrawDraft: [],
+  redrawTab: '등원',
+  redrawAttempts: {},
+  redrawActiveAttemptId: null,
+  redrawStats: { meters: 0, minutes: 0, source: 'road-approx' }
 };
 
 let lmap = null;
 let lLayers = [];
 let mapDrag = null;
+let rmap = null;
+let rLayers = [];
+let rmapReady = false;
+let redrawRenderSeq = 0;
 
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -736,30 +811,73 @@ function routeCacheKey(from, to){
   return f(from.lat)+','+f(from.lng)+'_'+f(to.lat)+','+f(to.lng);
 }
 
-/** 카카오모빌리티 Directions 연동 자리. 지금은 직선거리 추정치. */
+/** 카카오모빌리티 Directions 연동 전 · 도로근사(직선×배율). */
 async function fetchTravelTime(from, to){
   if(!from || !to || from.lat == null || to.lat == null){
-    return { minutes: 0, meters: 0, source: 'invalid' };
+    return { minutes: 0, meters: 0, source: 'invalid', path: [] };
   }
-  const key = routeCacheKey(from, to);
+  const key = routeCacheKey(from, to) + '_road';
   if(state.routeCache[key]) return state.routeCache[key];
   // TODO: REST 키 + Cloud Functions 프록시로 카카오모빌리티 길찾기 API 호출
-  // 예: await fetch('/api/directions?origin=...&destination=...')
-  const meters = haversineM(from, to);
+  const straight = haversineM(from, to);
+  const path = roadApproxWaypoints(from, to);
+  let pathMeters = 0;
+  for(let i = 0; i < path.length - 1; i++) pathMeters += haversineM(path[i], path[i + 1]);
+  // 격자(맨해튼) 경로와 배율 중 큰 쪽을 도로근사로 사용
+  const meters = Math.max(pathMeters, straight * ROAD_APPROX_FACTOR);
   const minutes = (meters / 1000) / AVG_SPEED_KMH * 60;
-  const result = { minutes, meters, source: 'haversine-estimate' };
+  const result = { minutes, meters, source: 'road-approx', path };
   state.routeCache[key] = result;
   return result;
 }
 
+/** 도로 격자 근사 경로 (동서→남북 또는 그 반대). */
+function roadApproxWaypoints(a, b){
+  if(!a || !b) return [];
+  const dLat = Math.abs(Number(b.lat) - Number(a.lat));
+  const dLng = Math.abs(Number(b.lng) - Number(a.lng));
+  if(dLat < 1e-7 || dLng < 1e-7){
+    return [{ lat: Number(a.lat), lng: Number(a.lng) }, { lat: Number(b.lat), lng: Number(b.lng) }];
+  }
+  const via = dLng >= dLat
+    ? { lat: Number(a.lat), lng: Number(b.lng) }
+    : { lat: Number(b.lat), lng: Number(a.lng) };
+  return [
+    { lat: Number(a.lat), lng: Number(a.lng) },
+    via,
+    { lat: Number(b.lat), lng: Number(b.lng) }
+  ];
+}
+
 async function estimateOrderedRouteMinutes(stops){
   const pts = (stops || []).filter(s => s && s.lat != null && s.lng != null);
-  let total = 0;
+  let totalMin = 0;
+  let totalM = 0;
   for(let i = 0; i < pts.length - 1; i++){
     const t = await fetchTravelTime(pts[i], pts[i + 1]);
-    total += t.minutes || 0;
+    totalMin += t.minutes || 0;
+    totalM += t.meters || 0;
   }
-  return total;
+  return { minutes: totalMin, meters: totalM };
+}
+
+async function buildRoadApproxPath(stops){
+  const pts = (stops || []).filter(s => s && s.lat != null && s.lng != null);
+  const path = [];
+  let totalMin = 0;
+  let totalM = 0;
+  for(let i = 0; i < pts.length; i++){
+    if(i === 0){
+      path.push({ lat: pts[i].lat, lng: pts[i].lng });
+      continue;
+    }
+    const seg = await fetchTravelTime(pts[i - 1], pts[i]);
+    totalMin += seg.minutes || 0;
+    totalM += seg.meters || 0;
+    const wp = (seg.path && seg.path.length) ? seg.path.slice(1) : [{ lat: pts[i].lat, lng: pts[i].lng }];
+    wp.forEach(p => path.push(p));
+  }
+  return { path, minutes: totalMin, meters: totalM, source: 'road-approx' };
 }
 
 async function loadRouteOrders(){
@@ -789,11 +907,575 @@ async function persistRouteCache(){
     await db.collection('shuttle_data').doc('route_cache').set({
       cache: state.routeCache,
       updatedAt: new Date().toISOString(),
-      note: 'key=lat1,lng1_lat2,lng2 · fetchTravelTime 결과 캐시 (현재는 직선거리 추정)'
+      note: 'key=lat1,lng1_lat2,lng2_road · fetchTravelTime 도로근사 캐시'
     }, { merge: true });
   }catch(e){
     console.warn('persistRouteCache', e);
   }
+}
+
+async function loadRouteAttempts(){
+  try{
+    const snap = await db.collection('shuttle_data').doc('route_attempts').get();
+    state.redrawAttempts = snap.exists ? (snap.data().attempts || {}) : {};
+  }catch(e){
+    console.warn('route_attempts', e);
+    state.redrawAttempts = {};
+  }
+}
+
+function redrawBuses(){
+  ensureMapWorking();
+  return busesForMap();
+}
+
+function clearRedrawLayers(){
+  rLayers.forEach(l => { try{ l.setMap(null); }catch(e){} });
+  rLayers = [];
+}
+
+function setRedrawEmpty(show, html){
+  const empty = document.getElementById('redrawMapEmpty');
+  if(!empty) return;
+  if(html != null) empty.innerHTML = html;
+  empty.classList.toggle('show', !!show);
+}
+
+function updateRedrawGuide(){
+  const text = document.getElementById('redrawGuideText');
+  const saveBtn = document.getElementById('redrawGuideSaveBtn');
+  const bus = state.redrawBusId && redrawBuses().find(b => b.id === state.redrawBusId);
+  if(!text) return;
+  if(!bus){
+    text.textContent = '원하는 색 노선(또는 정류장)을 클릭해 선택하세요.';
+  } else if(!state.redrawDraft.length){
+    text.textContent = bus.label + ' · 정류장을 원하는 순서대로 클릭하세요. 같은 정류장을 다시 누르면 취소됩니다.';
+  } else {
+    const total = (bus.stops || []).filter(s => !isAcademyStop(s) && s.lat != null).length;
+    text.textContent = bus.label + ' · 선택 ' + state.redrawDraft.length + '/' + total + ' · 도로근사 ' +
+      ((state.redrawStats.meters||0)/1000).toFixed(1) + 'km / ' + Math.round(state.redrawStats.minutes||0) + '분';
+  }
+  if(saveBtn) saveBtn.disabled = !state.redrawDraft.length;
+  const clearBtn = document.getElementById('redrawClearOrderBtn');
+  const undoBtn = document.getElementById('redrawUndoBtn');
+  const clearSel = document.getElementById('redrawClearSelBtn');
+  const saveMain = document.getElementById('redrawSaveBtn');
+  const applyBtn = document.getElementById('redrawApplyOfficialBtn');
+  if(clearBtn) clearBtn.disabled = !state.redrawBusId;
+  if(undoBtn) undoBtn.disabled = !state.redrawDraft.length;
+  if(clearSel) clearSel.disabled = !state.redrawBusId;
+  if(saveMain) saveMain.disabled = !state.redrawDraft.length;
+  if(applyBtn) applyBtn.disabled = !state.redrawDraft.length || !state.redrawBusId;
+}
+
+function updateRedrawStatsUi(){
+  const n = document.getElementById('redrawStopCount');
+  const km = document.getElementById('redrawKm');
+  const min = document.getElementById('redrawMin');
+  if(n) n.textContent = String(state.redrawDraft.length);
+  if(km) km.textContent = state.redrawDraft.length > 1 ? ((state.redrawStats.meters||0)/1000).toFixed(1) : '-';
+  if(min) min.textContent = state.redrawDraft.length > 1 ? String(Math.round(state.redrawStats.minutes||0)) : '-';
+  updateRedrawGuide();
+}
+
+async function refreshRedrawStats(){
+  if(state.redrawDraft.length < 2){
+    state.redrawStats = { meters: 0, minutes: 0, source: 'road-approx' };
+    updateRedrawStatsUi();
+    return state.redrawStats;
+  }
+  const built = await buildRoadApproxPath(state.redrawDraft);
+  state.redrawStats = { meters: built.meters, minutes: built.minutes, source: built.source };
+  updateRedrawStatsUi();
+  return built;
+}
+
+function selectRedrawBus(busId, opts){
+  const keepDraft = !!(opts && opts.keepDraft);
+  const bus = redrawBuses().find(b => b.id === busId);
+  if(!bus) return;
+  state.redrawBusId = busId;
+  state.redrawActiveAttemptId = null;
+  if(!keepDraft){
+    // 순서만 지우고 정류장은 지도에 남김
+    state.redrawDraft = [];
+    state.redrawStats = { meters: 0, minutes: 0, source: 'road-approx' };
+  }
+  const sum = document.getElementById('redrawSelectionSummary');
+  if(sum){
+    sum.innerHTML = '선택 노선: <b>' + esc(bus.label) + '</b> · 정류장 ' +
+      (bus.stops||[]).filter(s => !isAcademyStop(s)).length + '개 · 순서를 지운 뒤 클릭으로 다시 그리세요.';
+  }
+  renderRedrawSide();
+  renderRedrawMap(true);
+  refreshRedrawStats();
+}
+
+function clearRedrawSelection(){
+  state.redrawBusId = null;
+  state.redrawDraft = [];
+  state.redrawActiveAttemptId = null;
+  state.redrawStats = { meters: 0, minutes: 0, source: 'road-approx' };
+  const sum = document.getElementById('redrawSelectionSummary');
+  if(sum) sum.textContent = '전체 노선 중 조정할 호차를 지도(또는 왼쪽 목록)에서 선택하세요.';
+  renderRedrawSide();
+  renderRedrawMap(false);
+  updateRedrawStatsUi();
+}
+
+function clearRedrawOrderOnly(){
+  if(!state.redrawBusId) return;
+  state.redrawDraft = [];
+  state.redrawActiveAttemptId = null;
+  state.redrawStats = { meters: 0, minutes: 0, source: 'road-approx' };
+  renderRedrawSide();
+  renderRedrawMap(false);
+  updateRedrawStatsUi();
+}
+
+function undoRedrawClick(){
+  if(!state.redrawDraft.length) return;
+  state.redrawDraft.pop();
+  renderRedrawSide();
+  renderRedrawMap(false);
+  refreshRedrawStats().then(() => {});
+}
+
+function pickRedrawStop(busId, stop){
+  if(!state.redrawBusId){
+    selectRedrawBus(busId);
+  }
+  if(busId !== state.redrawBusId){
+    // 다른 노선 정류장 클릭 → 그 노선으로 전환(순서 초기화)
+    selectRedrawBus(busId);
+  }
+  if(isAcademyStop(stop)) return;
+  if(stop.lat == null || stop.lng == null) return;
+  const idx = state.redrawDraft.findIndex(d => String(d.id) === String(stop.id));
+  if(idx >= 0) state.redrawDraft.splice(idx, 1);
+  else state.redrawDraft.push({
+    id: stop.id,
+    name: stop.name,
+    lat: stop.lat,
+    lng: stop.lng,
+    passengers: stop.passengers || 0
+  });
+  state.redrawActiveAttemptId = null;
+  renderRedrawSide();
+  renderRedrawMap(false);
+  refreshRedrawStats().then(() => {});
+}
+
+function renderRedrawSide(){
+  ensureMapWorking();
+  const orderRow = document.getElementById('redrawLineOrderRow');
+  if(orderRow){
+    orderRow.innerHTML =
+      `<span class="meta" style="font-weight:800;color:var(--navy)">기준</span>` +
+      `<button type="button" class="chip ${state.redrawTab==='등원'?'active':''}" data-redraw-tab="등원">등원</button>` +
+      `<button type="button" class="chip ${state.redrawTab==='하원'?'active':''}" data-redraw-tab="하원">하원</button>`;
+    orderRow.querySelectorAll('[data-redraw-tab]').forEach(btn => {
+      btn.onclick = () => {
+        state.redrawTab = btn.getAttribute('data-redraw-tab');
+        renderRedrawSide();
+        renderRedrawMap(false);
+      };
+    });
+  }
+
+  const buses = redrawBuses();
+  const list = document.getElementById('redrawBusList');
+  if(list){
+    if(!buses.length){
+      list.innerHTML = `<div class="map-tip">이 분원에는 지도 좌표가 있는 호차가 없습니다.</div>`;
+    } else {
+      list.innerHTML = buses.map(b => {
+        const col = busColor(b);
+        const sel = state.redrawBusId === b.id;
+        const attempts = Object.values(state.redrawAttempts || {}).filter(a => a.busId === b.id).length;
+        return `<div class="map-bus-item${sel?' redraw-selected':''}" data-redraw-bus="${esc(b.id)}">
+          <div class="row">
+            <span class="map-swatch" style="background:${col}"></span>
+            <div style="flex:1">
+              <div style="font-weight:800;font-size:13px">${esc(b.label)}</div>
+              <div class="meta">정류장 ${(b.stops||[]).filter(s=>!isAcademyStop(s)).length} · 시도 ${attempts}건</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-redraw-bus]').forEach(el => {
+        el.onclick = () => selectRedrawBus(el.getAttribute('data-redraw-bus'));
+      });
+    }
+  }
+
+  const stopList = document.getElementById('redrawStopList');
+  if(stopList){
+    if(!state.redrawDraft.length){
+      stopList.innerHTML = `<div class="map-tip">아직 순서가 없습니다. 지도에서 정류장을 클릭하세요.</div>`;
+    } else {
+      stopList.innerHTML = state.redrawDraft.map((s, i) => `
+        <div class="stop-list-item" style="cursor:pointer" data-redraw-stop-idx="${i}">
+          <span class="dot" style="background:${state.redrawBusId ? busColor(redrawBuses().find(b=>b.id===state.redrawBusId)||{}) : 'var(--navy)'}"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700">${i+1}. ${esc(s.name || ('정류장 '+s.id))}</div>
+            <div class="meta">${Number(s.passengers)||0}명 · 클릭 시 제외</div>
+          </div>
+        </div>`).join('');
+      stopList.querySelectorAll('[data-redraw-stop-idx]').forEach(el => {
+        el.onclick = () => {
+          const i = Number(el.getAttribute('data-redraw-stop-idx'));
+          if(Number.isFinite(i)) {
+            state.redrawDraft.splice(i, 1);
+            renderRedrawSide();
+            renderRedrawMap(false);
+            refreshRedrawStats();
+          }
+        };
+      });
+    }
+  }
+
+  renderRedrawAttempts();
+  updateRedrawStatsUi();
+}
+
+function renderRedrawAttempts(){
+  const box = document.getElementById('redrawAttemptList');
+  if(!box) return;
+  let list = Object.values(state.redrawAttempts || {});
+  if(state.redrawBusId) list = list.filter(a => a.busId === state.redrawBusId);
+  list.sort((a,b) => String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!list.length){
+    box.innerHTML = `<div class="map-tip">저장된 시도가 없습니다. 그린 뒤 「이 시도 저장」을 누르세요.</div>`;
+    return;
+  }
+  box.innerHTML = list.map(a => `
+    <div class="attempt-item${state.redrawActiveAttemptId===a.id?' active':''}" data-attempt-id="${esc(a.id)}">
+      <div class="row">
+        <div style="font-weight:800;font-size:13px">${esc(a.name || a.id)}</div>
+        <span class="badge gray">${esc(a.tab || '')}</span>
+      </div>
+      <div class="meta">${esc(a.busLabel || a.busId)} · 정류장 ${(a.stopIds||[]).length}개 · ${((a.meters||0)/1000).toFixed(1)}km / ${Math.round(a.minutes||0)}분</div>
+      <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-navy btn-sm" data-attempt-load="${esc(a.id)}">불러오기</button>
+        <button type="button" class="btn btn-outline btn-sm" data-attempt-del="${esc(a.id)}">삭제</button>
+      </div>
+    </div>`).join('');
+  box.querySelectorAll('[data-attempt-load]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); loadRedrawAttempt(btn.getAttribute('data-attempt-load')); };
+  });
+  box.querySelectorAll('[data-attempt-del]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); deleteRedrawAttempt(btn.getAttribute('data-attempt-del')); };
+  });
+}
+
+function loadRedrawAttempt(id){
+  const a = state.redrawAttempts[id];
+  if(!a) return;
+  const bus = redrawBuses().find(b => b.id === a.busId) || state.buses.find(b => b.id === a.busId);
+  if(!bus){ alert('해당 호차 데이터를 찾을 수 없습니다.'); return; }
+  state.redrawBusId = a.busId;
+  state.redrawTab = a.tab || '등원';
+  state.redrawActiveAttemptId = id;
+  const byId = Object.fromEntries((bus.stops||[]).map(s => [String(s.id), s]));
+  state.redrawDraft = (a.stopIds || []).map(sid => {
+    const s = byId[String(sid)];
+    return s ? { id: s.id, name: s.name, lat: s.lat, lng: s.lng, passengers: s.passengers||0 } : null;
+  }).filter(Boolean);
+  document.getElementById('redrawAttemptName').value = a.name || '';
+  const sum = document.getElementById('redrawSelectionSummary');
+  if(sum) sum.innerHTML = '불러온 시도: <b>' + esc(a.name||id) + '</b>';
+  renderRedrawSide();
+  renderRedrawMap(true);
+  refreshRedrawStats();
+}
+
+async function saveRedrawAttempt(){
+  if(!state.redrawBusId || !state.redrawDraft.length){
+    alert('노선을 선택하고 정류장 순서를 클릭한 뒤 저장하세요.');
+    return;
+  }
+  const bus = redrawBuses().find(b => b.id === state.redrawBusId);
+  if(!bus) return;
+  await refreshRedrawStats();
+  const nameInput = document.getElementById('redrawAttemptName');
+  const name = (nameInput && nameInput.value.trim()) || (bus.label + ' 시도 ' + new Date().toLocaleString('ko-KR'));
+  const id = 'att_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  const attempt = {
+    id,
+    name,
+    busId: bus.id,
+    busLabel: bus.label,
+    branch: bus.branch,
+    tab: state.redrawTab,
+    stopIds: state.redrawDraft.map(s => String(s.id)),
+    stopNames: state.redrawDraft.map(s => s.name || String(s.id)),
+    meters: state.redrawStats.meters || 0,
+    minutes: state.redrawStats.minutes || 0,
+    source: state.redrawStats.source || 'road-approx',
+    createdAt: new Date().toISOString()
+  };
+  state.redrawAttempts[id] = attempt;
+  state.redrawActiveAttemptId = id;
+  try{
+    await db.collection('shuttle_data').doc('route_attempts').set({
+      attempts: state.redrawAttempts,
+      updatedAt: attempt.createdAt
+    }, { merge: true });
+    await persistRouteCache();
+    if(nameInput) nameInput.value = '';
+    renderRedrawAttempts();
+    alert('시도를 저장했습니다. (route_attempts · 원본 미변경)');
+  }catch(e){
+    console.error(e);
+    delete state.redrawAttempts[id];
+    alert('시도 저장 실패: ' + e.message);
+  }
+}
+
+async function deleteRedrawAttempt(id){
+  if(!state.redrawAttempts[id]) return;
+  if(!confirm('이 시도를 삭제할까요?')) return;
+  delete state.redrawAttempts[id];
+  if(state.redrawActiveAttemptId === id) state.redrawActiveAttemptId = null;
+  try{
+    await db.collection('shuttle_data').doc('route_attempts').set({
+      attempts: state.redrawAttempts,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    renderRedrawAttempts();
+  }catch(e){
+    alert('삭제 실패: ' + e.message);
+  }
+}
+
+async function applyRedrawAsOfficialOrder(){
+  if(!state.redrawBusId || !state.redrawDraft.length) return;
+  const busId = state.redrawBusId;
+  const key = state.redrawTab === '하원' ? '하원순서' : '등원순서';
+  const entry = state.routeOrders[busId] || {};
+  entry[key] = state.redrawDraft.map(s => String(s.id));
+  entry.updatedAt = new Date().toISOString();
+  state.routeOrders[busId] = entry;
+  try{
+    await db.collection('shuttle_data').doc('route_orders').set({
+      orders: state.routeOrders,
+      updatedAt: entry.updatedAt
+    }, { merge: true });
+    state.routeOrdersOriginal = JSON.parse(JSON.stringify(state.routeOrders));
+    await persistRouteCache();
+    alert('공식 노선 순서로 적용했습니다. (route_orders · 원본 시트 미변경)');
+  }catch(e){
+    alert('적용 실패: ' + e.message);
+  }
+}
+
+function forceRedrawRelayout(){
+  if(!rmap) return;
+  try{ rmap.relayout(); }catch(e){}
+  [80, 250, 600].forEach(ms => setTimeout(() => {
+    try{ if(rmap) rmap.relayout(); }catch(e){}
+  }, ms));
+}
+
+async function renderRedrawMap(fitBounds){
+  const seq = ++redrawRenderSeq;
+  const buses = redrawBuses();
+  const hasGeo = buses.some(b => (b.stops||[]).some(s => s.lat != null && s.lng != null));
+  if(!hasGeo){
+    clearRedrawLayers();
+    setRedrawEmpty(true, null);
+    return;
+  }
+  if(!rmap){
+    setRedrawEmpty(true, `<div><div style="font-size:32px;margin-bottom:8px">🗺️</div><p><b>카카오맵 로딩 중…</b></p></div>`);
+    return;
+  }
+  setRedrawEmpty(false);
+  clearRedrawLayers();
+  const bounds = new kakao.maps.LatLngBounds();
+  let boundCount = 0;
+
+  // 배경: 전체 노선(선택 외는 흐리게)
+  for(const bus of buses){
+    if(seq !== redrawRenderSeq) return;
+    const col = busColor(bus);
+    const selected = state.redrawBusId === bus.id;
+    const dim = state.redrawBusId && !selected;
+    const op = dim ? 0.22 : (selected ? 0.95 : 0.7);
+    let stops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+    if(!selected){
+      const saved = state.routeOrders[bus.id];
+      const preferKey = state.redrawTab === '하원' ? '하원순서' : '등원순서';
+      const altKey = preferKey === '등원순서' ? '하원순서' : '등원순서';
+      const orderIds = saved && ((saved[preferKey] && saved[preferKey].length) ? saved[preferKey] : saved[altKey]);
+      if(orderIds && orderIds.length){
+        const byId = new Map(stops.map(s => [String(s.id), s]));
+        const ordered = [];
+        orderIds.forEach(id => { const s = byId.get(String(id)); if(s){ ordered.push(s); byId.delete(String(id)); } });
+        byId.forEach(s => ordered.push(s));
+        stops = ordered;
+      }
+      if(stops.length > 1){
+        const pl = new kakao.maps.Polyline({
+          path: stops.map(s => new kakao.maps.LatLng(s.lat, s.lng)),
+          strokeWeight: selected ? 5 : 3,
+          strokeColor: col,
+          strokeOpacity: op,
+          strokeStyle: 'solid'
+        });
+        pl.setMap(rmap);
+        rLayers.push(pl);
+        kakao.maps.event.addListener(pl, 'click', () => selectRedrawBus(bus.id));
+      }
+    }
+
+    // 선택 노선: 순서가 있으면 도로근사 경로, 없으면 핀만
+    if(selected){
+      const pinStops = (bus.stops || []).filter(s => s.lat != null && s.lng != null);
+      if(state.redrawDraft.length > 1){
+        const built = await buildRoadApproxPath(state.redrawDraft);
+        if(seq !== redrawRenderSeq) return;
+        const pl = new kakao.maps.Polyline({
+          path: built.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+          strokeWeight: 6,
+          strokeColor: col,
+          strokeOpacity: 0.95,
+          strokeStyle: 'solid'
+        });
+        pl.setMap(rmap);
+        rLayers.push(pl);
+      }
+
+      pinStops.forEach(s => {
+        const ordIdx = state.redrawDraft.findIndex(d => String(d.id) === String(s.id));
+        const picked = ordIdx >= 0;
+        const sz = picked ? 28 : 20;
+        const id = 'rd-' + bus.id.replace(/__/g,'-') + '-' + s.id;
+        const label = picked ? String(ordIdx + 1) : (isAcademyStop(s) ? '학' : '');
+        const cls = 'stop-bubble ' + (picked ? 'redraw-num' : 'redraw-idle');
+        const tip = picked
+          ? ((s.name||'') + ' · 순서 ' + (ordIdx+1) + ' · 다시 클릭하면 취소')
+          : ((s.name||'') + ' · 클릭하여 다음 순서');
+        const html = '<div id="'+id+'" class="'+cls+'" title="'+esc(tip)+'"'
+          + ' style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+col+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:'+(picked?12:10)+'px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer">'+label+'</div>';
+        const pos = new kakao.maps.LatLng(s.lat, s.lng);
+        const overlay = new kakao.maps.CustomOverlay({
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: picked ? 30 : 20
+        });
+        overlay.setMap(rmap);
+        rLayers.push(overlay);
+        bounds.extend(pos);
+        boundCount++;
+        setTimeout(() => {
+          if(seq !== redrawRenderSeq) return;
+          const el = document.getElementById(id);
+          if(!el) return;
+          el.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            pickRedrawStop(bus.id, s);
+          };
+        }, 0);
+      });
+    } else {
+      // 비선택 노선도 정류장 클릭으로 선택 가능 (작은 핀)
+      stops.forEach(s => {
+        if(isAcademyStop(s)) return;
+        const id = 'rd0-' + bus.id.replace(/__/g,'-') + '-' + s.id;
+        const html = '<div id="'+id+'" class="stop-bubble" title="'+esc((s.name||'')+' · 클릭하여 이 노선 선택')+'"'
+          + ' style="width:14px;height:14px;border-radius:50%;background:'+col+';border:2px solid #fff;opacity:'+(dim?0.35:0.85)+';cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)"></div>';
+        const pos = new kakao.maps.LatLng(s.lat, s.lng);
+        const overlay = new kakao.maps.CustomOverlay({
+          position: pos, content: html, xAnchor: 0.5, yAnchor: 0.5, zIndex: 5
+        });
+        overlay.setMap(rmap);
+        rLayers.push(overlay);
+        bounds.extend(pos);
+        boundCount++;
+        setTimeout(() => {
+          if(seq !== redrawRenderSeq) return;
+          const el = document.getElementById(id);
+          if(el) el.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); selectRedrawBus(bus.id); };
+        }, 0);
+      });
+    }
+  }
+
+  if(seq !== redrawRenderSeq) return;
+  if(fitBounds && boundCount){
+    try{
+      if(boundCount === 1){
+        rmap.setCenter(bounds.getNorthEast());
+        rmap.setLevel(5);
+      } else rmap.setBounds(bounds);
+    }catch(e){
+      const branch = effectiveMapBranch();
+      const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+      rmap.setCenter(new kakao.maps.LatLng(c.lat, c.lng));
+      rmap.setLevel(c.level);
+    }
+  }
+  forceRedrawRelayout();
+}
+
+function initRedrawMap(){
+  if(rmapReady && rmap){
+    forceRedrawRelayout();
+    renderRedrawMap(true);
+    return;
+  }
+  const start = () => {
+    try{
+      const el = document.getElementById('redrawMap');
+      if(!el) return;
+      if(el.offsetWidth < 40 || el.offsetHeight < 40){
+        setTimeout(start, 120);
+        return;
+      }
+      const branch = effectiveMapBranch();
+      const c = BRANCH_MAP_CENTER[branch] || BRANCH_MAP_CENTER['장안'];
+      rmap = new kakao.maps.Map(el, {
+        center: new kakao.maps.LatLng(c.lat, c.lng),
+        level: c.level
+      });
+      rmapReady = true;
+      setRedrawEmpty(false);
+      renderRedrawSide();
+      renderRedrawMap(true);
+      forceRedrawRelayout();
+    }catch(err){
+      console.error(err);
+      rmapReady = false;
+      rmap = null;
+      setRedrawEmpty(true, `<div><p><b>카카오맵 연결 실패</b></p><p class="map-tip">${esc(err && err.message || err)}</p></div>`);
+    }
+  };
+  if(typeof kakao === 'undefined' || !kakao.maps){
+    setTimeout(() => {
+      if(typeof kakao !== 'undefined' && kakao.maps) kakao.maps.load(start);
+      else setRedrawEmpty(true, `<div><p><b>카카오맵 SDK를 불러오는 중…</b></p></div>`);
+    }, 300);
+    return;
+  }
+  kakao.maps.load(start);
+}
+
+function showRedrawView(){
+  document.querySelector('main').classList.add('map-mode');
+  ensureMapWorking();
+  renderRedrawSide();
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      if(!rmapReady || !rmap) initRedrawMap();
+      else {
+        forceRedrawRelayout();
+        renderRedrawMap(true);
+      }
+    }, 50);
+  });
 }
 
 function toggleReassignMode(force){
@@ -1281,8 +1963,12 @@ function updateOrderPickBanner(){
 function pickStopForOrder(busId, stop){
   if(!state.mapOrderPicking || busId !== state.orderBusId) return false;
   if(isAcademyStop(stop)) return true;
-  if(state.orderDraft.some(d => String(d.id) === String(stop.id))) return true;
-  state.orderDraft.push(stop);
+  const idx = state.orderDraft.findIndex(d => String(d.id) === String(stop.id));
+  if(idx >= 0){
+    state.orderDraft.splice(idx, 1); // 같은 정류장 재클릭 → 선택 취소
+  } else {
+    state.orderDraft.push(stop);
+  }
   updateOrderPickBanner();
   renderOrderList();
   renderKakaoMap(false);
@@ -1385,8 +2071,10 @@ async function renderOrderList(){
   if(hint && bus){
     hint.textContent = '예상 총 운행시간 계산 중…';
     const pts = [...state.orderDraft, academy];
-    const mins = await estimateOrderedRouteMinutes(pts);
-    hint.textContent = '예상 총 운행시간: 약 ' + Math.round(mins) + '분 (' + (state.routeCache && Object.keys(state.routeCache).length ? '캐시/추정' : '직선거리 추정') + ' · Directions API 연동 예정)';
+    const est = await estimateOrderedRouteMinutes(pts);
+    const mins = Math.round(est.minutes || 0);
+    const km = ((est.meters || 0) / 1000).toFixed(1);
+    hint.textContent = '예상 총 운행: 약 ' + mins + '분 · ' + km + 'km (도로근사 ×' + ROAD_APPROX_FACTOR + ' · 네비 API 연동 전)';
   }
 }
 
@@ -1440,12 +2128,14 @@ function bindOrderItemDrag(el){
 
 async function saveRouteOrder(){
   if(!state.orderBusId) return;
-  // 지도 클릭으로 일부만 찍은 경우 나머지 정류장은 뒤에 붙임
-  const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
-  if(bus){
-    (bus.stops || []).filter(s => !isAcademyStop(s)).forEach(s => {
-      if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
-    });
+  // 지도 클릭 편성 중이면 찍은 순서만 저장(미선택 정류장 자동 붙이지 않음)
+  if(!state.mapOrderPicking){
+    const bus = state.mapWorking.find(b => b.id === state.orderBusId) || state.buses.find(b => b.id === state.orderBusId);
+    if(bus){
+      (bus.stops || []).filter(s => !isAcademyStop(s)).forEach(s => {
+        if(!state.orderDraft.some(d => String(d.id) === String(s.id))) state.orderDraft.push(s);
+      });
+    }
   }
   saveOrderDraftToStateMemory();
   const entry = state.routeOrders[state.orderBusId] || {};
@@ -1567,7 +2257,6 @@ function renderMapSide(){
         </div>
         ${reassignCtrls}
         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" class="btn btn-navy btn-sm" data-order-map-btn="${esc(b.id)}">순서편집 시작</button>
           <button type="button" class="btn btn-outline btn-sm" data-order-btn="${esc(b.id)}">리스트로 순서</button>
         </div>
       </div>`;
@@ -1596,12 +2285,6 @@ function renderMapSide(){
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         openOrderPanel(btn.getAttribute('data-order-btn'), { mapPick: false });
-      });
-    });
-    list.querySelectorAll('[data-order-map-btn]').forEach(btn => {
-      btn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        openOrderPanel(btn.getAttribute('data-order-map-btn'), { mapPick: true });
       });
     });
   }
@@ -2508,6 +3191,7 @@ function renderTabs(){
       document.getElementById(t.view).classList.add('active');
       renderTabs();
       if(t.key === 'map') showMapView();
+      else if(t.key === 'redraw') showRedrawView();
       else hideMapMode();
       if(t.key === 'sim'){ renderSimSelect(); renderIncStopSelect(); }
       if(t.key === 'alerts') renderAlerts();
@@ -2534,6 +3218,10 @@ function renderBranches(){
       renderAlertBanner();
       if(state.activeTab === 'map'){
         resetMapPreview();
+      }
+      if(state.activeTab === 'redraw'){
+        clearRedrawSelection();
+        showRedrawView();
       }
       if(state.activeTab === 'alerts') renderAlerts();
     };
@@ -2593,6 +3281,7 @@ function rebuildBusesForDayMode(){
   renderIncStopSelect();
   renderAlertBanner();
   if(state.activeTab === 'map') showMapView();
+  if(state.activeTab === 'redraw') showRedrawView();
   if(state.activeTab === 'alerts') renderAlerts();
   const paxBuses = state.buses.filter(b => b.passengers > 0).length;
   const status = document.getElementById('loadStatus');
@@ -3297,6 +3986,7 @@ async function loadAll(){
   await ensureRules();
   await loadRouteOrders();
   await loadRouteCache();
+  await loadRouteAttempts();
 
   const snaps = await Promise.all(SHEETS.map(name => db.collection('shuttle_data').doc(name).get()));
   SHEETS.forEach((name, i) => {
@@ -3331,6 +4021,7 @@ async function loadAll(){
   renderAlertBanner();
   fillRulesForm();
   if(state.activeTab === 'map') showMapView();
+  if(state.activeTab === 'redraw') showRedrawView();
   if(state.activeTab === 'alerts') renderAlerts();
 
   const paxBuses = state.buses.filter(b => b.passengers > 0).length;
@@ -3394,6 +4085,12 @@ document.getElementById('reassignAutoBtn').onclick = () => buildAutoReassignDraf
 document.getElementById('reassignRunSimBtn').onclick = () => runReductionSimulation();
 document.getElementById('reassignClearSelBtn').onclick = () => clearReassignSelection();
 document.getElementById('reassignConfirmBtn').onclick = () => confirmReassignPlan();
+document.getElementById('redrawClearOrderBtn').onclick = () => clearRedrawOrderOnly();
+document.getElementById('redrawUndoBtn').onclick = () => undoRedrawClick();
+document.getElementById('redrawClearSelBtn').onclick = () => clearRedrawSelection();
+document.getElementById('redrawSaveBtn').onclick = () => saveRedrawAttempt().catch(err => alert(err.message));
+document.getElementById('redrawGuideSaveBtn').onclick = () => saveRedrawAttempt().catch(err => alert(err.message));
+document.getElementById('redrawApplyOfficialBtn').onclick = () => applyRedrawAsOfficialOrder().catch(err => alert(err.message));
 document.querySelectorAll('[data-order-tab]').forEach(btn => {
   btn.addEventListener('click', () => switchOrderTab(btn.getAttribute('data-order-tab')));
 });

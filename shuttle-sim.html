@@ -111,7 +111,39 @@ main{padding:24px 28px 60px;max-width:1180px;margin:0 auto}
 footer{text-align:center;font-size:11px;color:var(--muted);padding:20px}
 main.map-mode{max-width:none}
 .map-layout{display:grid;grid-template-columns:300px 1fr;gap:14px;min-height:560px;height:calc(100vh - 210px)}
+.map-layout.map-layout-edge{display:block;grid-template-columns:unset;gap:0}
+.map-layout.map-layout-edge .map-main{height:calc(100vh - 210px);min-height:560px}
 .map-side{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.map-edge-dock{
+  position:absolute;left:12px;top:56px;bottom:12px;z-index:15;
+  width:min(320px,42vw);max-width:calc(100% - 24px);
+  display:flex;flex-direction:row;align-items:stretch;gap:0;
+  padding:0;background:transparent;border:none;border-radius:0;overflow:visible;
+  box-shadow:none;
+}
+.map-edge-dock .map-edge-inner{
+  flex:1;min-width:0;min-height:0;overflow:auto;
+  background:rgba(255,255,255,.96);border:1px solid var(--border);border-radius:12px;
+  padding:12px;display:flex;flex-direction:column;gap:8px;
+  box-shadow:0 8px 28px rgba(0,0,0,.16);
+}
+.map-edge-toggle{
+  flex-shrink:0;align-self:flex-start;margin:0 0 0 0;
+  width:28px;min-height:72px;border:1px solid var(--border);border-radius:0 10px 10px 0;
+  background:rgba(255,255,255,.96);color:var(--navy);font-size:12px;font-weight:800;
+  cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(0,0,0,.12);
+  writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:.04em;padding:10px 4px;
+}
+.map-edge-dock:not([data-collapsed="true"]) .map-edge-toggle{
+  border-radius:0 10px 10px 0;margin-left:-1px;
+}
+.map-edge-dock[data-collapsed="true"]{
+  width:auto;bottom:auto;
+}
+.map-edge-dock[data-collapsed="true"] .map-edge-inner{display:none}
+.map-edge-dock[data-collapsed="true"] .map-edge-toggle{
+  border-radius:10px;min-height:auto;writing-mode:horizontal-tb;width:auto;padding:8px 12px;
+}
 .map-main{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:#E8EEF5;height:100%;min-height:480px}
 #kakaoMap{width:100%;height:480px;min-height:480px}
 @media (min-width:901px){
@@ -156,6 +188,8 @@ main.map-mode{max-width:none}
 .map-tip{font-size:11px;color:var(--muted);line-height:1.45}
 @media (max-width:900px){
   .map-layout{grid-template-columns:1fr;height:auto}
+  .map-layout.map-layout-edge .map-main{height:auto;min-height:480px}
+  .map-edge-dock{top:56px;bottom:8px;width:min(300px,78vw)}
   #kakaoMap{height:420px}
 }
 @media (max-width:640px){
@@ -221,14 +255,31 @@ main.map-mode{max-width:none}
 }
 .redraw-route-legend{
   position:absolute;left:12px;bottom:12px;z-index:18;
-  display:flex;flex-direction:column;gap:6px;align-items:stretch;
-  max-width:min(260px,48%);max-height:42%;overflow:auto;
+  display:flex;flex-direction:column;gap:0;align-items:stretch;
+  max-width:min(280px,52%);
   pointer-events:none;
 }
+.redraw-route-legend .legend-head{
+  pointer-events:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:rgba(27,31,39,.9);color:#fff;border-radius:10px 10px 0 0;
+  padding:8px 10px;font-size:12px;font-weight:800;
+}
+.redraw-route-legend .legend-head button{
+  border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:8px;
+  padding:4px 8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;
+}
+.redraw-route-legend .legend-body{
+  pointer-events:auto;display:flex;flex-direction:column;gap:6px;
+  background:rgba(255,255,255,.94);border:1px solid var(--border);border-top:0;
+  border-radius:0 0 10px 10px;padding:8px;box-shadow:0 4px 14px rgba(0,0,0,.14);
+  max-height:none;overflow:visible;
+}
+.redraw-route-legend[data-collapsed="true"] .legend-body{display:none}
+.redraw-route-legend[data-collapsed="true"] .legend-head{border-radius:10px}
 .redraw-legend-btn{
   pointer-events:auto;display:block;width:100%;text-align:left;
-  background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:10px;
-  padding:8px 10px 8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.14);
+  background:#fff;border:1px solid var(--border);border-radius:10px;
+  padding:8px 10px 8px 12px;
   cursor:pointer;font-family:inherit;line-height:1.35;
 }
 .redraw-legend-btn:hover{border-color:var(--slate);background:#fff}
@@ -307,10 +358,15 @@ body.map-only #coordMissingBanner,
 body.map-only #branchRow,
 body.map-only #dayGroupRow,
 body.map-only footer,
-body.map-only .map-side,
+body.map-only .map-side:not(.map-edge-dock),
 body.map-only .redraw-guide,
 body.map-only .coord-pick-banner{
   display:none !important;
+}
+body.map-only .map-edge-dock{
+  display:flex !important;
+  top:72px;
+  z-index:60;
 }
 body.map-only{
   background:#fff;
@@ -465,56 +521,7 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
   </section>
 
   <section class="view" id="view-map">
-    <div class="map-layout">
-      <aside class="map-side">
-        <div class="map-banner">현재 노선상황 · 도로(네비) 기준 경로 · 원본 미변경</div>
-        <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
-        <div id="mapBusList"></div>
-        <button class="btn btn-outline" type="button" id="toolPanelToggleBtn"
-          style="width:100%;margin-top:12px">
-          ⚙ 재배정·감차 도구 열기
-        </button>
-        <div id="toolPanel" style="display:none;margin-top:8px;flex-direction:column;gap:8px">
-          <p class="map-tip">노선을 <b>새로 짜는</b> 작업은 <b>노선 다시 그리기</b> 탭에서 합니다. 이 탭은 현재 호차별 노선·탑승 현황과 감차·흡수 미리보기용입니다.</p>
-          <div id="coordPickPanel" class="reassign-panel" style="display:none">
-            <div class="map-tip" style="margin:0;font-weight:800;color:var(--navy)">좌표 없는 정류장 · 지도에서 위치 찍기</div>
-            <div class="coord-save-notice" style="margin:0">저장 시 Firestore 원본 <code>정류장</code> 시트에 반영됩니다.</div>
-            <div id="coordPickList" class="coord-missing-list" style="max-height:280px"></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-navy btn-sm" type="button" id="coordPickSaveAllBtn">찍은 좌표 전체 저장</button>
-              <button class="btn btn-outline btn-sm" type="button" id="coordPickCancelBtn">위치 찍기 종료</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
-          </div>
-          <div class="reassign-panel" id="reassignPanel" style="display:none">
-            <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션</div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer">
-              <input type="checkbox" id="reassignSkipEmptyChk" checked>
-              탑승자 없는 정류장은 빼고 편성
-            </label>
-            <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
-              <button class="btn btn-outline btn-sm" type="button" id="reassignRunSimBtn">감차 시뮬레이션 실행</button>
-              <button class="btn btn-outline btn-sm" type="button" id="reassignClearSelBtn">선택 초기화</button>
-            </div>
-            <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">이번 재배정 초안</div>
-            <div id="reassignDraftList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
-            <button class="btn btn-yellow btn-sm" type="button" id="reassignConfirmBtn" disabled>이 배정안 확정 (미리보기 요약)</button>
-            <div id="reassignResult"></div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px">
-            <button class="btn btn-outline btn-sm" type="button" id="mapPruneEmptyBtn">탑승 0명 정류장 지우기</button>
-          </div>
-          <div class="map-preview-log" id="mapPreviewLog">재배정·감차 미리보기 이동이 있으면 여기에 표시됩니다.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-outline" type="button" id="mapUndoBtn" disabled>한 단계 되돌리기</button>
-            <button class="btn btn-outline" type="button" id="mapResetBtn">미리보기 초기화</button>
-          </div>
-        </div>
-      </aside>
+    <div class="map-layout map-layout-edge">
       <div class="map-main">
         <div class="map-only-toolbar" aria-label="지도 보기 도구">
           <div class="map-zoom-group" title="확대/축소">
@@ -525,6 +532,58 @@ body.map-only .map-only-toolbar [data-map-only-exit]{display:inline-flex}
           <button class="btn btn-ghost btn-sm" type="button" data-map-only-exit style="background:rgba(255,255,255,.18);color:#fff">화면으로 돌아가기</button>
           <button class="btn btn-navy btn-sm" type="button" data-map-only-print data-map-target="map">인쇄</button>
         </div>
+        <aside class="map-side map-edge-dock" id="mapSidePanel" data-collapsed="false">
+          <div class="map-edge-inner">
+            <div class="map-banner">현재 노선상황 · 도로(네비) 기준 경로 · 원본 미변경</div>
+            <div class="filter-row" style="margin:0" id="mapBusFilterRow"></div>
+            <div id="mapBusList"></div>
+            <button class="btn btn-outline" type="button" id="toolPanelToggleBtn"
+              style="width:100%;margin-top:4px">
+              ⚙ 재배정·감차 도구 열기
+            </button>
+            <div id="toolPanel" style="display:none;margin-top:8px;flex-direction:column;gap:8px">
+              <p class="map-tip">노선을 <b>새로 짜는</b> 작업은 <b>노선 다시 그리기</b> 탭에서 합니다. 이 탭은 현재 호차별 노선·탑승 현황과 감차·흡수 미리보기용입니다.</p>
+              <div id="coordPickPanel" class="reassign-panel" style="display:none">
+                <div class="map-tip" style="margin:0;font-weight:800;color:var(--navy)">좌표 없는 정류장 · 지도에서 위치 찍기</div>
+                <div class="coord-save-notice" style="margin:0">저장 시 Firestore 원본 <code>정류장</code> 시트에 반영됩니다.</div>
+                <div id="coordPickList" class="coord-missing-list" style="max-height:280px"></div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-navy btn-sm" type="button" id="coordPickSaveAllBtn">찍은 좌표 전체 저장</button>
+                  <button class="btn btn-outline btn-sm" type="button" id="coordPickCancelBtn">위치 찍기 종료</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-outline" type="button" id="reassignModeBtn">노선 재배정 모드</button>
+              </div>
+              <div class="reassign-panel" id="reassignPanel" style="display:none">
+                <div class="map-tip" style="margin:0"><b>1.</b> 각 카드의 <b>없앨 노선</b>(라디오) 1개 → <b>2.</b> <b>흡수</b>(체크박스) 여러 개 → <b>3.</b> 자동분배 또는 감차 시뮬레이션</div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer">
+                  <input type="checkbox" id="reassignSkipEmptyChk" checked>
+                  탑승자 없는 정류장은 빼고 편성
+                </label>
+                <div id="reassignSelectionSummary" class="map-tip">없앨 노선·흡수 노선을 호차 카드에서 선택하세요.</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-navy btn-sm" type="button" id="reassignAutoBtn">자동분배 초안 생성</button>
+                  <button class="btn btn-outline btn-sm" type="button" id="reassignRunSimBtn">감차 시뮬레이션 실행</button>
+                  <button class="btn btn-outline btn-sm" type="button" id="reassignClearSelBtn">선택 초기화</button>
+                </div>
+                <div class="map-tip" style="font-weight:700;color:var(--navy);margin:0">이번 재배정 초안</div>
+                <div id="reassignDraftList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
+                <button class="btn btn-yellow btn-sm" type="button" id="reassignConfirmBtn" disabled>이 배정안 확정 (미리보기 요약)</button>
+                <div id="reassignResult"></div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px">
+                <button class="btn btn-outline btn-sm" type="button" id="mapPruneEmptyBtn">탑승 0명 정류장 지우기</button>
+              </div>
+              <div class="map-preview-log" id="mapPreviewLog">재배정·감차 미리보기 이동이 있으면 여기에 표시됩니다.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-outline" type="button" id="mapUndoBtn" disabled>한 단계 되돌리기</button>
+                <button class="btn btn-outline" type="button" id="mapResetBtn">미리보기 초기화</button>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="map-edge-toggle" id="mapSideToggle" aria-expanded="true" title="노선 정보 접기/펼치기">노선 정보</button>
+        </aside>
         <div class="coord-pick-banner" id="coordPickMapBanner">
           <span id="coordPickMapText">지도에서 정류장 위치를 클릭하세요.</span>
           <button class="btn btn-yellow btn-sm" type="button" id="coordPickBannerCancel">취소</button>
@@ -851,6 +910,8 @@ const state = {
   mapMoves: [],
   mapBusFilter: 'ALL',
   mapBusAccordion: {}, // { [busId]: true } — 현재 노선상황 호차 카드 펼침
+  mapSideOpen: true, // 지도 가장자리 노선 정보창
+  redrawLegendOpen: true,
   busColorOverrides: {}, // { [busId]: '#rrggbb' } — 사용자가 지정한 노선 색
   mapReady: false,
   hydrations: {},
@@ -1961,6 +2022,12 @@ async function saveRedrawSet(){
     alert('세트 이름을 입력해주세요.');
     return;
   }
+  const sameNameCount = Object.values(state.redrawSets || {}).filter(s => String(s.name || '') === setName).length;
+  if(sameNameCount > 0){
+    const stamp = new Date().toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    setName = `${setName} (${stamp})`;
+    if(setInput) setInput.value = setName;
+  }
   const id = 'set_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
   const routeMap = {};
   routes.forEach(r => {
@@ -2050,6 +2117,34 @@ async function deleteRedrawSet(id){
     renderSimRelatedSets();
   }catch(e){
     alert('삭제 실패: ' + e.message);
+  }
+}
+
+async function renameRedrawSet(id){
+  const doc = state.redrawSets[id];
+  if(!doc) return;
+  const next = prompt('세트 이름을 입력하세요', doc.name || doc.id);
+  if(next == null) return;
+  const name = String(next).trim();
+  if(!name){
+    alert('이름을 입력해주세요.');
+    return;
+  }
+  if(name === doc.name) return;
+  const prev = doc.name;
+  doc.name = name;
+  doc.updatedAt = new Date().toISOString();
+  try{
+    await persistRouteAttempts();
+    if(state.redrawActiveSetId === id){
+      const setInput = document.getElementById('redrawSetName');
+      if(setInput) setInput.value = name;
+    }
+    renderRedrawAttempts();
+    renderSimRelatedSets();
+  }catch(e){
+    doc.name = prev;
+    alert('이름 변경 실패: ' + e.message);
   }
 }
 
@@ -2321,10 +2416,11 @@ function renderRedrawAttempts(){
         <span class="badge gray">${esc(a.tab || '')}</span>
       </div>
       <div class="meta">새 노선 ${n}개 · ${((a.totalMeters||0)/1000).toFixed(1)}km / ${Math.round(a.totalMinutes||0)}분</div>
-      <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))}</div>
+      <div class="meta">${esc((a.createdAt||'').replace('T',' ').slice(0,19))}${a.updatedAt ? ' · 수정 ' + esc(String(a.updatedAt).replace('T',' ').slice(0,19)) : ''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" class="btn btn-outline btn-sm" data-set-star="${esc(a.id)}">${star} 즐겨찾기</button>
         <button type="button" class="btn btn-outline btn-sm" data-set-prefer="${esc(a.id)}">선호안</button>
+        <button type="button" class="btn btn-outline btn-sm" data-set-rename="${esc(a.id)}">이름 변경</button>
         <button type="button" class="btn btn-navy btn-sm" data-set-load="${esc(a.id)}">불러오기</button>
         <button type="button" class="btn btn-outline btn-sm" data-set-del="${esc(a.id)}">삭제</button>
       </div>
@@ -2335,6 +2431,9 @@ function renderRedrawAttempts(){
   });
   box.querySelectorAll('[data-set-del]').forEach(btn => {
     btn.onclick = (ev) => { ev.stopPropagation(); deleteRedrawSet(btn.getAttribute('data-set-del')); };
+  });
+  box.querySelectorAll('[data-set-rename]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); renameRedrawSet(btn.getAttribute('data-set-rename')); };
   });
   box.querySelectorAll('[data-set-star]').forEach(btn => {
     btn.onclick = (ev) => { ev.stopPropagation(); toggleRedrawSetStar(btn.getAttribute('data-set-star')); };
@@ -3701,6 +3800,7 @@ function renderMapSide(){
   }
 
   if(state.coordPickMode) renderCoordPickPanel();
+  syncMapSidePanelUi();
 }
 
 function clearMapLayers(){
@@ -3809,9 +3909,13 @@ function renderRedrawRouteLegend(){
   const finished = (state.redrawNewRoutes || []).filter(r => r.finished && (r.stops||[]).length);
   if(!finished.length){
     box.innerHTML = '';
+    box.style.display = 'none';
     return;
   }
-  box.innerHTML = finished.map(r => {
+  box.style.display = 'flex';
+  const open = state.redrawLegendOpen !== false;
+  box.setAttribute('data-collapsed', open ? 'false' : 'true');
+  const body = finished.map(r => {
     const stops = r.stops || [];
     const pax = stops.reduce((a,s) => a + (Number(s.passengers)||0), 0);
     const min = Math.round(r.minutes || 0);
@@ -3821,6 +3925,20 @@ function renderRedrawRouteLegend(){
       <p class="meta">정류장 ${stops.length} · 탑승 ${pax}명 · ${min}분</p>
     </button>`;
   }).join('');
+  box.innerHTML = `<div class="legend-head">
+      <span>지도 노선 ${finished.length}개</span>
+      <button type="button" id="redrawLegendToggle">${open ? '접기' : '열기'}</button>
+    </div>
+    <div class="legend-body">${body}</div>`;
+  const toggle = document.getElementById('redrawLegendToggle');
+  if(toggle){
+    toggle.onclick = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      state.redrawLegendOpen = !open;
+      renderRedrawRouteLegend();
+    };
+  }
   box.querySelectorAll('[data-legend-route]').forEach(btn => {
     btn.onclick = (ev) => {
       ev.preventDefault();
@@ -3828,6 +3946,24 @@ function renderRedrawRouteLegend(){
       beginEditNewRoute(btn.getAttribute('data-legend-route'));
     };
   });
+}
+
+function syncMapSidePanelUi(){
+  const panel = document.getElementById('mapSidePanel');
+  const btn = document.getElementById('mapSideToggle');
+  if(!panel || !btn) return;
+  const open = state.mapSideOpen !== false;
+  panel.setAttribute('data-collapsed', open ? 'false' : 'true');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const n = (state.mapWorking || []).length;
+  btn.textContent = open ? '접기' : (`노선 ${n || ''}`.trim() || '노선 정보');
+  btn.title = open ? '노선 정보 접기' : '노선 정보 열기';
+}
+
+function setMapSideOpen(open){
+  state.mapSideOpen = !!open;
+  syncMapSidePanelUi();
+  forceMapRelayout();
 }
 
 function pruneEmptyStopsFromRedrawPool(){
@@ -5987,6 +6123,7 @@ function renderSimRelatedSets(){
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
           <button type="button" class="btn btn-outline btn-sm" data-sim-star="${esc(a.id)}">${star} 즐겨찾기</button>
           <button type="button" class="btn btn-outline btn-sm" data-sim-prefer="${esc(a.id)}">선호안 지정</button>
+          <button type="button" class="btn btn-outline btn-sm" data-sim-rename="${esc(a.id)}">이름 변경</button>
           <button type="button" class="btn btn-navy btn-sm" data-sim-open="${esc(a.id)}">다시그리기에서 열기</button>
           <button type="button" class="btn btn-yellow btn-sm" data-sim-apply="${esc(a.id)}">현 노선 순서로 교체(원본버스)</button>
         </div>
@@ -5997,6 +6134,9 @@ function renderSimRelatedSets(){
   });
   box.querySelectorAll('[data-sim-prefer]').forEach(btn => {
     btn.onclick = () => setPreferredRedrawSet(btn.getAttribute('data-sim-prefer'));
+  });
+  box.querySelectorAll('[data-sim-rename]').forEach(btn => {
+    btn.onclick = () => renameRedrawSet(btn.getAttribute('data-sim-rename'));
   });
   box.querySelectorAll('[data-sim-open]').forEach(btn => {
     btn.onclick = () => openRedrawSetInTab(btn.getAttribute('data-sim-open'));
@@ -6668,6 +6808,17 @@ document.getElementById('mapResetBtn').onclick = () => resetMapPreview();
 document.getElementById('mapPruneEmptyBtn').onclick = () => pruneEmptyStopsFromMapPreview();
 document.getElementById('mapUndoBtn').onclick = () => undoLastMapMove();
 document.getElementById('reassignModeBtn').onclick = () => toggleReassignMode();
+(function wireMapSideToggle(){
+  const btn = document.getElementById('mapSideToggle');
+  if(!btn || btn.__mapSideWired) return;
+  btn.__mapSideWired = true;
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setMapSideOpen(!(state.mapSideOpen !== false));
+  });
+  syncMapSidePanelUi();
+})();
 (function wireToolPanelToggle(){
   const btn = document.getElementById('toolPanelToggleBtn');
   if(!btn || btn.__toolPanelWired) return;

@@ -1772,6 +1772,8 @@ async function renderRedrawMap(fitBounds){
   const bounds = new kakao.maps.LatLngBounds();
   let boundCount = 0;
   const active = getActiveNewRoute();
+  // drawing은 풀 핀 렌더에서도 쓰므로 반드시 먼저 선언 (TDZ ReferenceError 방지)
+  const drawing = !!active;
 
   // 0) 정상어학원(장안분원) 고정 — 항상 표시·식별
   const academyMark = drawFixedAcademyMarker(rmap, rLayers, {
@@ -1819,7 +1821,6 @@ async function renderRedrawMap(fitBounds){
   // 2) 만든 새 노선들 (도로 경로 + 번호)
   //    - 그리는 중: 다른(확정) 노선은 옅게
   //    - 활성 노선: 선택 구간은 진하게, 마지막 선택↔학원 연결은 옅은 점선
-  const drawing = !!active;
   for(const route of state.redrawNewRoutes){
     if(seq !== redrawRenderSeq) return;
     if(!(route.stops && route.stops.length)) continue;

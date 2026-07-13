@@ -226,7 +226,7 @@ main.map-mode{max-width:none}
 .sim-compare-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
 .attempt-item.starred{border-color:var(--busyellow)}
 .attempt-item.preferred{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
-.map-bus-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
+.map-bus-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
 .map-bus-stats .cell{background:#F8FAFD;border:1px solid var(--border);border-radius:8px;padding:6px 4px;text-align:center}
 .map-bus-stats .cell .n{font-size:13px;font-weight:800;color:var(--navy)}
 .map-bus-stats .cell .l{font-size:9px;color:var(--muted);margin-top:1px}
@@ -3303,6 +3303,9 @@ function renderMapSide(){
       const spare = (b.seatSlots || b.capacity) - pax - state.rules.capacityBufferSeats;
       const travel = state.mapTravelByBus[b.id];
       const travelTxt = travel && travel.minutes != null ? Math.round(travel.minutes) + '분' : '…';
+      const distTxt = travel && travel.meters != null
+        ? ((Number(travel.meters)||0)/1000).toFixed(1) + 'km'
+        : '…';
       const isRem = state.reassignMode && state.reassignRemoveId === b.id;
       const isAbs = state.reassignMode && state.reassignAbsorbIds.includes(b.id);
       const dim = state.reassignMode && selected.size && !selected.has(b.id);
@@ -3333,7 +3336,8 @@ function renderMapSide(){
               <div class="cell"><div class="n">${stopN}</div><div class="l">정류장</div></div>
               <div class="cell"><div class="n">${pax}</div><div class="l">탑승</div></div>
               <div class="cell"><div class="n">${spare}</div><div class="l">여유석</div></div>
-              <div class="cell"><div class="n">${travelTxt}</div><div class="l">운행시간</div></div>
+              <div class="cell"><div class="n" data-map-stat="km">${distTxt}</div><div class="l">거리</div></div>
+              <div class="cell"><div class="n" data-map-stat="min">${travelTxt}</div><div class="l">운행시간</div></div>
             </div>
           </div>
         </div>
@@ -3756,8 +3760,11 @@ function renderMapSideTravelOnly(){
   document.querySelectorAll('#mapBusList [data-map-bus-id]').forEach(card => {
     const id = card.getAttribute('data-map-bus-id');
     const travel = state.mapTravelByBus[id];
-    const cell = card.querySelector('.map-bus-stats .cell:nth-child(4) .n');
-    if(cell && travel && travel.minutes != null) cell.textContent = Math.round(travel.minutes) + '분';
+    if(!travel) return;
+    const kmEl = card.querySelector('[data-map-stat="km"]');
+    const minEl = card.querySelector('[data-map-stat="min"]');
+    if(kmEl && travel.meters != null) kmEl.textContent = ((Number(travel.meters)||0)/1000).toFixed(1) + 'km';
+    if(minEl && travel.minutes != null) minEl.textContent = Math.round(travel.minutes) + '분';
   });
 }
 

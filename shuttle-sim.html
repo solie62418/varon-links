@@ -4441,9 +4441,9 @@ document.getElementById('reassignConfirmBtn').onclick = () => confirmReassignPla
 document.getElementById('redrawClearOrderBtn').onclick = () => clearRedrawOrderOnly();
 document.getElementById('redrawUndoBtn').onclick = () => undoRedrawClick();
 document.getElementById('redrawStopEditBtn').onclick = () => stopEditRedrawBus();
+document.getElementById('redrawStartNewBtn').onclick = () => startNewRedrawRoute();
 document.getElementById('redrawFinishBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
 document.getElementById('redrawGuideSaveBtn').onclick = () => finishRedrawRoute().catch(err => alert(err.message));
-document.getElementById('redrawApplyOfficialBtn').onclick = () => applyRedrawAsOfficialOrder().catch(err => alert(err.message));
 document.getElementById('redrawSelectAllBtn').onclick = () => selectAllRedrawPool();
 document.getElementById('redrawClearPoolBtn').onclick = () => clearRedrawPool();
 document.getElementById('redrawSaveSetBtn').onclick = () => saveRedrawSet().catch(err => alert(err.message));

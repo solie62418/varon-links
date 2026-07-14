@@ -1265,6 +1265,15 @@ function nonAcademyStops(stops){
   return (stops || []).filter(s => !isJanganAcademyStop(s));
 }
 
+/** 폴리라인 끝점이 학원 좌표에 닿는지 (등원=끝 / 하원=시작) */
+function pathTouchesAcademy(path, tab){
+  if(!path || path.length < 2) return false;
+  const mode = academyEndpointMode(tab);
+  const end = mode === 'first' ? path[0] : path[path.length - 1];
+  if(!end || end.lat == null || end.lng == null) return false;
+  return haversineM(end, JANGAN_ACADEMY) <= 120;
+}
+
 /** 카카오맵에 정상어학원(장안분원) 고정 마커+라벨 표시 */
 function drawFixedAcademyMarker(map, layerArr, opts){
   if(!map || typeof kakao === 'undefined' || !kakao.maps) return null;
@@ -1754,6 +1763,7 @@ function updateRedrawFinishBtnLabel(){
 
 async function refreshRedrawStats(){
   const route = getActiveNewRoute();
+  if(route) route.stops = normalizeAcademyEndpoint(route.stops);
   if(!route || route.stops.length < 2){
     state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
     if(route){ route.meters = 0; route.minutes = 0; route.path = []; }
@@ -2582,16 +2592,16 @@ async function renderRedrawMap(fitBounds){
 
     if(isActive){
       const mid = nonAcademyStops(route.stops);
-      const academy = { ...JANGAN_ACADEMY };
       const mode = academyEndpointMode();
+      const fullStops = normalizeAcademyEndpoint(mid);
 
-      // 선택 정류장 사이 본선 (진하게)
-      if(mid.length > 1){
-        const body = await buildRoadPath(mid);
+      // 선택 정류장 + 학원 끝점까지 한 줄로 연결 (등원=마지막 학원 / 하원=첫 학원)
+      if(fullStops.length > 1){
+        const full = await buildRoadPath(fullStops);
         if(seq !== redrawRenderSeq) return;
-        if(body.path && body.path.length > 1){
+        if(full.path && full.path.length > 1){
           const pl = new kakao.maps.Polyline({
-            path: body.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+            path: full.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
             strokeWeight: 7,
             strokeColor: col,
             strokeOpacity: 0.98,
@@ -2600,37 +2610,11 @@ async function renderRedrawMap(fitBounds){
           pl.setMap(rmap);
           rLayers.push(pl);
         }
-      }
-
-      // 마지막 선택 ↔ 학원 미리보기 (옅은 점선)
-      if(mid.length >= 1){
-        const tipStops = mode === 'first'
-          ? [academy, mid[0]]
-          : [mid[mid.length - 1], academy];
-        const tip = await buildRoadPath(tipStops);
-        if(seq !== redrawRenderSeq) return;
-        if(tip.path && tip.path.length > 1){
-          const pl = new kakao.maps.Polyline({
-            path: tip.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
-            strokeWeight: 4,
-            strokeColor: col,
-            strokeOpacity: 0.28,
-            strokeStyle: 'shortdash'
-          });
-          pl.setMap(rmap);
-          rLayers.push(pl);
-        }
-      }
-
-      // 통계는 학원 포함 전체 기준
-      const fullStops = normalizeAcademyEndpoint(mid);
-      if(fullStops.length > 1){
-        const full = await buildRoadPath(fullStops);
-        if(seq !== redrawRenderSeq) return;
         route.path = full.path;
         route.meters = full.meters;
         route.minutes = full.minutes;
         route.source = full.source;
+        route.stops = fullStops;
         state.redrawStats = { meters: full.meters, minutes: full.minutes, source: full.source };
         updateRedrawStatsUi();
       }
@@ -2638,7 +2622,6 @@ async function renderRedrawMap(fitBounds){
       // 활성 노선 번호 핀 (학원은 고정 마커로 대체)
       mid.forEach((s, i) => {
         if(s.lat == null) return;
-        const ordIdx = mode === 'first' ? (i + 1) : i; // 표시용: 하원이면 학원이 1번
         const displayOrd = mode === 'first' ? (i + 2) : (i + 1);
         const id = 'nr-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
         const sz = 30;
@@ -2665,12 +2648,14 @@ async function renderRedrawMap(fitBounds){
       continue;
     }
 
-    // 확정/비활성 노선 — 그리는 중이면 옅게
+    // 확정/비활성 노선 — 그리는 중이면 옅게 (학원 끝점 포함 경로 보장)
     const dimOp = drawing ? 0.16 : 0.78;
     const dimPin = drawing ? 0.22 : 0.9;
+    route.stops = normalizeAcademyEndpoint(route.stops);
     if(route.stops.length > 1){
       let path = route.path;
-      if(!path || path.length < 2){
+      const needsRebuild = !path || path.length < 2 || !pathTouchesAcademy(path, route.tab || state.redrawTab);
+      if(needsRebuild){
         const built = await buildRoadPath(route.stops);
         if(seq !== redrawRenderSeq) return;
         path = built.path;

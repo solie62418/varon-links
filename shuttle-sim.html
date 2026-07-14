@@ -1265,6 +1265,26 @@ function nonAcademyStops(stops){
   return (stops || []).filter(s => !isJanganAcademyStop(s));
 }
 
+function hasAcademyEndpoint(stops){
+  return (stops || []).some(s => isJanganAcademyStop(s));
+}
+
+/** 학원을 이미 클릭해 넣었을 때만 끝점 위치에 고정. 아니면 중간 정류장만 유지 */
+function stopsWithClickedAcademy(stops, tab){
+  const mid = nonAcademyStops(stops);
+  if(!hasAcademyEndpoint(stops)) return mid;
+  return normalizeAcademyEndpoint(mid, tab);
+}
+
+/** 폴리라인 끝점이 학원 좌표에 닿는지 (등원=끝 / 하원=시작) */
+function pathTouchesAcademy(path, tab){
+  if(!path || path.length < 2) return false;
+  const mode = academyEndpointMode(tab);
+  const end = mode === 'first' ? path[0] : path[path.length - 1];
+  if(!end || end.lat == null || end.lng == null) return false;
+  return haversineM(end, JANGAN_ACADEMY) <= 120;
+}
+
 /** 카카오맵에 정상어학원(장안분원) 고정 마커+라벨 표시 */
 function drawFixedAcademyMarker(map, layerArr, opts){
   if(!map || typeof kakao === 'undefined' || !kakao.maps) return null;
@@ -1685,12 +1705,16 @@ function updateRedrawGuide(){
   } else if(!state.redrawStopPool.length){
     text.textContent = '선택한 원본에 좌표 있는 정류장이 없습니다.';
   } else if(!route){
-    text.textContent = '정류장이 구분 없이 표시됩니다. 「새 노선 그리기」· '+academyEndpointLabel()+' 고정.';
+    text.textContent = '정류장이 구분 없이 표시됩니다. 「새 노선 그리기」 후 정류장 클릭 → 마지막에 정상어학원(학) 클릭.';
   } else if(nonAcademyStops(route.stops).length === 0){
-    text.textContent = '새 노선 · '+academyEndpointLabel()+' 고정 · 정류장을 순서대로 클릭 · 재클릭=취소';
+    text.textContent = '새 노선 · 정류장을 순서대로 클릭 · 재클릭=취소 · 끝나면 정상어학원(학) 클릭으로 연결';
+  } else if(!hasAcademyEndpoint(route.stops)){
+    const src = state.redrawStats.source === 'osrm' ? '도로' : '도로근사';
+    text.textContent = '새 노선 · 정류장 '+nonAcademyStops(route.stops).length+' · '+src+' '+
+      ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분 · 정상어학원(학)을 눌러 끝점 연결';
   } else {
     const src = state.redrawStats.source === 'osrm' ? '도로' : '도로근사';
-    text.textContent = '새 노선 · '+academyEndpointLabel()+' · 정류장 '+route.stops.length+' · '+src+' '+
+    text.textContent = '새 노선 · '+academyEndpointLabel()+' 연결 · 정류장 '+route.stops.length+' · '+src+' '+
       ((state.redrawStats.meters||0)/1000).toFixed(1)+'km / '+Math.round(state.redrawStats.minutes||0)+'분';
   }
   const canFinish = !!(route && nonAcademyStops(route.stops).length >= 1 && route.stops.length >= 2);
@@ -1754,6 +1778,7 @@ function updateRedrawFinishBtnLabel(){
 
 async function refreshRedrawStats(){
   const route = getActiveNewRoute();
+  if(route) route.stops = stopsWithClickedAcademy(route.stops);
   if(!route || route.stops.length < 2){
     state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
     if(route){ route.meters = 0; route.minutes = 0; route.path = []; }
@@ -1803,13 +1828,13 @@ function startNewRedrawRoute(){
   // 진행 중 미마무리 노선이 있으면 그걸 이어서
   const unfinished = state.redrawNewRoutes.find(r => !r.finished);
   if(unfinished){
-    unfinished.stops = normalizeAcademyEndpoint(unfinished.stops);
+    unfinished.stops = stopsWithClickedAcademy(unfinished.stops);
     state.redrawActiveRouteId = unfinished.id;
     const nameInput = document.getElementById('redrawRouteName');
     if(nameInput) nameInput.value = unfinished.name || '';
     state.redrawStats = { meters: unfinished.meters||0, minutes: unfinished.minutes||0, source: unfinished.source||'osrm' };
     const sum = document.getElementById('redrawSelectionSummary');
-    if(sum) sum.innerHTML = '그리는 중: <b>'+esc(unfinished.name || '새 노선')+'</b> · '+esc(academyEndpointLabel())+' 고정 · 정류장을 순서대로 클릭하세요.';
+    if(sum) sum.innerHTML = '그리는 중: <b>'+esc(unfinished.name || '새 노선')+'</b> · 정류장 클릭 후 <b>정상어학원(학)</b>을 눌러 끝점 연결';
     renderRedrawSide();
     renderRedrawMap(false);
     refreshRedrawStats();
@@ -1819,7 +1844,7 @@ function startNewRedrawRoute(){
   const route = {
     id,
     name: '',
-    stops: normalizeAcademyEndpoint([]),
+    stops: [],
     finished: false,
     reedit: false,
     meters: 0,
@@ -1834,7 +1859,7 @@ function startNewRedrawRoute(){
   const nameInput = document.getElementById('redrawRouteName');
   if(nameInput) nameInput.value = '';
   const sum = document.getElementById('redrawSelectionSummary');
-  if(sum) sum.innerHTML = '<b>새 노선</b> · '+esc(academyEndpointLabel())+' 고정 · 풀 정류장을 순서대로 클릭 · 끝나면 이름 붙여 마무리';
+  if(sum) sum.innerHTML = '<b>새 노선</b> · 풀 정류장을 순서대로 클릭 → 마지막에 <b>정상어학원(학)</b> 클릭하면 연결 · 이름 붙여 마무리';
   renderRedrawSide();
   renderRedrawMap(false);
   updateRedrawStatsUi();
@@ -1878,7 +1903,7 @@ function stopEditRedrawBus(){
 function clearRedrawOrderOnly(){
   const route = getActiveNewRoute();
   if(!route) return;
-  route.stops = normalizeAcademyEndpoint([]);
+  route.stops = [];
   route.path = [];
   route.meters = 0;
   route.minutes = 0;
@@ -1892,10 +1917,16 @@ function clearRedrawOrderOnly(){
 function undoRedrawClick(){
   const route = getActiveNewRoute();
   if(!route) return;
+  const hadAcademy = hasAcademyEndpoint(route.stops);
   const mid = nonAcademyStops(route.stops);
-  if(!mid.length) return;
-  mid.pop();
-  route.stops = normalizeAcademyEndpoint(mid);
+  if(mid.length){
+    mid.pop();
+    route.stops = hadAcademy && mid.length ? normalizeAcademyEndpoint(mid) : mid.slice();
+  } else if(hadAcademy){
+    route.stops = [];
+  } else {
+    return;
+  }
   route.finished = false;
   renderRedrawSide();
   renderRedrawMap(false);
@@ -1912,15 +1943,26 @@ function pickPoolStop(stop){
   if(!route) return;
   route.finished = false;
 
-  // 학원: 클릭 시 끝점으로 재고정 + 거리/시간에 포함됨을 안내
+  // 학원 클릭 시에만 끝점 연결 (그리는 중 자동 연결 없음)
   if(isJanganAcademyStop(stop)){
-    route.stops = normalizeAcademyEndpoint(route.stops);
-    const midN = nonAcademyStops(route.stops).length;
-    const sum = document.getElementById('redrawSelectionSummary');
-    if(sum){
-      sum.innerHTML = '<b>'+esc(JANGAN_ACADEMY.name)+'</b> 끝점 포함 · '+esc(academyEndpointLabel())+
-        (midN ? ' · 중간 정류장 '+midN+'개' : ' · 중간 정류장을 이어서 클릭하세요')+
-        ' · 거리·시간은 학원까지 포함해 계산합니다.';
+    const mid = nonAcademyStops(route.stops);
+    if(!mid.length){
+      const sum0 = document.getElementById('redrawSelectionSummary');
+      if(sum0) sum0.innerHTML = '먼저 <b>정류장</b>을 순서대로 클릭한 뒤, 마지막에 <b>정상어학원(학)</b>을 눌러 연결하세요.';
+      return;
+    }
+    if(hasAcademyEndpoint(route.stops)){
+      // 학원 재클릭 → 끝점 연결 해제
+      route.stops = mid;
+      const sum = document.getElementById('redrawSelectionSummary');
+      if(sum) sum.innerHTML = '학원 연결 해제 · 중간 정류장 '+mid.length+'개 · 다시 <b>정상어학원(학)</b>을 누르면 연결됩니다.';
+    } else {
+      route.stops = normalizeAcademyEndpoint(mid);
+      const sum = document.getElementById('redrawSelectionSummary');
+      if(sum){
+        sum.innerHTML = '<b>'+esc(JANGAN_ACADEMY.name)+'</b> 연결됨 · '+esc(academyEndpointLabel())+
+          ' · 중간 정류장 '+mid.length+'개 · 거리·시간에 학원 포함 · 재클릭하면 연결 해제';
+      }
     }
     renderRedrawSide();
     renderRedrawMap(false);
@@ -1928,6 +1970,7 @@ function pickPoolStop(stop){
     return;
   }
 
+  const hadAcademy = hasAcademyEndpoint(route.stops);
   const mid = nonAcademyStops(route.stops);
   const idx = mid.findIndex(d => String(d.id) === String(stop.id));
   if(idx >= 0) mid.splice(idx, 1);
@@ -1938,7 +1981,7 @@ function pickPoolStop(stop){
     lng: stop.lng,
     passengers: stop.passengers || 0
   });
-  route.stops = normalizeAcademyEndpoint(mid);
+  route.stops = hadAcademy && mid.length ? normalizeAcademyEndpoint(mid) : mid.slice();
   renderRedrawSide();
   renderRedrawMap(false);
   refreshRedrawStats();
@@ -1947,8 +1990,16 @@ function pickPoolStop(stop){
 async function finishRedrawRoute(){
   const route = getActiveNewRoute();
   if(!route) return;
+  if(nonAcademyStops(route.stops).length < 1){
+    alert('정류장을 1개 이상 선택한 뒤 마무리하세요.');
+    return;
+  }
+  if(!hasAcademyEndpoint(route.stops)){
+    alert('마지막에 정상어학원(빨간 학 마커)을 클릭해 끝점을 연결한 뒤 마무리하세요.');
+    return;
+  }
   route.stops = normalizeAcademyEndpoint(route.stops);
-  if(nonAcademyStops(route.stops).length < 1 || route.stops.length < 2){
+  if(route.stops.length < 2){
     alert('정류장을 1개 이상 선택하고(학원 끝점 포함) 마무리하세요.');
     return;
   }
@@ -2325,7 +2376,7 @@ function renderRedrawSide(){
   const route = getActiveNewRoute();
   if(stopList){
     if(!route || !route.stops.length){
-      stopList.innerHTML = `<div class="map-tip">새 노선 그리기를 시작한 뒤 지도에서 정류장을 클릭하세요.<br>학원(${esc(academyEndpointLabel())})은 자동 고정됩니다.</div>`;
+      stopList.innerHTML = `<div class="map-tip">새 노선 그리기를 시작한 뒤 지도에서 정류장을 클릭하세요.<br>마지막에 빨간 <b>학</b> 마커(정상어학원)를 클릭하면 끝점이 연결됩니다.</div>`;
     } else {
       const col = route.color || 'var(--navy)';
       stopList.innerHTML = route.stops.map((s, i) => {
@@ -2573,7 +2624,7 @@ async function renderRedrawMap(fitBounds){
 
   // 2) 만든 새 노선들 (도로 경로 + 번호)
   //    - 그리는 중: 다른(확정) 노선은 옅게
-  //    - 활성 노선: 선택 구간은 진하게, 마지막 선택↔학원 연결은 옅은 점선
+  //    - 활성 노선: 클릭한 정류장만 연결 · 학원은 클릭했을 때만 포함
   for(const route of state.redrawNewRoutes){
     if(seq !== redrawRenderSeq) return;
     if(!(route.stops && route.stops.length)) continue;
@@ -2582,16 +2633,17 @@ async function renderRedrawMap(fitBounds){
 
     if(isActive){
       const mid = nonAcademyStops(route.stops);
-      const academy = { ...JANGAN_ACADEMY };
       const mode = academyEndpointMode();
+      const drawStops = stopsWithClickedAcademy(route.stops);
+      route.stops = drawStops;
 
-      // 선택 정류장 사이 본선 (진하게)
-      if(mid.length > 1){
-        const body = await buildRoadPath(mid);
+      // 정류장끼리 연결. 학원을 클릭한 경우에만 학원까지 실선 연장
+      if(drawStops.length > 1){
+        const full = await buildRoadPath(drawStops);
         if(seq !== redrawRenderSeq) return;
-        if(body.path && body.path.length > 1){
+        if(full.path && full.path.length > 1){
           const pl = new kakao.maps.Polyline({
-            path: body.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+            path: full.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
             strokeWeight: 7,
             strokeColor: col,
             strokeOpacity: 0.98,
@@ -2600,46 +2652,24 @@ async function renderRedrawMap(fitBounds){
           pl.setMap(rmap);
           rLayers.push(pl);
         }
-      }
-
-      // 마지막 선택 ↔ 학원 미리보기 (옅은 점선)
-      if(mid.length >= 1){
-        const tipStops = mode === 'first'
-          ? [academy, mid[0]]
-          : [mid[mid.length - 1], academy];
-        const tip = await buildRoadPath(tipStops);
-        if(seq !== redrawRenderSeq) return;
-        if(tip.path && tip.path.length > 1){
-          const pl = new kakao.maps.Polyline({
-            path: tip.path.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
-            strokeWeight: 4,
-            strokeColor: col,
-            strokeOpacity: 0.28,
-            strokeStyle: 'shortdash'
-          });
-          pl.setMap(rmap);
-          rLayers.push(pl);
-        }
-      }
-
-      // 통계는 학원 포함 전체 기준
-      const fullStops = normalizeAcademyEndpoint(mid);
-      if(fullStops.length > 1){
-        const full = await buildRoadPath(fullStops);
-        if(seq !== redrawRenderSeq) return;
         route.path = full.path;
         route.meters = full.meters;
         route.minutes = full.minutes;
         route.source = full.source;
         state.redrawStats = { meters: full.meters, minutes: full.minutes, source: full.source };
         updateRedrawStatsUi();
+      } else {
+        route.path = [];
+        route.meters = 0;
+        route.minutes = 0;
+        state.redrawStats = { meters: 0, minutes: 0, source: 'osrm' };
+        updateRedrawStatsUi();
       }
 
       // 활성 노선 번호 핀 (학원은 고정 마커로 대체)
       mid.forEach((s, i) => {
         if(s.lat == null) return;
-        const ordIdx = mode === 'first' ? (i + 1) : i; // 표시용: 하원이면 학원이 1번
-        const displayOrd = mode === 'first' ? (i + 2) : (i + 1);
+        const displayOrd = mode === 'first' && hasAcademyEndpoint(drawStops) ? (i + 2) : (i + 1);
         const id = 'nr-' + route.id + '-' + String(s.id).replace(/[^a-zA-Z0-9_-]/g, '_');
         const sz = 30;
         const html = '<div id="'+id+'" class="stop-bubble redraw-num" title="'+esc((s.name||'')+' · 순서 '+displayOrd+' · 재클릭 취소')+'"'
@@ -2665,12 +2695,14 @@ async function renderRedrawMap(fitBounds){
       continue;
     }
 
-    // 확정/비활성 노선 — 그리는 중이면 옅게
+    // 확정/비활성 노선 — 그리는 중이면 옅게 (학원 끝점 포함 경로 보장)
     const dimOp = drawing ? 0.16 : 0.78;
     const dimPin = drawing ? 0.22 : 0.9;
+    route.stops = normalizeAcademyEndpoint(route.stops);
     if(route.stops.length > 1){
       let path = route.path;
-      if(!path || path.length < 2){
+      const needsRebuild = !path || path.length < 2 || !pathTouchesAcademy(path, route.tab || state.redrawTab);
+      if(needsRebuild){
         const built = await buildRoadPath(route.stops);
         if(seq !== redrawRenderSeq) return;
         path = built.path;

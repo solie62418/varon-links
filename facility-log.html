@@ -52,6 +52,7 @@
   button.primary{background:var(--gold);color:#fff;border:none;padding:11px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;margin-top:14px;}
   button.primary:disabled{opacity:.5;}
   button.secondary{background:#fff;color:var(--navy);border:1px solid var(--border);padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;}
+  button.danger{background:#fff;color:#C0392B;border:1px solid #F3C9C4;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;margin-right:auto;}
   button.small{padding:6px 10px;font-size:12px;border-radius:6px;}
   .file-row{display:flex;align-items:center;gap:8px;margin-top:4px;}
   .file-row img{height:40px;border-radius:6px;border:1px solid var(--border);}
@@ -313,8 +314,30 @@
       <div><label>소모물품/비고</label><input type="text" id="e_items"></div>
     </div>
     <div class="modal-actions">
+      <button class="danger" style="margin-top:0" onclick="deleteRequestAdmin()">삭제</button>
       <button class="secondary" onclick="closeEditModal()">취소</button>
       <button class="primary" style="margin-top:0" onclick="saveEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 분원 작성자용: 내가 쓴 요청 수정/삭제 모달 -->
+<div class="modal-bg" id="myEditModalBg">
+  <div class="modal">
+    <h3>내 요청 수정</h3>
+    <div id="myEditModalMeta" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;"></div>
+    <label>점검항목</label>
+    <select id="me_category"></select>
+    <label>위치</label>
+    <input type="text" id="me_location" placeholder="예: 3층 로비, 2강의실 등">
+    <label>요청내용</label>
+    <textarea id="me_content"></textarea>
+    <label>작성자</label>
+    <input type="text" id="me_requester" placeholder="이름">
+    <div class="modal-actions">
+      <button class="danger" onclick="deleteMyRequest()">삭제</button>
+      <button class="secondary" onclick="closeMyEditModal()">취소</button>
+      <button class="primary" style="margin-top:0" onclick="saveMyEdit()">저장</button>
     </div>
   </div>
 </div>
@@ -717,8 +740,56 @@ function reqCardHtml(r, showBranch, repeatCount){
     <div class="req-meta">
       <span>작성 ${r.created_date} · ${escapeHtml(r.requester||'')}</span>
     </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button type="button" class="secondary small" onclick="openMyEditModal('${r.id}')">✏️ 수정</button>
+    </div>
     ${handleBox}
   </div>`;
+}
+
+let myEditingId = null;
+function openMyEditModal(id){
+  const r = allMyRequests.find(x=>x.id===id);
+  if(!r) return;
+  myEditingId = id;
+  document.getElementById('myEditModalMeta').textContent = `${r.branch} · ${r.created_date} 작성 · 현재 상태: ${r.status}`;
+  const catSel = document.getElementById('me_category');
+  catSel.innerHTML = CATEGORIES.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
+  document.getElementById('me_location').value = r.location || '';
+  document.getElementById('me_content').value = r.request_content || '';
+  document.getElementById('me_requester').value = r.requester || '';
+  document.getElementById('myEditModalBg').classList.add('show');
+}
+function closeMyEditModal(){
+  document.getElementById('myEditModalBg').classList.remove('show');
+  myEditingId = null;
+}
+async function saveMyEdit(){
+  if(!myEditingId) return;
+  const payload = {
+    category: document.getElementById('me_category').value,
+    location: document.getElementById('me_location').value,
+    request_content: document.getElementById('me_content').value,
+    requester: document.getElementById('me_requester').value,
+  };
+  try{
+    await db.collection(FACILITY_COLLECTION).doc(myEditingId).update(payload);
+    closeMyEditModal();
+    await Promise.all([loadAdminRequests(), loadMyRequests()]);
+  }catch(err){
+    alert('저장 중 오류: ' + (err.message||err));
+  }
+}
+async function deleteMyRequest(){
+  if(!myEditingId) return;
+  if(!confirm('이 요청을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+  try{
+    await db.collection(FACILITY_COLLECTION).doc(myEditingId).delete();
+    closeMyEditModal();
+    await Promise.all([loadAdminRequests(), loadMyRequests()]);
+  }catch(err){
+    alert('삭제 중 오류: ' + (err.message||err));
+  }
 }
 
 function escapeHtml(s){
@@ -865,6 +936,17 @@ function openEditModal(id){
 function closeEditModal(){
   document.getElementById('editModalBg').classList.remove('show');
   editingId = null;
+}
+async function deleteRequestAdmin(){
+  if(!editingId) return;
+  if(!confirm('이 요청을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+  try{
+    await db.collection(FACILITY_COLLECTION).doc(editingId).delete();
+    closeEditModal();
+    await Promise.all([loadAdminRequests(), loadMyRequests()]);
+  }catch(err){
+    alert('삭제 중 오류: ' + (err.message||err));
+  }
 }
 async function saveEdit(){
   if(!editingId) return;

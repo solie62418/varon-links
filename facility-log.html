@@ -326,6 +326,8 @@
   <div class="modal">
     <h3>내 요청 수정</h3>
     <div id="myEditModalMeta" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;"></div>
+    <label>분원</label>
+    <select id="me_branch"></select>
     <label>점검항목</label>
     <select id="me_category"></select>
     <label>위치</label>
@@ -752,7 +754,9 @@ function openMyEditModal(id){
   const r = allMyRequests.find(x=>x.id===id);
   if(!r) return;
   myEditingId = id;
-  document.getElementById('myEditModalMeta').textContent = `${r.branch} · ${r.created_date} 작성 · 현재 상태: ${r.status}`;
+  document.getElementById('myEditModalMeta').textContent = `${r.created_date} 작성 · 현재 상태: ${r.status}`;
+  const branchSel = document.getElementById('me_branch');
+  branchSel.innerHTML = BRANCHES.map(b=>`<option value="${b}" ${b===r.branch?'selected':''}>${b}</option>`).join('');
   const catSel = document.getElementById('me_category');
   catSel.innerHTML = CATEGORIES.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
   document.getElementById('me_location').value = r.location || '';
@@ -767,6 +771,7 @@ function closeMyEditModal(){
 async function saveMyEdit(){
   if(!myEditingId) return;
   const payload = {
+    branch: document.getElementById('me_branch').value,
     category: document.getElementById('me_category').value,
     location: document.getElementById('me_location').value,
     request_content: document.getElementById('me_content').value,

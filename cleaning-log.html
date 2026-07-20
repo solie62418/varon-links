@@ -592,10 +592,16 @@ document.getElementById('saveCheckBtn').addEventListener('click', async () => {
   const checker = document.getElementById('inputChecker').value.trim();
   if(!checker){ alert('확인자를 입력해주세요.'); return; }
 
+  const allItems = Object.values(pendingChecks);
+  const missing = allItems.filter(({status}) => !status);
+  if(missing.length > 0){
+    alert(`아직 체크 안 된 항목이 ${missing.length}개 있습니다.\n\n- ${missing.map(m => m.item.name + '(' + m.item.zone + ')').join('\n- ')}\n\n전체 항목을 다 체크해야 저장할 수 있습니다.`);
+    return;
+  }
+
   const role = branch === '바론' ? '자체' : null;
   const newRows = [];
-  Object.values(pendingChecks).forEach(({item, status, note, action}) => {
-    if(!status) return;
+  allItems.forEach(({item, status, note, action}) => {
     const roleForItem = role || item.role;
     newRows.push({
       '점검일자': date,
@@ -612,8 +618,6 @@ document.getElementById('saveCheckBtn').addEventListener('click', async () => {
       '비고': '',
     });
   });
-
-  if(newRows.length === 0){ alert('체크된 항목이 없습니다.'); return; }
 
   const btn = document.getElementById('saveCheckBtn');
   btn.textContent = '저장 중...'; btn.disabled = true;
